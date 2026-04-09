@@ -108,6 +108,18 @@ if (songCount.count === 0) {
       tags: JSON.stringify(['First Date', 'Love']),
       audio_url: '/musics/Like Roses ( You Are Your Name).mp3',
       story: 'A first date love story turned into a romantic R&B track.',
+      sort_order: 4,
+    },
+    {
+      title: "Mummy's 60th Birthday",
+      genre: 'Afro-Beats',
+      duration: '3:29',
+      description: '"A 60th birthday tribute — a joyful Afro-Beats celebration of a mother\'s love, life, and the legacy she has built."',
+      cover_url: '/musics/Cover%20Phtotos/MummyBirthday_Cover.jpg',
+      artist: 'The Family',
+      tags: JSON.stringify(['Birthday', 'Celebration', 'Mother']),
+      audio_url: "/musics/Mummy's 60th Birthday.mp3",
+      story: "A heartfelt Afro-Beats track celebrating a mother's 60th birthday milestone.",
       sort_order: 3,
     },
     {
@@ -120,7 +132,7 @@ if (songCount.count === 0) {
       tags: JSON.stringify(['Birthday', 'Celebration']),
       audio_url: '/musics/Mimi (Give Me Wealth).mp3',
       story: 'A birthday celebration song full of Afrobeats energy.',
-      sort_order: 4,
+      sort_order: 5,
     },
   ];
 
@@ -176,14 +188,37 @@ try {
   db.prepare("UPDATE songs SET cover_url = '/musics/Cover%20Phtotos/valentine.jpg' WHERE title = 'Valentine'").run();
   db.prepare("UPDATE songs SET cover_url = '/musics/Cover%20Phtotos/LikeRoses_Cover.jpg' WHERE title = 'Like Roses (You Are Your Name)'").run();
   db.prepare("UPDATE songs SET cover_url = '/musics/Cover%20Phtotos/Mimi_Cover.jpg' WHERE title = 'Mimi (Give Me Wealth)'").run();
+  db.prepare("UPDATE songs SET cover_url = '/musics/Cover%20Phtotos/MummyBirthday_Cover.jpg' WHERE title = \"Mummy's 60th Birthday\"").run();
+} catch (e) {}
+
+// Add Mummy's 60th Birthday if it doesn't exist yet
+try {
+  const exists = db.prepare("SELECT COUNT(*) as count FROM songs WHERE title = \"Mummy's 60th Birthday\"").get();
+  if (exists.count === 0) {
+    db.prepare(`
+      INSERT INTO songs (title, genre, duration, description, cover_url, artist, tags, audio_url, story, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      "Mummy's 60th Birthday", 'Afro-Beats', '3:29',
+      '"A 60th birthday tribute — a joyful Afro-Beats celebration of a mother\'s love, life, and the legacy she has built."',
+      '/musics/Cover%20Phtotos/MummyBirthday_Cover.jpg',
+      'The Family',
+      JSON.stringify(['Birthday', 'Celebration', 'Mother']),
+      "/musics/Mummy's 60th Birthday.mp3",
+      "A heartfelt Afro-Beats track celebrating a mother's 60th birthday milestone.",
+      3
+    );
+    console.log("✅ Added Mummy's 60th Birthday to catalogue");
+  }
 } catch (e) {}
 
 // Set sort_order for all songs
 try {
   db.prepare("UPDATE songs SET sort_order = 1 WHERE title = 'Anniversary'").run();
   db.prepare("UPDATE songs SET sort_order = 2 WHERE title = 'Valentine'").run();
-  db.prepare("UPDATE songs SET sort_order = 3 WHERE title = 'Like Roses (You Are Your Name)'").run();
-  db.prepare("UPDATE songs SET sort_order = 4 WHERE title = 'Mimi (Give Me Wealth)'").run();
+  db.prepare("UPDATE songs SET sort_order = 3 WHERE title = \"Mummy's 60th Birthday\"").run();
+  db.prepare("UPDATE songs SET sort_order = 4 WHERE title = 'Like Roses (You Are Your Name)'").run();
+  db.prepare("UPDATE songs SET sort_order = 5 WHERE title = 'Mimi (Give Me Wealth)'").run();
 } catch (e) {}
 
 module.exports = db;

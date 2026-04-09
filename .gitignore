@@ -27,3 +27,6 @@ server/*.db-wal
 *.njsproj
 *.sln
 *.sw?
+
+# Project-specific ignores
+design Prompt/
