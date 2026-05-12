@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import TrackOrderModal from './TrackOrderModal';
 
@@ -6,10 +6,6 @@ const Header: React.FC = () => {
   const location = useLocation();
   const [isTrackModalOpen, setIsTrackModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  useEffect(() => {
-    setIsMobileMenuOpen(false);
-  }, [location.pathname]);
 
   const navLinkClass = (path: string) =>
     `font-bold border-b-2 transition-colors duration-300 ${location.pathname === path ? 'text-[#9f402d] border-[#9f402d]' : 'text-[#5e5e63] border-transparent hover:text-[#9f402d]'}`;
@@ -45,7 +41,7 @@ const Header: React.FC = () => {
           <div className="hidden md:flex items-center space-x-6">
             <Link
               to="/create"
-              className="bg-obsidian text-primary px-8 py-2.5 font-label uppercase tracking-widest text-[10px] rounded-full hover:scale-105 transition-transform duration-300 shadow-obsidian"
+              className="bg-obsidian text-primary px-8 py-2.5 font-label uppercase tracking-widest text-[10px] rounded-full hover:scale-[1.02] transition-transform duration-300 shadow-[0_5px_16px_rgba(36,26,0,0.12)]"
             >
               Create Your Song
             </Link>
@@ -82,12 +78,14 @@ const Header: React.FC = () => {
           <nav className="flex flex-col px-4 py-6 gap-4 font-headline italic text-xl">
             <Link
               to="/"
+              onClick={() => setIsMobileMenuOpen(false)}
               className={`px-4 py-2 ${location.pathname === '/' ? 'text-[#9f402d] font-bold' : 'text-[#5e5e63]'}`}
             >
               Gallery
             </Link>
             <Link
               to="/library"
+              onClick={() => setIsMobileMenuOpen(false)}
               className={`px-4 py-2 ${location.pathname === '/library' ? 'text-[#9f402d] font-bold' : 'text-[#5e5e63]'}`}
             >
               Our Catalogue
@@ -104,7 +102,8 @@ const Header: React.FC = () => {
             <div className="px-4 pt-4 mt-2 border-t border-[#fff2d8]">
               <Link
                 to="/create"
-                className="block w-full text-center bg-obsidian text-primary px-8 py-4 font-label not-italic uppercase tracking-widest text-xs rounded-full shadow-obsidian"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="block w-full text-center bg-obsidian text-primary px-8 py-4 font-label not-italic uppercase tracking-widest text-xs rounded-full shadow-[0_5px_16px_rgba(36,26,0,0.12)]"
               >
                 Create Your Song
               </Link>

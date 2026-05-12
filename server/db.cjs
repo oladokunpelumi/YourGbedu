@@ -43,6 +43,7 @@ db.exec(`
     mood TEXT,
     tempo INTEGER,
     occasion TEXT,
+    occasion_detail TEXT,
     story TEXT,
     status TEXT DEFAULT 'in_production',
     created_at TEXT NOT NULL,
@@ -54,15 +55,16 @@ db.exec(`
 `);
 
 // Safe migrations for new columns
-try { db.exec("ALTER TABLE orders ADD COLUMN recipient_type TEXT"); } catch (err) { }
-try { db.exec("ALTER TABLE orders ADD COLUMN sender_name TEXT"); } catch (err) { }
-try { db.exec("ALTER TABLE orders ADD COLUMN voice_gender TEXT"); } catch (err) { }
-try { db.exec("ALTER TABLE orders ADD COLUMN special_qualities TEXT"); } catch (err) { }
-try { db.exec("ALTER TABLE orders ADD COLUMN favorite_memories TEXT"); } catch (err) { }
-try { db.exec("ALTER TABLE orders ADD COLUMN special_message TEXT"); } catch (err) { }
-try { db.exec("ALTER TABLE orders ADD COLUMN customer_email TEXT"); } catch (err) { }
-try { db.exec("ALTER TABLE orders ADD COLUMN ai_brief TEXT"); } catch (err) { }
-try { db.exec("ALTER TABLE songs ADD COLUMN sort_order INTEGER DEFAULT 99"); } catch (err) { }
+try { db.exec("ALTER TABLE orders ADD COLUMN recipient_type TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE orders ADD COLUMN occasion_detail TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE orders ADD COLUMN sender_name TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE orders ADD COLUMN voice_gender TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE orders ADD COLUMN special_qualities TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE orders ADD COLUMN favorite_memories TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE orders ADD COLUMN special_message TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE orders ADD COLUMN customer_email TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE orders ADD COLUMN ai_brief TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE songs ADD COLUMN sort_order INTEGER DEFAULT 99"); } catch { /* already migrated */ }
 
 // Seed songs if table is empty
 const songCount = db.prepare('SELECT COUNT(*) as count FROM songs').get();
@@ -149,17 +151,17 @@ if (songCount.count === 0) {
 // ── Live data migrations (run on every startup to fix existing databases) ──
 
 // Remove Baby Steps placeholder
-try { db.prepare("DELETE FROM songs WHERE title = 'Baby Steps'").run(); } catch (e) {}
+try { db.prepare("DELETE FROM songs WHERE title = 'Baby Steps'").run(); } catch { /* best effort cleanup */ }
 
 // Fix Mimi audio URL typo
 try {
   db.prepare("UPDATE songs SET audio_url = '/musics/Mimi (Give Me Wealth).mp3' WHERE title LIKE 'Mimi%' AND audio_url LIKE '%\"%'").run();
-} catch (e) {}
+} catch { /* best effort cleanup */ }
 
 // Fix Like Roses genre to R&B
 try {
   db.prepare("UPDATE songs SET genre = 'R&B' WHERE title = 'Like Roses (You Are Your Name)' AND genre != 'R&B'").run();
-} catch (e) {}
+} catch { /* best effort cleanup */ }
 
 // Add Anniversary if it doesn't exist yet
 try {
@@ -180,7 +182,7 @@ try {
     );
     console.log('✅ Added Anniversary to catalogue');
   }
-} catch (e) {}
+} catch { /* best effort cleanup */ }
 
 // Update cover photos for all songs
 try {
@@ -189,7 +191,7 @@ try {
   db.prepare("UPDATE songs SET cover_url = '/musics/Cover%20Phtotos/LikeRoses_Cover.jpg' WHERE title = 'Like Roses (You Are Your Name)'").run();
   db.prepare("UPDATE songs SET cover_url = '/musics/Cover%20Phtotos/Mimi_Cover.jpg' WHERE title = 'Mimi (Give Me Wealth)'").run();
   db.prepare("UPDATE songs SET cover_url = '/musics/Cover%20Phtotos/MummyBirthday_Cover.jpg' WHERE title = \"Mummy's 60th Birthday\"").run();
-} catch (e) {}
+} catch { /* best effort cleanup */ }
 
 // Add Mummy's 60th Birthday if it doesn't exist yet
 try {
@@ -210,7 +212,7 @@ try {
     );
     console.log("✅ Added Mummy's 60th Birthday to catalogue");
   }
-} catch (e) {}
+} catch { /* best effort cleanup */ }
 
 // Set sort_order for all songs
 try {
@@ -219,6 +221,32 @@ try {
   db.prepare("UPDATE songs SET sort_order = 3 WHERE title = \"Mummy's 60th Birthday\"").run();
   db.prepare("UPDATE songs SET sort_order = 4 WHERE title = 'Like Roses (You Are Your Name)'").run();
   db.prepare("UPDATE songs SET sort_order = 5 WHERE title = 'Mimi (Give Me Wealth)'").run();
-} catch (e) {}
+} catch { /* best effort cleanup */ }
+
+// ── Indexes for hot query paths ───────────────────────────────────────────────
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_orders_customer_email ON orders(customer_email)'); } catch { /* best effort index */ }
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_orders_paystack_reference ON orders(paystack_reference)'); } catch { /* best effort index */ }
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_orders_stripe_session_id ON orders(stripe_session_id)'); } catch { /* best effort index */ }
+
+// ── JWT revocation table ──────────────────────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS revoked_tokens (
+    jti      TEXT PRIMARY KEY,
+    expires_at TEXT NOT NULL
+  );
+`);
+
+// Prune expired revoked tokens on startup
+try {
+  db.prepare("DELETE FROM revoked_tokens WHERE expires_at < ?").run(new Date().toISOString());
+} catch { /* best effort cleanup */ }
+
+// Prune again every 6 hours so the table doesn't grow unbounded between restarts.
+// .unref() prevents this timer from keeping the process alive on graceful shutdown.
+setInterval(() => {
+  try {
+    db.prepare("DELETE FROM revoked_tokens WHERE expires_at < ?").run(new Date().toISOString());
+  } catch { /* best effort cleanup */ }
+}, 6 * 60 * 60 * 1000).unref();
 
 module.exports = db;

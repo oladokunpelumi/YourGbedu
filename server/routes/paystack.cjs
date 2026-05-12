@@ -3,53 +3,81 @@ const router = express.Router();
 const crypto = require('crypto');
 const uuidv4 = () => crypto.randomUUID();
 const { z } = require('zod');
-const db = require('../db.cjs');
-const { sendConfirmationEmail } = require('../email.cjs');
-const { generateProductionBrief } = require('../services/gemini.cjs');
+const { getPaystackAmountKobo, isFastDelivery } = require('../pricing.cjs');
+const { getClientUrlFromRequest } = require('../client-url.cjs');
 
-// ── Validation schema ─────────────────────────────────────────────────────────
 const InitializeSchema = z.object({
     email: z.string().email().optional().or(z.literal('')),
-    amount: z.number().int().positive().optional(),
-    metadata: z.record(z.unknown()).optional(),
+    // amount is intentionally absent — price is always SONG_PRICE_KOBO, never client-controlled
+    metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
-const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
-const PAYSTACK_WEBHOOK_SECRET = process.env.PAYSTACK_WEBHOOK_SECRET || PAYSTACK_SECRET_KEY;
 const PAYSTACK_BASE_URL = 'https://api.paystack.co';
 const DELIVERY_DAYS = 3;
 
+let db;
+function getDb() {
+    if (!db) db = require('../db.cjs');
+    return db;
+}
+
+let emailModule;
+function getEmailModule() {
+    if (!emailModule) emailModule = require('../email.cjs');
+    return emailModule;
+}
+
+function getPaystackSecretKey() {
+    return process.env.PAYSTACK_SECRET_KEY;
+}
+
 // ── Initialize a Paystack transaction ─────────────────────────────────────────
 router.post('/initialize', async (req, res) => {
+    const parsed = InitializeSchema.safeParse(req.body);
+    if (!parsed.success) {
+        return res.status(400).json({ error: 'Invalid checkout request.' });
+    }
+
     try {
-        const { email, amount, metadata } = req.body;
+        const { email, metadata } = parsed.data;
         const customerEmail = email || 'guest@yourgbedu.com';
+        const resolvedMetadata = metadata || {};
+        const amount = getPaystackAmountKobo(resolvedMetadata);
+        const paystackSecret = getPaystackSecretKey();
+
+        if (!paystackSecret) {
+            return res.status(503).json({ error: 'Payment gateway not configured.' });
+        }
 
         const response = await fetch(`${PAYSTACK_BASE_URL}/transaction/initialize`, {
             method: 'POST',
             headers: {
-                Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+                Authorization: `Bearer ${paystackSecret}`,
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
                 email: customerEmail,
-                amount: amount || 3000000, // 30,000 NGN in Kobo
+                amount,
                 currency: 'NGN',
-                callback_url: `${process.env.CLIENT_URL || 'http://localhost:3000'}/#/payment-success`,
-                metadata: { ...metadata, customerEmail },
+                callback_url: `${getClientUrlFromRequest(req)}/#/payment-success`,
+                metadata: { ...resolvedMetadata, customerEmail },
             }),
         });
 
         const data = await response.json();
 
         if (data.status) {
-            res.json({ authorization_url: data.data.authorization_url, reference: data.data.reference });
+            res.json({
+                authorization_url: data.data.authorization_url,
+                access_code: data.data.access_code,
+                reference: data.data.reference,
+            });
         } else {
             console.error('Paystack Initialization Error:', data.message);
             res.status(400).json({ error: data.message });
         }
-    } catch (error) {
-        console.error('Error initializing Paystack transaction:', error);
+    } catch {
+        console.error('Error initializing Paystack transaction');
         res.status(500).json({ error: 'Failed to initialize transaction' });
     }
 });
@@ -58,10 +86,15 @@ router.post('/initialize', async (req, res) => {
 router.get('/verify/:reference', async (req, res) => {
     try {
         const { reference } = req.params;
+        const paystackSecret = getPaystackSecretKey();
+        if (!paystackSecret) {
+            return res.status(503).json({ error: 'Payment gateway not configured.' });
+        }
+
         const response = await fetch(`${PAYSTACK_BASE_URL}/transaction/verify/${reference}`, {
             method: 'GET',
             headers: {
-                Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+                Authorization: `Bearer ${paystackSecret}`,
                 'Content-Type': 'application/json',
             },
         });
@@ -73,82 +106,86 @@ router.get('/verify/:reference', async (req, res) => {
         } else {
             res.json({ paid: false, message: 'Transaction not successful' });
         }
-    } catch (error) {
-        console.error('Error verifying Paystack transaction:', error);
+    } catch {
+        console.error('Error verifying Paystack transaction');
         res.status(500).json({ error: 'Failed to verify transaction' });
     }
 });
 
-// ── Paystack Webhook (server-side order creation) ─────────────────────────────
-// This is the reliable way to create orders — Paystack calls this URL after payment.
+// ── Paystack Webhook ──────────────────────────────────────────────────────────
+// Paystack signs webhooks with the merchant's secret key (same as PAYSTACK_SECRET_KEY).
+// https://paystack.com/docs/payments/webhooks/#verify-event-origin
 router.post('/webhook', (req, res) => {
-    // Verify Paystack HMAC signature
     const signature = req.headers['x-paystack-signature'];
+    const paystackSecret = getPaystackSecretKey();
+
+    if (!signature) {
+        console.warn('[Webhook] Missing x-paystack-signature header — rejected');
+        return res.status(401).json({ error: 'Missing signature' });
+    }
+    if (!paystackSecret) {
+        console.error('[Webhook] PAYSTACK_SECRET_KEY missing');
+        return res.status(503).json({ error: 'Webhook secret not configured' });
+    }
+
+    const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || '');
+
     const hash = crypto
-        .createHmac('sha512', PAYSTACK_WEBHOOK_SECRET)
-        .update(req.body) // req.body is raw Buffer here
+        .createHmac('sha512', paystackSecret)
+        .update(rawBody)
         .digest('hex');
 
-    if (hash !== signature) {
-        console.warn('[Webhook] Invalid signature — request rejected');
-        return res.status(400).json({ error: 'Invalid signature' });
+    const hashBuffer = Buffer.from(hash, 'utf8');
+    const signatureBuffer = Buffer.from(String(signature), 'utf8');
+    if (hashBuffer.length !== signatureBuffer.length || !crypto.timingSafeEqual(hashBuffer, signatureBuffer)) {
+        console.warn('[Webhook] Invalid signature — rejected');
+        return res.status(401).json({ error: 'Invalid signature' });
     }
 
     let event;
     try {
-        event = JSON.parse(req.body.toString());
+        event = JSON.parse(rawBody.toString());
     } catch {
         return res.status(400).json({ error: 'Invalid JSON body' });
     }
 
-    // Acknowledge webhook immediately before doing heavy work
+    // Acknowledge immediately before doing heavy work
     res.sendStatus(200);
 
     if (event.event === 'charge.success') {
+        const dbConn = getDb();
         const { reference, metadata, customer, amount } = event.data;
 
-        // Idempotency: don't create duplicate orders
-        const existing = db.prepare('SELECT id FROM orders WHERE paystack_reference = ?').get(reference);
+        const existing = dbConn.prepare('SELECT id FROM orders WHERE paystack_reference = ?').get(reference);
         if (existing) {
-            console.log(`[Webhook] Order for reference ${reference} already exists, skipping.`);
+            console.log(`[Webhook] Order for reference already exists, skipping`);
             return;
         }
 
         const id = uuidv4();
         const createdAt = new Date().toISOString();
-        const actualDeliveryDays = metadata?.fastDelivery ? 1 : DELIVERY_DAYS;
+        const actualDeliveryDays = isFastDelivery(metadata?.fastDelivery) ? 1 : DELIVERY_DAYS;
         const deliveryDate = new Date(
             Date.now() + actualDeliveryDays * 24 * 60 * 60 * 1000
         ).toISOString();
 
         try {
-            // Generate AI production brief asynchronously — doesn't block order creation
-            const briefPromise = generateProductionBrief({
-                recipientType: metadata?.recipientType || '',
-                senderName: metadata?.senderName || '',
-                genre: metadata?.genre || '',
-                voiceGender: metadata?.voiceGender || '',
-                specialQualities: metadata?.specialQualities || '',
-                favoriteMemories: metadata?.favoriteMemories || '',
-                specialMessage: metadata?.specialMessage || '',
-            });
-
-            db.prepare(`
+            dbConn.prepare(`
                 INSERT INTO orders (
-                    id, song_title, genre, mood, tempo, occasion, story, status,
+                    id, song_title, genre, mood, tempo, occasion, occasion_detail, story, status,
                     created_at, delivery_date, paystack_reference, amount,
                     recipient_type, sender_name, voice_gender,
                     special_qualities, favorite_memories, special_message, customer_email
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'in_production', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'in_production', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).run(
                 id,
                 'Custom Song',
                 metadata?.genre || '',
-                '',   // mood — field is deprecated in new order flow
-                100,  // tempo — field is deprecated in new order flow
-                '',   // occasion — field is deprecated
-                '',   // story — field is deprecated (replaced by specialQualities etc.)
+                '', 100,
+                metadata?.occasion || '',
+                metadata?.occasionDetail || '',
+                '',
                 createdAt,
                 deliveryDate,
                 reference,
@@ -162,22 +199,11 @@ router.post('/webhook', (req, res) => {
                 metadata?.customerEmail || customer?.email || null
             );
 
-            console.log(`[Webhook] ✅ Created order ${id} for reference ${reference}`);
+            console.log(`[Webhook] Order created`);
 
-            // Update the order with AI brief once generated
-            briefPromise.then(brief => {
-                try {
-                    db.prepare('UPDATE orders SET ai_brief = ? WHERE id = ?').run(brief, id);
-                    console.log(`[Webhook] ✅ AI brief stored for order ${id}`);
-                } catch (e) {
-                    console.error('[Webhook] Failed to store AI brief:', e.message);
-                }
-            });
-
-            // Send confirmation email
             const customerEmail = metadata?.customerEmail || customer?.email;
             if (customerEmail) {
-                sendConfirmationEmail({
+                getEmailModule().sendConfirmationEmail({
                     to: customerEmail,
                     orderId: id.slice(0, 8).toUpperCase(),
                     genre: metadata?.genre,

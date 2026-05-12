@@ -1,9 +1,15 @@
 const express = require('express');
 const router = express.Router();
+const { getStripeAmountCents } = require('../pricing.cjs');
+const { getClientUrlFromRequest } = require('../client-url.cjs');
 
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000';
+let stripeClient;
+function getStripeClient() {
+    if (!stripeClient) {
+        stripeClient = require('stripe')(process.env.STRIPE_SECRET_KEY);
+    }
+    return stripeClient;
+}
 
 // POST /api/create-checkout-session
 router.post('/create-checkout-session', async (req, res) => {
@@ -14,17 +20,36 @@ router.post('/create-checkout-session', async (req, res) => {
             recipientType,
             senderName,
             genre,
+            occasion,
+            occasionDetail,
             voiceGender,
             specialQualities,
             favoriteMemories,
             specialMessage,
-            amount,
             fastDelivery,
+            embedded,
+            // amount is intentionally not destructured — price is always SONG_PRICE_CENTS
         } = req.body;
 
         const resolvedEmail = email || customerEmail || 'guest@yourgbedu.com';
+        const unitAmount = getStripeAmountCents(fastDelivery);
+        const clientUrl = getClientUrlFromRequest(req);
 
-        const session = await stripe.checkout.sessions.create({
+        const metadata = {
+            customerEmail: resolvedEmail,
+            recipientType: (recipientType || '').substring(0, 500),
+            senderName: (senderName || '').substring(0, 500),
+            genre: (genre || '').substring(0, 500),
+            occasion: (occasion || '').substring(0, 500),
+            occasionDetail: (occasionDetail || '').substring(0, 500),
+            voiceGender: (voiceGender || '').substring(0, 500),
+            specialQualities: (specialQualities || '').substring(0, 500),
+            favoriteMemories: (favoriteMemories || '').substring(0, 500),
+            specialMessage: (specialMessage || '').substring(0, 500),
+            fastDelivery: fastDelivery ? 'true' : 'false',
+        };
+
+        const sessionOptions = {
             payment_method_types: ['card'],
             mode: 'payment',
             customer_email: resolvedEmail,
@@ -36,29 +61,28 @@ router.post('/create-checkout-session', async (req, res) => {
                             name: 'Custom Song — YourGbedu' + (fastDelivery ? ' (24-Hour Fast Delivery)' : ''),
                             description: `A personalised ${genre || 'custom'} song crafted just for your ${recipientType || 'loved one'}.`,
                         },
-                        unit_amount: amount || 2500, // Dynamic or fallback to $25.00 USD
+                        unit_amount: unitAmount,
                     },
                     quantity: 1,
                 },
             ],
+            metadata,
+        };
+
+        if (embedded) {
+            sessionOptions.ui_mode = 'embedded';
+            sessionOptions.redirect_on_completion = 'if_required';
+            sessionOptions.return_url = `${clientUrl}/#/checkout/return?session_id={CHECKOUT_SESSION_ID}&provider=stripe`;
+        } else {
             // Success URL uses hash routing — session_id sits inside the hash so
             // location.search works correctly in the React app.
-            success_url: `${CLIENT_URL}/#/payment-success?session_id={CHECKOUT_SESSION_ID}&provider=stripe`,
-            cancel_url: `${CLIENT_URL}/#/create`,
-            metadata: {
-                customerEmail: resolvedEmail,
-                recipientType: (recipientType || '').substring(0, 500),
-                senderName: (senderName || '').substring(0, 500),
-                genre: (genre || '').substring(0, 500),
-                voiceGender: (voiceGender || '').substring(0, 500),
-                specialQualities: (specialQualities || '').substring(0, 500),
-                favoriteMemories: (favoriteMemories || '').substring(0, 500),
-                specialMessage: (specialMessage || '').substring(0, 500),
-                fastDelivery: fastDelivery ? 'true' : 'false',
-            },
-        });
+            sessionOptions.success_url = `${clientUrl}/#/payment-success?session_id={CHECKOUT_SESSION_ID}&provider=stripe`;
+            sessionOptions.cancel_url = `${clientUrl}/#/create`;
+        }
 
-        res.json({ url: session.url, sessionId: session.id });
+        const session = await getStripeClient().checkout.sessions.create(sessionOptions);
+
+        res.json({ url: session.url, sessionId: session.id, clientSecret: session.client_secret });
     } catch (err) {
         console.error('[Stripe] Checkout session error:', err);
         res.status(500).json({ error: 'Failed to create checkout session' });
@@ -68,7 +92,7 @@ router.post('/create-checkout-session', async (req, res) => {
 // GET /api/verify-session/:sessionId — verify a completed Stripe session
 router.get('/verify-session/:sessionId', async (req, res) => {
     try {
-        const session = await stripe.checkout.sessions.retrieve(req.params.sessionId);
+        const session = await getStripeClient().checkout.sessions.retrieve(req.params.sessionId);
         res.json({
             paid: session.payment_status === 'paid',
             amount: session.amount_total, // in cents
@@ -80,5 +104,9 @@ router.get('/verify-session/:sessionId', async (req, res) => {
         res.status(500).json({ error: 'Failed to verify session' });
     }
 });
+
+router.__setStripeClientForTests = (client) => {
+    stripeClient = client;
+};
 
 module.exports = router;

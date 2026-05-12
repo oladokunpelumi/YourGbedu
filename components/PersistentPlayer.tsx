@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { usePlayer } from '../App';
+import { usePlayer } from '../contexts/PlayerContext';
 
 function formatTime(seconds: number): string {
   if (!seconds || isNaN(seconds)) return '0:00';
@@ -10,6 +10,7 @@ function formatTime(seconds: number): string {
 }
 
 const PersistentPlayer: React.FC = () => {
+  const [isHidden, setIsHidden] = useState(false);
   const {
     activeSong,
     isPlaying,
@@ -37,7 +38,7 @@ const PersistentPlayer: React.FC = () => {
       <div className="fixed bottom-6 left-0 right-0 z-[100] flex justify-center pointer-events-none">
         <Link
           to="/create"
-          className="pointer-events-auto bg-obsidian text-primary px-10 py-4 font-label uppercase tracking-widest text-xs rounded-full shadow-[0_8px_32px_rgba(36,26,0,0.35)] hover:scale-105 transition-transform duration-300"
+          className="pointer-events-auto inline-flex min-h-12 min-w-[190px] max-w-[calc(100vw-2rem)] items-center justify-center whitespace-nowrap rounded-full bg-[#211704] px-7 py-3 font-label text-xs uppercase tracking-widest text-primary shadow-[0_8px_24px_rgba(36,26,0,0.18)] ring-1 ring-[#D4AF37]/30 transition-transform duration-300 hover:scale-[1.02] sm:px-8"
         >
           Create Your Song
         </Link>
@@ -49,115 +50,165 @@ const PersistentPlayer: React.FC = () => {
   const activeBarIndex = Math.floor(progressFraction * waveformBars.length);
   const hasAudio = !!activeSong.audioUrl;
 
+  if (isHidden) {
+    return (
+      <button
+        type="button"
+        onClick={() => setIsHidden(false)}
+        className="fixed bottom-5 right-5 z-[100] flex h-12 items-center gap-2 rounded-full bg-obsidian px-4 text-primary shadow-[0_6px_18px_rgba(36,26,0,0.18)] transition-transform hover:scale-[1.03]"
+        aria-label="Show music player"
+      >
+        <span className="material-symbols-outlined text-xl" aria-hidden="true">
+          graphic_eq
+        </span>
+        <span className="hidden text-[10px] font-label font-bold uppercase tracking-widest sm:inline">
+          Player
+        </span>
+      </button>
+    );
+  }
+
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-[100] glass shadow-ambient h-20 px-4 md:px-8 flex items-center justify-between transition-all">
-      {/* Track Info */}
-      <div className="flex items-center gap-4 w-1/4 min-w-[140px] md:min-w-[200px]">
-        <div className="h-12 w-12 rounded-md bg-surface-container-low relative overflow-hidden group shrink-0">
+    <div className="fixed bottom-4 left-0 right-0 z-[100] flex justify-center px-3 pointer-events-none">
+      <div className="pointer-events-auto grid w-full max-w-[760px] grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-[28px] border border-[#D4AF37]/35 bg-[#211704] px-3 py-2 text-[#fff6d5] shadow-[0_10px_30px_rgba(36,26,0,0.24)] ring-1 ring-black/10 md:grid-cols-[minmax(160px,220px)_auto_minmax(180px,1fr)_auto] md:gap-3 md:px-4">
+        <div className="flex min-w-0 items-center gap-3">
           <img
             src={activeSong.coverUrl}
-            alt={activeSong.title}
+            alt=""
             loading="eager"
-            className="absolute inset-0 w-full h-full object-cover transition-transform group-hover:scale-110"
+            className="h-11 w-11 shrink-0 rounded-md border border-[#D4AF37]/25 object-cover shadow-[0_4px_12px_rgba(0,0,0,0.22)]"
           />
+          <div className="min-w-0">
+            <p className="truncate font-display text-sm font-bold leading-tight text-[#fff8df]">
+              {activeSong.title}
+            </p>
+            <p className="truncate font-ui text-xs text-[#d9bf62]">
+              {activeSong.genre} {hasAudio ? '' : '• No audio'}
+            </p>
+          </div>
         </div>
-        <div className="flex flex-col overflow-hidden">
-          <span className="text-[#241a00] font-bold text-sm truncate font-display">
-            {activeSong.title}
-          </span>
-          <span className="text-[#78614A] text-xs truncate font-ui">
-            {activeSong.genre} {hasAudio ? '' : '• No Audio'}
-            {isPreviewLocked && <span className="text-secondary ml-1">• Preview ended</span>}
-          </span>
-        </div>
-      </div>
 
-      {/* Player Controls */}
-      <div className="flex flex-col items-center flex-1 max-w-2xl px-4">
-        <div className="flex items-center gap-6 mb-1">
+        <div className="flex shrink-0 items-center justify-center gap-1">
           <button
+            type="button"
             onClick={skipPrev}
-            className="text-[#78614A] hover:text-[#241a00] transition-colors"
+            className="hidden h-9 w-9 items-center justify-center rounded-full text-[#d9bf62] transition-colors hover:bg-[#D4AF37]/10 hover:text-[#fff8df] sm:flex"
+            aria-label="Previous sample"
           >
-            <span className="material-symbols-outlined text-xl">skip_previous</span>
+            <span className="material-symbols-outlined text-xl" aria-hidden="true">
+              skip_previous
+            </span>
           </button>
           <button
+            type="button"
             onClick={togglePlay}
             disabled={!hasAudio || isPreviewLocked}
-            className={`h-10 w-10 rounded-full flex items-center justify-center transition-transform ${hasAudio && !isPreviewLocked ? 'btn-gradient text-white hover:scale-105' : 'bg-surface-container-low text-[#78614A] cursor-not-allowed'}`}
+            className={`flex h-10 w-10 items-center justify-center rounded-full transition-transform ${
+              hasAudio && !isPreviewLocked
+                ? 'bg-[#D4AF37] text-[#211704] shadow-[0_4px_14px_rgba(212,175,55,0.25)] hover:scale-[1.03]'
+                : 'bg-[#D4AF37]/10 text-[#d9bf62]/45 cursor-not-allowed'
+            }`}
+            aria-label={isPlaying ? 'Pause sample' : 'Play sample'}
           >
-            <span className="material-symbols-outlined fill">
+            <span className="material-symbols-outlined" aria-hidden="true">
               {isPlaying ? 'pause' : 'play_arrow'}
             </span>
           </button>
           <button
+            type="button"
             onClick={skipNext}
-            className="text-[#78614A] hover:text-[#241a00] transition-colors"
+            className="hidden h-9 w-9 items-center justify-center rounded-full text-[#d9bf62] transition-colors hover:bg-[#D4AF37]/10 hover:text-[#fff8df] sm:flex"
+            aria-label="Next sample"
           >
-            <span className="material-symbols-outlined text-xl">skip_next</span>
+            <span className="material-symbols-outlined text-xl" aria-hidden="true">
+              skip_next
+            </span>
           </button>
         </div>
 
-        <div className="w-full flex items-center gap-3 relative">
-          <span className="text-[10px] text-[#78614A] font-mono">{formatTime(currentTime)}</span>
+        <div className="hidden min-w-0 items-center gap-3 md:flex">
+          <span className="w-9 text-right font-mono text-[10px] text-[#d9bf62]/80">
+            {formatTime(currentTime)}
+          </span>
 
           {isPreviewLocked ? (
-            <div className="flex-1 h-8 flex items-center justify-center gap-2 bg-secondary/10 rounded-lg px-3">
-              <span className="material-symbols-outlined text-secondary text-sm">lock</span>
-              <span className="text-secondary text-xs font-bold font-ui">30s preview ended</span>
-              <Link
-                to="/create"
-                className="ml-auto text-[10px] font-bold btn-secondary-warm text-white px-2 py-0.5 rounded hover:opacity-90 transition-colors uppercase tracking-wider font-ui"
-              >
-                Create Yours
-              </Link>
+            <div className="flex h-9 min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-[#D4AF37]/10 px-3">
+              <span className="material-symbols-outlined text-sm text-[#D4AF37]" aria-hidden="true">
+                lock
+              </span>
+              <span className="truncate font-ui text-xs font-bold text-[#D4AF37]">
+                30s preview ended
+              </span>
             </div>
           ) : (
-            <div
-              className="h-8 flex-1 flex items-center gap-[2px] opacity-80 cursor-pointer"
+            <button
+              type="button"
+              className="flex h-10 flex-1 items-center gap-[3px] rounded-full bg-[#120d02]/60 px-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#D4AF37] focus-visible:outline-offset-4"
               onClick={(e) => {
                 if (!hasAudio || !duration) return;
                 const rect = e.currentTarget.getBoundingClientRect();
                 const fraction = (e.clientX - rect.left) / rect.width;
                 seek(fraction * duration);
               }}
+              aria-label="Seek within sample preview"
             >
               {waveformBars.map((height, i) => (
-                <div
+                <span
                   key={i}
-                  className={`w-1 rounded-full transition-colors ${i < activeBarIndex ? 'bg-secondary' : 'bg-surface-container-highest'}`}
+                  className={`w-1 rounded-full transition-colors ${
+                    i < activeBarIndex ? 'bg-[#D4AF37]' : 'bg-[#fff8df]/22'
+                  }`}
                   style={{ height: `${height}%` }}
+                  aria-hidden="true"
                 />
               ))}
-            </div>
+            </button>
           )}
 
-          <span className="text-[10px] text-[#78614A] font-mono">{formatTime(duration)}</span>
         </div>
-      </div>
 
-      {/* Volume & CTA — desktop only */}
-      <div className="hidden md:flex items-center justify-end gap-6 w-1/4 min-w-[200px]">
-        <div className="flex items-center gap-2 group">
-          <span className="material-symbols-outlined text-[#78614A] text-lg">
-            {volume === 0 ? 'volume_off' : volume < 0.5 ? 'volume_down' : 'volume_up'}
-          </span>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={volume}
-            onChange={(e) => setVolume(parseFloat(e.target.value))}
-            className="w-20 h-1 bg-surface-container-highest rounded-full appearance-none cursor-pointer"
-          />
+        <div className="hidden shrink-0 items-center gap-2 md:flex">
+          <div className="hidden items-center gap-2 2xl:flex">
+            <label className="sr-only" htmlFor="player-volume">
+              Volume
+            </label>
+            <span className="material-symbols-outlined text-lg text-[#d9bf62]/80" aria-hidden="true">
+              {volume === 0 ? 'volume_off' : volume < 0.5 ? 'volume_down' : 'volume_up'}
+            </span>
+            <input
+              id="player-volume"
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={volume}
+              onChange={(e) => setVolume(parseFloat(e.target.value))}
+              className="w-20 cursor-pointer accent-[#D4AF37]"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsHidden(true)}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[#d9bf62]/80 transition-colors hover:bg-[#D4AF37]/10 hover:text-[#fff8df]"
+            aria-label="Hide music player"
+          >
+            <span className="material-symbols-outlined text-lg" aria-hidden="true">
+              close
+            </span>
+          </button>
         </div>
-        <Link
-          to="/create"
-          className="text-xs font-bold text-secondary rounded-md px-3 py-1.5 bg-surface-container-highest hover:bg-secondary hover:text-white transition-colors uppercase tracking-wider font-ui"
+
+        <button
+          type="button"
+          onClick={() => setIsHidden(true)}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[#d9bf62]/80 transition-colors hover:bg-[#D4AF37]/10 hover:text-[#fff8df] md:hidden"
+          aria-label="Hide music player"
         >
-          Create Your Song
-        </Link>
+          <span className="material-symbols-outlined text-lg" aria-hidden="true">
+            close
+          </span>
+        </button>
       </div>
     </div>
   );

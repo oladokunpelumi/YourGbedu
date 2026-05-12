@@ -1,7 +1,34 @@
 const { Resend } = require('resend');
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM_EMAIL = process.env.FROM_EMAIL || 'YourGbedu <onboarding@resend.dev>';
+function escapeHtml(str) {
+    return String(str ?? '').replace(/[&<>"']/g, (c) => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+}
+
+let resendClient = null;
+let resendClientKey = null;
+
+function getFromEmail() {
+  return process.env.FROM_EMAIL || 'YourGbedu <onboarding@resend.dev>';
+}
+
+function getResendClient() {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey || apiKey.startsWith('re_placeholder')) return null;
+
+  if (!resendClient || resendClientKey !== apiKey) {
+    try {
+      resendClient = new Resend(apiKey);
+      resendClientKey = apiKey;
+    } catch (err) {
+      console.error('[Email] Failed to initialize Resend client:', err.message);
+      return null;
+    }
+  }
+
+  return resendClient;
+}
 
 /**
  * Send a payment/order confirmation email.
@@ -14,8 +41,9 @@ const FROM_EMAIL = process.env.FROM_EMAIL || 'YourGbedu <onboarding@resend.dev>'
  * @param {string} params.reference - Paystack reference
  */
 async function sendConfirmationEmail({ to, orderId, genre, mood, deliveryDate, reference }) {
-  if (!process.env.RESEND_API_KEY || process.env.RESEND_API_KEY.startsWith('re_placeholder')) {
-    console.log('[Email] Resend not configured — skipping email to:', to);
+  const resend = getResendClient();
+  if (!resend) {
+    console.log('[Email] Resend not configured — skipping confirmation email');
     return;
   }
 
@@ -25,6 +53,11 @@ async function sendConfirmationEmail({ to, orderId, genre, mood, deliveryDate, r
     month: 'long',
     day: 'numeric',
   });
+
+  const safeOrderId   = escapeHtml(orderId);
+  const safeGenre     = escapeHtml(genre || 'Custom');
+  const safeMood      = escapeHtml(mood || 'Custom');
+  const safeReference = escapeHtml(reference);
 
   const html = `
 <!DOCTYPE html>
@@ -55,12 +88,12 @@ async function sendConfirmationEmail({ to, orderId, genre, mood, deliveryDate, r
     <div class="body">
       <p style="color:#d1d5db; line-height:1.6;">Thank you for your order. Our team of professional artists has received your brief and will begin composing your unique song immediately.</p>
       <div style="background:#1c1c1c; border-radius:10px; padding:16px; margin: 20px 0;">
-        <div class="row"><span class="label">Order ID</span><span class="value">#${orderId}</span></div>
-        <div class="row"><span class="label">Genre</span><span class="value">${genre || 'Custom'}</span></div>
-        <div class="row"><span class="label">Mood</span><span class="value">${mood || 'Custom'}</span></div>
+        <div class="row"><span class="label">Order ID</span><span class="value">#${safeOrderId}</span></div>
+        <div class="row"><span class="label">Genre</span><span class="value">${safeGenre}</span></div>
+        <div class="row"><span class="label">Mood</span><span class="value">${safeMood}</span></div>
         <div class="row"><span class="label">Amount Paid</span><span class="value">₦30,000</span></div>
         <div class="row"><span class="label">Estimated Delivery</span><span class="value">${delivery}</span></div>
-        <div class="row"><span class="label">Payment Ref</span><span class="value" style="font-size:11px; font-family:monospace;">${reference}</span></div>
+        <div class="row"><span class="label">Payment Ref</span><span class="value" style="font-size:11px; font-family:monospace;">${safeReference}</span></div>
       </div>
       <a href="${process.env.CLIENT_URL || 'http://localhost:3000'}/track" class="cta">Track Your Order →</a>
     </div>
@@ -71,12 +104,12 @@ async function sendConfirmationEmail({ to, orderId, genre, mood, deliveryDate, r
 
   try {
     const result = await resend.emails.send({
-      from: FROM_EMAIL,
+      from: getFromEmail(),
       to,
       subject: `🎵 Your YourGbedu order #${orderId} is in production!`,
       html,
     });
-    console.log('[Email] Sent confirmation to:', to, '| ID:', result.data?.id);
+    console.log('[Email] Sent confirmation | ID:', result.data?.id);
     return result;
   } catch (err) {
     console.error('[Email] Failed to send confirmation email:', err.message);
@@ -88,13 +121,14 @@ async function sendConfirmationEmail({ to, orderId, genre, mood, deliveryDate, r
  * @param {string} params.to - Customer email
  * @param {string} params.token - Magic link token
  */
-async function sendMagicLinkEmail({ to, token }) {
-  if (!process.env.RESEND_API_KEY || process.env.RESEND_API_KEY.startsWith('re_placeholder')) {
-    console.log('[Email] Resend not configured — skipping magic link to:', to, '| token:', token);
+async function sendMagicLinkEmail({ to, token, clientUrl }) {
+  const resend = getResendClient();
+  if (!resend) {
+    console.log('[Email] Resend not configured — skipping magic link email');
     return;
   }
 
-  const loginUrl = `${process.env.CLIENT_URL || 'http://localhost:3000'}/#/verify?token=${token}`;
+  const loginUrl = `${clientUrl || process.env.CLIENT_URL || 'http://localhost:3000'}/#/verify?token=${token}`;
 
   const html = `
 <!DOCTYPE html>
@@ -130,12 +164,12 @@ async function sendMagicLinkEmail({ to, token }) {
 
   try {
     const result = await resend.emails.send({
-      from: FROM_EMAIL,
+      from: getFromEmail(),
       to,
       subject: '🎵 Sign in to YourGbedu',
       html,
     });
-    console.log('[Email] Sent magic link to:', to, '| ID:', result.data?.id);
+    console.log('[Email] Sent magic link | ID:', result.data?.id);
     return result;
   } catch (err) {
     console.error('[Email] Failed to send magic link email:', err.message);
@@ -152,10 +186,16 @@ async function sendMagicLinkEmail({ to, token }) {
  * @param {string} params.recipientType - Who the song is for (e.g. "Wife")
  */
 async function sendCompletionEmail({ to, orderId, genre, senderName, recipientType }) {
-  if (!process.env.RESEND_API_KEY || process.env.RESEND_API_KEY.startsWith('re_placeholder')) {
-    console.log('[Email] Resend not configured — skipping completion email to:', to);
+  const resend = getResendClient();
+  if (!resend) {
+    console.log('[Email] Resend not configured — skipping completion email');
     return;
   }
+
+  const safeOrderId       = escapeHtml(orderId);
+  const safeGenre         = escapeHtml(genre);
+  const safeSenderName    = escapeHtml(senderName);
+  const safeRecipientType = escapeHtml(recipientType);
 
   const html = `
 <!DOCTYPE html>
@@ -189,13 +229,13 @@ async function sendCompletionEmail({ to, orderId, genre, senderName, recipientTy
         <span class="badge">✓ Song Completed</span>
       </div>
       <p style="color:#d1d5db; line-height:1.6;">
-        ${senderName ? `Hi ${senderName},` : 'Hello,'}<br><br>
-        Great news! Your custom${recipientType ? ` song for your ${recipientType}` : ' song'} has been completed and is ready for delivery. Our team has poured their heart into crafting something truly special for you.
+        ${safeSenderName ? `Hi ${safeSenderName},` : 'Hello,'}<br><br>
+        Great news! Your custom${safeRecipientType ? ` song for your ${safeRecipientType}` : ' song'} has been completed and is ready for delivery. Our team has poured their heart into crafting something truly special for you.
       </p>
       <div style="background:#1c1c1c; border-radius:10px; padding:16px; margin: 20px 0;">
-        <div class="row"><span class="label">Order ID</span><span class="value">#${orderId}</span></div>
-        ${genre ? `<div class="row"><span class="label">Genre</span><span class="value">${genre}</span></div>` : ''}
-        ${recipientType ? `<div class="row"><span class="label">Song For</span><span class="value">${recipientType}</span></div>` : ''}
+        <div class="row"><span class="label">Order ID</span><span class="value">#${safeOrderId}</span></div>
+        ${safeGenre ? `<div class="row"><span class="label">Genre</span><span class="value">${safeGenre}</span></div>` : ''}
+        ${safeRecipientType ? `<div class="row"><span class="label">Song For</span><span class="value">${safeRecipientType}</span></div>` : ''}
         <div class="row"><span class="label">Status</span><span class="value" style="color:#4ade80;">Completed ✓</span></div>
       </div>
       <p style="color:#9ca3af; font-size:13px; line-height:1.6;">
@@ -210,12 +250,12 @@ async function sendCompletionEmail({ to, orderId, genre, senderName, recipientTy
 
   try {
     const result = await resend.emails.send({
-      from: FROM_EMAIL,
+      from: getFromEmail(),
       to,
       subject: `🎵 Your YourGbedu song #${orderId} is ready!`,
       html,
     });
-    console.log('[Email] Sent completion email to:', to, '| ID:', result.data?.id);
+    console.log('[Email] Sent completion email | ID:', result.data?.id);
     return result;
   } catch (err) {
     console.error('[Email] Failed to send completion email:', err.message);

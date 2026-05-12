@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { usePlayer } from '../App';
-import { Song } from '../types';
+import React, { useState } from 'react';
+import { usePlayer } from '../contexts/PlayerContext';
 
 const Library: React.FC = () => {
-  const { songs, playSong, activeSong, isPlaying } = usePlayer();
+  const { songs, isSongsLoading, songsError, reloadSongs, playSong, activeSong, isPlaying } =
+    usePlayer();
   const [filter, setFilter] = useState('All Stories');
 
   const categories = ['All Stories', ...new Set(songs.flatMap((s) => s.tags || []))];
@@ -110,10 +110,27 @@ const Library: React.FC = () => {
         })}
       </div>
 
-      {songs.length === 0 && (
+      {isSongsLoading && songs.length === 0 && (
         <div className="text-center py-20 text-[#A08B74]">
           <span className="material-symbols-outlined text-4xl mb-4 block">library_music</span>
           <p className="text-lg font-display">Loading songs...</p>
+        </div>
+      )}
+
+      {songsError && !isSongsLoading && (
+        <div className="mx-auto max-w-xl rounded-2xl border border-red-200 bg-red-50 px-6 py-5 text-center text-red-700">
+          <span className="material-symbols-outlined mb-2 block text-3xl" aria-hidden="true">
+            cloud_off
+          </span>
+          <p className="font-display text-lg font-bold">Songs could not load</p>
+          <p className="mt-1 text-sm">{songsError}</p>
+          <button
+            type="button"
+            onClick={reloadSongs}
+            className="mt-4 rounded-full bg-obsidian px-5 py-2 text-xs font-bold uppercase tracking-widest text-primary"
+          >
+            Try Again
+          </button>
         </div>
       )}
     </div>

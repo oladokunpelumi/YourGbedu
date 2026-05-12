@@ -1,33 +1,30 @@
 import path from 'path';
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, '.', '');
-  return {
-    server: {
-      port: 3000,
-      host: '0.0.0.0',
-      proxy: {
-        '/api': {
-          target: 'http://localhost:3001',
-          changeOrigin: true,
-        },
-        '/musics': {
-          target: 'http://localhost:3001',
-          changeOrigin: true,
-        },
+const clientPort = Number(process.env.VITE_CLIENT_PORT || 3000);
+const serverPort = process.env.SERVER_PORT || 3001;
+
+export default defineConfig({
+  server: {
+    port: clientPort,
+    strictPort: true,
+    host: '127.0.0.1',
+    proxy: {
+      '/api': {
+        target: `http://127.0.0.1:${serverPort}`,
+        changeOrigin: true,
+      },
+      '/musics': {
+        target: `http://127.0.0.1:${serverPort}`,
+        changeOrigin: true,
       },
     },
-    plugins: [react()],
-    define: {
-      'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+  },
+  plugins: [react()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, '.'),
     },
-    resolve: {
-      alias: {
-        '@': path.resolve(__dirname, '.'),
-      },
-    },
-  };
+  },
 });

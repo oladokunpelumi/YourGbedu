@@ -5,6 +5,10 @@ const PaymentSuccess: React.FC = () => {
   const [status, setStatus] = useState<'creating' | 'success' | 'error'>('creating');
   const [orderId, setOrderId] = useState<string | null>(null);
   const [amountPaid, setAmountPaid] = useState<string>('');
+  const [deliveryLabel, setDeliveryLabel] = useState('~3 days');
+  const [errorMessage, setErrorMessage] = useState(
+    "We couldn't verify your payment or create your order. Please contact support if you were charged."
+  );
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -40,22 +44,37 @@ const PaymentSuccess: React.FC = () => {
         if (stripeSessionId) {
           // ── Stripe flow ─────────────────────────────────────────
           const verifyRes = await fetch(`/api/verify-session/${stripeSessionId}`);
+          if (!verifyRes.ok) {
+            const data = await verifyRes.json().catch(() => null);
+            setErrorMessage(data?.error || 'Stripe verification failed.');
+            setStatus('error');
+            return;
+          }
           const verifyData = await verifyRes.json();
 
           if (!verifyData.paid) {
+            setErrorMessage('Stripe has not marked this payment as paid yet.');
             setStatus('error');
             return;
           }
 
-          setAmountPaid('$25 USD');
+          setAmountPaid(
+            typeof verifyData.amount === 'number'
+              ? `$${(verifyData.amount / 100).toFixed(2)} USD`
+              : '$25 USD'
+          );
 
           const meta = verifyData.metadata || {};
+          const fastDelivery = brief.fastDelivery || meta.fastDelivery === 'true';
+          setDeliveryLabel(fastDelivery ? '24 hours' : '~3 days');
           const orderRes = await fetch('/api/orders', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               songTitle: 'Custom Song',
               genre: brief.genre || meta.genre || '',
+              occasion: brief.occasion || meta.occasion || '',
+              occasionDetail: brief.occasionDetail || meta.occasionDetail || '',
               stripeSessionId,
               customerEmail:
                 brief.customerEmail || verifyData.customerEmail || meta.customerEmail || '',
@@ -65,22 +84,45 @@ const PaymentSuccess: React.FC = () => {
               specialQualities: brief.specialQualities || meta.specialQualities || '',
               favoriteMemories: brief.favoriteMemories || meta.favoriteMemories || '',
               specialMessage: brief.specialMessage || meta.specialMessage || '',
+              fastDelivery,
             }),
           });
+
+          if (!orderRes.ok) {
+            const data = await orderRes.json().catch(() => null);
+            setErrorMessage(data?.error || 'Payment was verified, but the order could not be created.');
+            setStatus('error');
+            return;
+          }
 
           const orderData = await orderRes.json();
           finalize(orderData.id);
         } else {
           // ── Paystack flow ───────────────────────────────────────
           const verifyRes = await fetch(`/api/paystack/verify/${paystackReference}`);
+          if (!verifyRes.ok) {
+            const data = await verifyRes.json().catch(() => null);
+            setErrorMessage(data?.error || 'Paystack verification failed.');
+            setStatus('error');
+            return;
+          }
           const verifyData = await verifyRes.json();
 
           if (!verifyData.paid) {
+            setErrorMessage(verifyData.message || 'Paystack has not marked this payment as paid yet.');
             setStatus('error');
             return;
           }
 
-          setAmountPaid('₦30,000');
+          setAmountPaid(
+            typeof verifyData.amount === 'number'
+              ? `₦${(verifyData.amount / 100).toLocaleString('en-NG')}`
+              : '₦30,000'
+          );
+
+          const fastDelivery =
+            brief.fastDelivery || verifyData.metadata?.fastDelivery === true || verifyData.metadata?.fastDelivery === 'true';
+          setDeliveryLabel(fastDelivery ? '24 hours' : '~3 days');
 
           const orderRes = await fetch('/api/orders', {
             method: 'POST',
@@ -88,6 +130,8 @@ const PaymentSuccess: React.FC = () => {
             body: JSON.stringify({
               songTitle: 'Custom Song',
               genre: brief.genre || verifyData.metadata?.genre || '',
+              occasion: brief.occasion || verifyData.metadata?.occasion || '',
+              occasionDetail: brief.occasionDetail || verifyData.metadata?.occasionDetail || '',
               paystackReference,
               customerEmail: brief.customerEmail || verifyData.metadata?.customerEmail || '',
               recipientType: brief.recipientType || verifyData.metadata?.recipientType || '',
@@ -98,14 +142,23 @@ const PaymentSuccess: React.FC = () => {
               favoriteMemories:
                 brief.favoriteMemories || verifyData.metadata?.favoriteMemories || '',
               specialMessage: brief.specialMessage || verifyData.metadata?.specialMessage || '',
+              fastDelivery,
             }),
           });
+
+          if (!orderRes.ok) {
+            const data = await orderRes.json().catch(() => null);
+            setErrorMessage(data?.error || 'Payment was verified, but the order could not be created.');
+            setStatus('error');
+            return;
+          }
 
           const orderData = await orderRes.json();
           finalize(orderData.id);
         }
       } catch (err) {
         console.error('Order creation error:', err);
+        setErrorMessage('Network error while creating your order. Please check your connection and try again.');
         setStatus('error');
       }
     };
@@ -162,8 +215,7 @@ const PaymentSuccess: React.FC = () => {
           Verification Failed
         </h2>
         <p className="text-[#e2c15a] font-body text-center max-w-md opacity-80">
-          We couldn't verify your payment or create your order. Please contact support if you were
-          charged.
+          {errorMessage}
         </p>
         <Link
           to="/create"
@@ -233,7 +285,7 @@ const PaymentSuccess: React.FC = () => {
               <span className="text-xs text-[#c4a02e] font-display uppercase tracking-widest">
                 Est. Delivery
               </span>
-              <span className="text-sm text-primary font-bold font-display">~3 days</span>
+              <span className="text-sm text-primary font-bold font-display">{deliveryLabel}</span>
             </div>
           </div>
         </div>

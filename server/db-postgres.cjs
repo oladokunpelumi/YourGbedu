@@ -85,6 +85,7 @@ async function initSchema() {
             mood TEXT,
             tempo INTEGER,
             occasion TEXT,
+            occasion_detail TEXT,
             story TEXT,
             status TEXT DEFAULT 'in_production',
             created_at TEXT NOT NULL,
@@ -115,6 +116,8 @@ async function initSchema() {
             created_at TEXT NOT NULL
         );
     `);
+
+    await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS occasion_detail TEXT');
     console.log('[PostgreSQL] Schema initialized');
 
     // Seed sample songs if the table is empty

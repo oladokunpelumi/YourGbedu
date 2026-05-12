@@ -7,7 +7,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "dev": "concurrently \"vite\" \"node server/server.cjs\"",
+    "dev": "concurrently -k \"vite\" \"node server/server.cjs\"",
     "start": "node server/server.cjs",
     "server": "node server/server.cjs",
     "dev:client": "vite",
@@ -24,6 +24,7 @@
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.6.2",
     "concurrently": "^9.2.1",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
@@ -44,6 +45,7 @@
     "@eslint/js": "^9.39.4",
     "@tailwindcss/container-queries": "^0.1.1",
     "@tailwindcss/forms": "^0.5.11",
+    "@types/cookie-parser": "^1.4.10",
     "@types/node": "^22.14.0",
     "@types/pg": "^8.18.0",
     "@types/supertest": "^7.2.0",

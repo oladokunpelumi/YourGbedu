@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { usePlayer } from '../App';
+import { usePlayer } from '../contexts/PlayerContext';
 import FAQ from '../components/FAQ';
 
 // Sound toggle for the music video
@@ -26,7 +26,16 @@ const SoundToggleVideo: React.FC = () => {
 };
 
 const Home: React.FC = () => {
-  const { songs, activeSong, playSong, togglePlay, isPlaying } = usePlayer();
+  const {
+    songs,
+    isSongsLoading,
+    songsError,
+    reloadSongs,
+    activeSong,
+    playSong,
+    togglePlay,
+    isPlaying,
+  } = usePlayer();
 
   // Scroll-reveal: stagger curator cards as they enter the viewport
   const revealRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -67,7 +76,7 @@ const Home: React.FC = () => {
             <div>
               <Link
                 to="/create"
-                className="inline-block bg-obsidian text-primary px-12 py-5 font-label uppercase tracking-widest text-sm rounded-full hover:scale-105 transition-all duration-500 shadow-obsidian"
+                className="inline-block bg-obsidian text-primary px-12 py-5 font-label uppercase tracking-widest text-sm rounded-full hover:scale-[1.02] transition-all duration-500 shadow-[0_6px_18px_rgba(36,26,0,0.14)]"
               >
                 Create Your Song
               </Link>
@@ -134,7 +143,7 @@ const Home: React.FC = () => {
           <div className="text-center mt-10">
             <Link
               to="/create"
-              className="inline-block bg-primary text-obsidian px-12 py-4 font-label uppercase tracking-widest text-sm rounded-full hover:scale-105 transition-all duration-300 shadow-[0_0_40px_rgba(212,175,55,0.3)]"
+              className="inline-block bg-primary text-obsidian px-12 py-4 font-label uppercase tracking-widest text-sm rounded-full hover:scale-[1.02] transition-all duration-300 shadow-[0_6px_18px_rgba(212,175,55,0.18)]"
             >
               Create Your Song
             </Link>
@@ -244,7 +253,7 @@ const Home: React.FC = () => {
 
             <button
               onClick={togglePlay}
-              className={`relative z-20 w-32 h-32 rounded-full bg-primary flex items-center justify-center shadow-[0_0_60px_rgba(212,175,55,0.4)] transition-all duration-500 ${isPlaying ? 'scale-110 shadow-[0_0_80px_rgba(212,175,55,0.6)]' : 'hover:scale-105'}`}
+              className={`relative z-20 w-32 h-32 rounded-full bg-primary flex items-center justify-center shadow-[0_8px_28px_rgba(212,175,55,0.22)] transition-all duration-500 ${isPlaying ? 'scale-105 shadow-[0_10px_34px_rgba(212,175,55,0.28)]' : 'hover:scale-[1.02]'}`}
             >
               <span
                 className="material-symbols-outlined text-obsidian text-6xl"
@@ -305,6 +314,32 @@ const Home: React.FC = () => {
               </div>
             ))}
           </div>
+
+          {isSongsLoading && songs.length === 0 && (
+            <div className="mt-24 text-center text-primary/70">
+              <span className="material-symbols-outlined mb-3 block text-4xl" aria-hidden="true">
+                library_music
+              </span>
+              <p className="font-display text-lg">Loading songs...</p>
+            </div>
+          )}
+
+          {songsError && !isSongsLoading && (
+            <div className="mx-auto mt-24 max-w-xl rounded-2xl border border-primary/20 bg-primary/10 px-6 py-5 text-center text-primary">
+              <span className="material-symbols-outlined mb-2 block text-3xl" aria-hidden="true">
+                cloud_off
+              </span>
+              <p className="font-display text-lg font-bold">Catalogue unavailable</p>
+              <p className="mt-1 text-sm text-primary/75">{songsError}</p>
+              <button
+                type="button"
+                onClick={reloadSongs}
+                className="mt-4 rounded-full bg-primary px-5 py-2 text-xs font-bold uppercase tracking-widest text-obsidian"
+              >
+                Try Again
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Texture overlay for the section */}
@@ -426,7 +461,7 @@ const Home: React.FC = () => {
           </h2>
           <Link
             to="/create"
-            className="bg-obsidian text-primary px-16 py-6 font-label uppercase tracking-[0.2em] text-sm rounded-full shadow-[0_20px_50px_rgba(36,26,0,0.2)] hover:shadow-[0_30px_60px_rgba(36,26,0,0.4)] hover:-translate-y-2 transition-all duration-700"
+            className="bg-obsidian text-primary px-16 py-6 font-label uppercase tracking-[0.2em] text-sm rounded-full shadow-[0_8px_24px_rgba(36,26,0,0.14)] hover:-translate-y-1 transition-all duration-500"
           >
             Create Your Song
           </Link>

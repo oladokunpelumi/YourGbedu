@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 interface Order {
@@ -7,11 +7,14 @@ interface Order {
   genre: string;
   mood: string;
   tempo: number;
+  occasion: string;
+  occasion_detail: string;
   story: string;
   status: string;
   created_at: string;
   delivery_date: string;
-  paystack_reference: string;
+  stripe_session_id: string | null;
+  paystack_reference: string | null;
   amount: number;
   recipient_type: string;
   sender_name: string;
@@ -39,13 +42,72 @@ interface Stats {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  in_production: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
-  completed: 'bg-green-500/10 text-green-600 border-green-500/30',
-  cancelled: 'bg-red-500/10 text-red-500 border-red-500/30',
+  in_production: 'border-blue-500/30 bg-blue-500/10 text-blue-700',
+  completed: 'border-green-500/30 bg-green-500/10 text-green-700',
+  cancelled: 'border-red-500/30 bg-red-500/10 text-red-600',
 };
 
+function adminFetch(url: string, options: RequestInit = {}) {
+  return fetch(url, { ...options, credentials: 'include' });
+}
+
+function formatDate(value: string) {
+  if (!value) return '-';
+  return new Date(value).toLocaleDateString('en-NG', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function formatAmount(amount: number) {
+  return `₦${((amount || 0) / 100).toLocaleString('en-NG')}`;
+}
+
+function labelize(value?: string | null) {
+  if (!value) return '-';
+  return value.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function buildOrderExport(order: Order) {
+  return {
+    orderId: order.id,
+    shortOrderId: order.id.slice(0, 8).toUpperCase(),
+    status: order.status,
+    paymentReference: order.paystack_reference || order.stripe_session_id || null,
+    amount: order.amount,
+    deliveryDate: order.delivery_date,
+    customerEmail: order.customer_email || null,
+    form: {
+      recipientType: order.recipient_type || '',
+      senderName: order.sender_name || '',
+      genre: order.genre || '',
+      voiceGender: order.voice_gender || '',
+      occasion: order.occasion || '',
+      occasionDetail: order.occasion_detail || '',
+      specialQualities: order.special_qualities || '',
+      favoriteMemories: order.favorite_memories || '',
+      specialMessage: order.special_message || order.story || '',
+    },
+    aiBrief: order.ai_brief || '',
+    createdAt: order.created_at,
+  };
+}
+
+function downloadJson(fileName: string, payload: unknown) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 const Admin: React.FC = () => {
-  const [adminToken, setAdminToken] = useState<string | null>(localStorage.getItem('admin_token'));
+  const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -58,52 +120,44 @@ const Admin: React.FC = () => {
   const [stats, setStats] = useState<Stats | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [adminMessage, setAdminMessage] = useState('');
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginError('');
-    setIsLoading(true);
+  const currentPendingBriefs = useMemo(
+    () => orders.filter((order) => !order.ai_brief?.trim()).length,
+    [orders]
+  );
 
+  useEffect(() => {
+    adminFetch('/api/admin/stats')
+      .then((res) => setAuthenticated(res.ok))
+      .catch(() => setAuthenticated(false));
+  }, []);
+
+  const logout = useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setAdminToken(data.token);
-        localStorage.setItem('admin_token', data.token);
-      } else {
-        setLoginError('Invalid credentials');
-      }
-    } catch (err) {
-      setLoginError('An error occurred during log in.');
-    } finally {
-      setIsLoading(false);
+      await adminFetch('/api/admin/logout', { method: 'POST' });
+    } catch {
+      /* best effort */
     }
-  };
-
-  const logout = useCallback(() => {
-    localStorage.removeItem('admin_token');
-    setAdminToken(null);
+    setAuthenticated(false);
+    setOrders([]);
+    setStats(null);
   }, []);
 
   const fetchData = useCallback(
-    async (authToken: string, page = 1) => {
+    async (page = 1) => {
       setIsLoading(true);
+      setAdminMessage('');
       try {
         const params = new URLSearchParams({ page: String(page), limit: '25' });
         if (statusFilter) params.set('status', statusFilter);
         if (search) params.set('search', search);
 
         const [ordersRes, statsRes] = await Promise.all([
-          fetch(`/api/admin/orders?${params}`, {
-            headers: { Authorization: `Bearer ${authToken}` },
-          }),
-          fetch('/api/admin/stats', { headers: { Authorization: `Bearer ${authToken}` } }),
+          adminFetch(`/api/admin/orders?${params}`),
+          adminFetch('/api/admin/stats'),
         ]);
 
         if (ordersRes.status === 401 || ordersRes.status === 403) {
@@ -117,113 +171,172 @@ const Admin: React.FC = () => {
         setStats(statsData);
       } catch (err) {
         console.error('Failed to fetch admin data:', err);
+        setAdminMessage('Could not load the order queue.');
       } finally {
         setIsLoading(false);
       }
     },
-    [logout, statusFilter, search]
+    [logout, search, statusFilter]
   );
 
   useEffect(() => {
-    if (adminToken) {
-      fetchData(adminToken, currentPage);
+    if (authenticated) fetchData(currentPage);
+  }, [authenticated, currentPage, fetchData]);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    setIsLoading(true);
+
+    try {
+      const res = await adminFetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+
+      if (res.ok) {
+        setAuthenticated(true);
+        setPassword('');
+      } else {
+        setLoginError('Invalid credentials');
+      }
+    } catch {
+      setLoginError('An error occurred during log in.');
+    } finally {
+      setIsLoading(false);
     }
-  }, [adminToken, fetchData, currentPage]);
+  };
 
   const handleStatusUpdate = async (orderId: string, newStatus: string) => {
-    if (!adminToken) return;
     setUpdatingId(orderId);
+    setAdminMessage('');
     try {
-      await fetch(`/api/admin/orders/${orderId}/status`, {
+      const res = await adminFetch(`/api/admin/orders/${orderId}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
-      await fetchData(adminToken);
+
+      if (!res.ok) throw new Error('Status update failed');
+      await fetchData(currentPage);
     } catch (err) {
       console.error('Failed to update status:', err);
+      setAdminMessage('Could not update the order status.');
     } finally {
       setUpdatingId(null);
     }
   };
 
-  if (!adminToken) {
-    return (
-      <div className="min-h-screen pt-32 pb-20 px-8 flex flex-col items-center justify-center bg-background">
-        <div className="max-w-md w-full bg-background-surface border border-background-border p-10 rounded-2xl relative overflow-hidden shadow-sm">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
+  const handleGenerateBrief = async (orderId: string) => {
+    setGeneratingId(orderId);
+    setAdminMessage('');
+    try {
+      const res = await adminFetch(`/api/admin/orders/${orderId}/ai-brief`, { method: 'POST' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'AI brief generation failed');
 
-          <div className="relative text-center mb-8">
-            <span className="material-symbols-outlined text-4xl text-primary/80 mb-4 block">
+      setOrders((current) =>
+        current.map((order) => (order.id === orderId ? { ...order, ai_brief: data.aiBrief } : order))
+      );
+      setAdminMessage('AI production brief generated.');
+    } catch (err) {
+      console.error('Failed to generate AI brief:', err);
+      setAdminMessage(err instanceof Error ? err.message : 'Could not generate the AI brief.');
+    } finally {
+      setGeneratingId(null);
+    }
+  };
+
+  const handleExportOrder = (order: Order) => {
+    downloadJson(`yourgbedu-order-${order.id.slice(0, 8).toUpperCase()}.json`, buildOrderExport(order));
+  };
+
+  const handleExportQueue = async () => {
+    setAdminMessage('');
+    try {
+      const params = new URLSearchParams();
+      if (statusFilter) params.set('status', statusFilter);
+      if (search) params.set('search', search);
+
+      const res = await adminFetch(`/api/admin/orders/export?${params}`);
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'Queue export failed');
+
+      downloadJson('yourgbedu-order-queue.json', data);
+    } catch (err) {
+      console.error('Failed to export queue:', err);
+      setAdminMessage(err instanceof Error ? err.message : 'Could not export the order queue.');
+    }
+  };
+
+  if (authenticated === null) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <span className="material-symbols-outlined animate-spin text-4xl text-primary">
+          progress_activity
+        </span>
+      </div>
+    );
+  }
+
+  if (!authenticated) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background px-8 pb-20 pt-32">
+        <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-background-border bg-background-surface p-10 shadow-sm">
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent" />
+          <div className="relative mb-8 text-center">
+            <span className="material-symbols-outlined mb-4 block text-4xl text-primary/80">
               admin_panel_settings
             </span>
-            <h2 className="text-2xl font-bold text-[#1C1008] font-display">Admin Login</h2>
-            <p className="text-[#A08B74] text-sm mt-3 font-body">Sign in to manage orders</p>
+            <h2 className="font-display text-2xl font-bold text-[#1C1008]">Admin Login</h2>
+            <p className="mt-3 font-body text-sm text-[#A08B74]">Sign in to work on orders</p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-5 relative">
+          <form onSubmit={handleLogin} className="relative space-y-5">
             {loginError && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm text-center">
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-center text-sm text-red-600">
                 {loginError}
               </div>
             )}
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs font-medium text-[#A08B74] uppercase tracking-widest pl-1 mb-2 block font-display">
-                  Username
-                </label>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full bg-background border border-background-border rounded-xl px-4 py-3.5 text-[#1C1008] placeholder-[#A08B74] focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all font-body text-sm"
-                  placeholder="Enter username"
-                  required
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-[#A08B74] uppercase tracking-widest pl-1 mb-2 block font-display">
-                  Password
-                </label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-background border border-background-border rounded-xl px-4 py-3.5 text-[#1C1008] placeholder-[#A08B74] focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all font-body text-sm"
-                  placeholder="••••••••"
-                  required
-                />
-              </div>
+            <div>
+              <label className="mb-2 block pl-1 font-display text-xs font-medium uppercase tracking-widest text-[#A08B74]">
+                Username
+              </label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full rounded-xl border border-background-border bg-background px-4 py-3.5 font-body text-sm text-[#1C1008] transition-all placeholder-[#A08B74] focus:outline-none focus:ring-2 focus:ring-primary/40"
+                placeholder="Enter username"
+                autoComplete="username"
+                required
+              />
+            </div>
+            <div>
+              <label className="mb-2 block pl-1 font-display text-xs font-medium uppercase tracking-widest text-[#A08B74]">
+                Password
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded-xl border border-background-border bg-background px-4 py-3.5 font-body text-sm text-[#1C1008] transition-all placeholder-[#A08B74] focus:outline-none focus:ring-2 focus:ring-primary/40"
+                placeholder="Password"
+                autoComplete="current-password"
+                required
+              />
             </div>
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full relative px-6 py-4 rounded-xl bg-gradient-to-r from-primary to-amber-500 text-white font-bold transition-all hover:shadow-[0_0_20px_rgba(249,115,22,0.3)] hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed group/btn overflow-hidden font-display tracker-wider mt-6"
+              className="mt-6 w-full rounded-xl bg-[#241a00] px-6 py-4 font-display text-sm font-bold uppercase tracking-wider text-primary transition-all hover:bg-[#352600] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <span className="relative z-10 flex items-center justify-center gap-2 text-sm uppercase">
-                {isLoading ? (
-                  <>
-                    <span className="material-symbols-outlined animate-spin text-lg">
-                      progress_activity
-                    </span>
-                    Authenticating...
-                  </>
-                ) : (
-                  <>
-                    Access Dashboard
-                    <span className="material-symbols-outlined group-hover/btn:translate-x-1 transition-transform text-lg">
-                      arrow_forward
-                    </span>
-                  </>
-                )}
-              </span>
+              {isLoading ? 'Authenticating...' : 'Access Workbench'}
             </button>
             <div className="pt-6 text-center">
-              <Link
-                to="/"
-                className="text-xs text-[#A08B74] hover:text-[#1C1008] transition-colors"
-              >
-                ← Back to Home
+              <Link to="/" className="text-xs text-[#A08B74] transition-colors hover:text-[#1C1008]">
+                Back to Home
               </Link>
             </div>
           </form>
@@ -234,85 +347,72 @@ const Admin: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Admin Header */}
-      <header className="bg-background-surface border-b border-background-border px-6 py-4 flex items-center justify-between sticky top-0 z-10">
-        <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-primary">admin_panel_settings</span>
-          <span className="font-bold text-[#1C1008] font-display">YourGbedu Admin</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => adminToken && fetchData(adminToken)}
-            className="flex items-center gap-1 text-sm text-[#78614A] hover:text-[#1C1008] transition-colors"
-          >
-            <span className="material-symbols-outlined text-base">refresh</span>
-            Refresh
-          </button>
-          <button
-            onClick={logout}
-            className="flex items-center gap-1 text-sm text-red-500 hover:text-red-600 transition-colors"
-          >
-            <span className="material-symbols-outlined text-base">logout</span>
-            Log Out
-          </button>
-          <Link
-            to="/"
-            className="text-sm text-[#78614A] hover:text-[#1C1008] transition-colors ml-4 border-l border-background-border pl-4"
-          >
-            ← Site
-          </Link>
+      <header className="sticky top-0 z-10 border-b border-background-border bg-background-surface px-6 py-4">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="font-display text-xs font-bold uppercase tracking-[0.2em] text-[#8a7124]">
+              Production Workbench
+            </p>
+            <h1 className="font-serif text-3xl font-bold italic text-[#1C1008]">
+              Orders to Work On
+            </h1>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => fetchData(currentPage)}
+              className="inline-flex items-center gap-2 rounded-full border border-background-border px-4 py-2 text-sm text-[#78614A] transition-colors hover:border-primary/50 hover:text-[#1C1008]"
+            >
+              <span className="material-symbols-outlined text-base">refresh</span>
+              Refresh
+            </button>
+            <button
+              type="button"
+              onClick={logout}
+              className="inline-flex items-center gap-2 rounded-full border border-red-200 px-4 py-2 text-sm text-red-600 transition-colors hover:bg-red-50"
+            >
+              <span className="material-symbols-outlined text-base">logout</span>
+              Log Out
+            </button>
+            <Link to="/" className="rounded-full border border-background-border px-4 py-2 text-sm text-[#78614A] hover:text-[#1C1008]">
+              Site
+            </Link>
+          </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-6 py-8 flex flex-col gap-8">
-        {/* Stats Cards */}
-        {stats && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {[
-              {
-                label: 'Total Orders',
-                value: stats.totalOrders,
-                icon: 'receipt_long',
-                color: 'text-blue-500',
-              },
-              {
-                label: 'Total Revenue',
-                value: `₦${(stats.totalRevenue / 100).toLocaleString('en-NG')}`,
-                icon: 'payments',
-                color: 'text-green-600',
-              },
-              {
-                label: 'Songs in Library',
-                value: stats.songCount,
-                icon: 'library_music',
-                color: 'text-primary',
-              },
-            ].map((stat) => (
-              <div
-                key={stat.label}
-                className="bg-background-surface border border-background-border rounded-xl p-6 flex items-center gap-4"
-              >
-                <div className="size-12 bg-background rounded-xl flex items-center justify-center">
-                  <span className={`material-symbols-outlined text-2xl ${stat.color}`}>
-                    {stat.icon}
-                  </span>
-                </div>
-                <div>
-                  <p className="text-xs text-[#A08B74] font-medium uppercase tracking-wider font-display">
-                    {stat.label}
-                  </p>
-                  <p className="text-2xl font-bold text-[#1C1008] font-display">{stat.value}</p>
-                </div>
+      <main className="mx-auto flex max-w-7xl flex-col gap-6 px-6 py-8">
+        <section className="grid grid-cols-1 gap-3 md:grid-cols-4">
+          {[
+            { label: 'Total Orders', value: stats?.totalOrders ?? '-', icon: 'receipt_long' },
+            { label: 'Revenue', value: stats ? formatAmount(stats.totalRevenue) : '-', icon: 'payments' },
+            { label: 'Visible Pending Briefs', value: currentPendingBriefs, icon: 'auto_awesome' },
+            { label: 'Songs in Library', value: stats?.songCount ?? '-', icon: 'library_music' },
+          ].map((stat) => (
+            <div
+              key={stat.label}
+              className="flex items-center gap-3 rounded-xl border border-background-border bg-background-surface px-4 py-3"
+            >
+              <span className="material-symbols-outlined text-xl text-primary">{stat.icon}</span>
+              <div>
+                <p className="font-display text-[10px] font-bold uppercase tracking-widest text-[#A08B74]">
+                  {stat.label}
+                </p>
+                <p className="font-display text-lg font-bold text-[#1C1008]">{stat.value}</p>
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          ))}
+        </section>
 
-        {/* Orders Table */}
-        <div className="bg-background-surface border border-background-border rounded-xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-background-border flex flex-col sm:flex-row items-start sm:items-center gap-3 justify-between">
-            <h2 className="font-bold text-[#1C1008] font-display">All Orders</h2>
-            <div className="flex items-center gap-2 flex-wrap">
+        <section className="overflow-hidden rounded-2xl border border-background-border bg-background-surface">
+          <div className="flex flex-col gap-4 border-b border-background-border px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="font-display text-lg font-bold text-[#1C1008]">Order Queue</h2>
+              <p className="text-sm text-[#78614A]">
+                Expand an order to review the brief, export JSON, or generate the production brief.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
               <input
                 type="text"
                 placeholder="Search name / email / ID..."
@@ -321,7 +421,7 @@ const Admin: React.FC = () => {
                   setSearch(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="bg-background border border-background-border rounded-lg px-3 py-1.5 text-[#1C1008] text-xs placeholder-[#A08B74] focus:outline-none focus:ring-1 focus:ring-primary w-48"
+                className="w-56 rounded-lg border border-background-border bg-background px-3 py-2 text-sm text-[#1C1008] placeholder-[#A08B74] focus:outline-none focus:ring-1 focus:ring-primary"
               />
               <select
                 value={statusFilter}
@@ -329,231 +429,220 @@ const Admin: React.FC = () => {
                   setStatusFilter(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="bg-background border border-background-border rounded-lg px-3 py-1.5 text-[#1C1008] text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                className="rounded-lg border border-background-border bg-background px-3 py-2 text-sm text-[#1C1008] focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 <option value="">All statuses</option>
                 <option value="in_production">In Production</option>
                 <option value="completed">Completed</option>
                 <option value="cancelled">Cancelled</option>
               </select>
-              <span className="text-xs text-[#A08B74]">
-                {pagination ? `${pagination.total} orders` : `${orders.length} orders`}
-              </span>
+              <button
+                type="button"
+                onClick={handleExportQueue}
+                className="inline-flex items-center gap-2 rounded-lg bg-[#241a00] px-4 py-2 font-display text-xs font-bold uppercase tracking-wider text-primary"
+              >
+                <span className="material-symbols-outlined text-base">download</span>
+                Export Queue JSON
+              </button>
             </div>
           </div>
 
+          {adminMessage && (
+            <div className="border-b border-background-border bg-[#FFF8E5] px-5 py-3 text-sm text-[#5C4A2F]">
+              {adminMessage}
+            </div>
+          )}
+
           {isLoading ? (
-            <div className="flex items-center justify-center p-16 gap-3">
-              <span className="material-symbols-outlined animate-spin text-primary text-3xl">
+            <div className="flex items-center justify-center p-16">
+              <span className="material-symbols-outlined animate-spin text-3xl text-primary">
                 progress_activity
               </span>
             </div>
           ) : orders.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-16 gap-3 text-[#A08B74]">
+            <div className="flex flex-col items-center justify-center gap-3 p-16 text-[#A08B74]">
               <span className="material-symbols-outlined text-4xl">inbox</span>
-              <p>No orders yet</p>
+              <p>No orders match this view</p>
             </div>
           ) : (
             <div className="divide-y divide-background-border">
-              {orders.map((order) => (
-                <div key={order.id} className="px-6 py-4">
-                  <div className="flex items-center justify-between gap-4 flex-wrap">
-                    <div className="flex items-center gap-4 min-w-0">
-                      <div className="size-10 bg-primary/10 border border-primary/20 rounded-lg flex items-center justify-center shrink-0">
-                        <span className="material-symbols-outlined text-primary text-lg">
-                          music_note
-                        </span>
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[#1C1008] font-bold font-mono text-sm">
-                            #{order.id.slice(0, 8).toUpperCase()}
-                          </span>
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-xs font-bold border ${STATUS_COLORS[order.status] || STATUS_COLORS.in_production}`}
-                          >
-                            {order.status.replace('_', ' ')}
-                          </span>
-                        </div>
-                        <p className="text-[#A08B74] text-xs mt-0.5 truncate">
-                          {order.genre || 'Custom'} · {order.voice_gender || order.mood || 'Custom'}{' '}
-                          · {new Date(order.created_at).toLocaleDateString('en-NG')}
-                        </p>
-                      </div>
-                    </div>
+              {orders.map((order) => {
+                const isExpanded = expandedId === order.id;
+                const hasBrief = !!order.ai_brief?.trim();
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-sm font-bold text-[#1C1008]">
-                        ₦{(order.amount / 100).toLocaleString('en-NG')}
-                      </span>
-                      <select
-                        value={order.status}
-                        onChange={(e) => handleStatusUpdate(order.id, e.target.value)}
-                        disabled={updatingId === order.id}
-                        className="bg-background border border-background-border rounded-lg px-3 py-1.5 text-[#1C1008] text-xs focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
-                      >
-                        <option value="in_production">In Production</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
-                      </select>
+                return (
+                  <article key={order.id} className="px-5 py-4">
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                       <button
-                        onClick={() => setExpandedId(expandedId === order.id ? null : order.id)}
-                        className="size-8 flex items-center justify-center rounded-lg bg-background border border-background-border text-[#A08B74] hover:text-[#1C1008] transition-colors"
+                        type="button"
+                        onClick={() => setExpandedId(isExpanded ? null : order.id)}
+                        className="flex min-w-0 flex-1 items-center gap-4 text-left"
                       >
-                        <span className="material-symbols-outlined text-sm">
-                          {expandedId === order.id ? 'expand_less' : 'expand_more'}
-                        </span>
+                        <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
+                          <span className="material-symbols-outlined text-primary">music_note</span>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-mono text-sm font-bold text-[#1C1008]">
+                              #{order.id.slice(0, 8).toUpperCase()}
+                            </span>
+                            <span className={`rounded-full border px-2 py-0.5 text-xs font-bold ${STATUS_COLORS[order.status] || STATUS_COLORS.in_production}`}>
+                              {order.status.replace('_', ' ')}
+                            </span>
+                            <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${hasBrief ? 'bg-violet-500/10 text-violet-700' : 'bg-amber-500/10 text-amber-700'}`}>
+                              {hasBrief ? 'AI brief ready' : 'AI brief pending'}
+                            </span>
+                          </div>
+                          <p className="mt-1 truncate text-sm text-[#78614A]">
+                            {labelize(order.occasion)} · {order.genre || 'Custom'} · {order.voice_gender || 'Voice TBD'} · {formatDate(order.created_at)}
+                          </p>
+                        </div>
                       </button>
-                    </div>
-                  </div>
 
-                  {/* Expanded Detail */}
-                  {expandedId === order.id && (
-                    <div className="mt-4 bg-background rounded-xl p-4 text-sm space-y-4 border border-background-border">
-                      {/* Basic Info */}
-                      <div className="grid grid-cols-2 gap-4 pb-4 border-b border-background-border">
-                        <div>
-                          <span className="text-[#A08B74] text-xs uppercase tracking-wider">
-                            For
+                      <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                        <span className="font-display text-sm font-bold text-[#1C1008]">
+                          {formatAmount(order.amount)}
+                        </span>
+                        <select
+                          value={order.status}
+                          onChange={(e) => handleStatusUpdate(order.id, e.target.value)}
+                          disabled={updatingId === order.id}
+                          className="rounded-lg border border-background-border bg-background px-3 py-2 text-xs text-[#1C1008] focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+                        >
+                          <option value="in_production">In Production</option>
+                          <option value="completed">Completed</option>
+                          <option value="cancelled">Cancelled</option>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => handleExportOrder(order)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-background-border px-3 py-2 text-xs font-bold text-[#5C4A2F] hover:border-primary/50"
+                        >
+                          <span className="material-symbols-outlined text-sm">download</span>
+                          JSON
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateBrief(order.id)}
+                          disabled={generatingId === order.id}
+                          className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-[#241a00] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <span className={`material-symbols-outlined text-sm ${generatingId === order.id ? 'animate-spin' : ''}`}>
+                            {generatingId === order.id ? 'progress_activity' : 'auto_awesome'}
                           </span>
-                          <p className="text-[#1C1008] font-medium">
-                            {order.recipient_type || '—'}
-                          </p>
+                          {hasBrief ? 'Regenerate' : 'Generate Brief'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedId(isExpanded ? null : order.id)}
+                          className="flex size-9 items-center justify-center rounded-lg border border-background-border text-[#78614A] hover:text-[#1C1008]"
+                          aria-label={isExpanded ? 'Collapse order' : 'Expand order'}
+                        >
+                          <span className="material-symbols-outlined text-base">
+                            {isExpanded ? 'expand_less' : 'expand_more'}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="mt-4 rounded-xl border border-background-border bg-background p-4 text-sm">
+                        <div className="grid gap-3 border-b border-background-border pb-4 md:grid-cols-3">
+                          {[
+                            ['For', order.recipient_type],
+                            ['From', order.sender_name],
+                            ['Occasion', labelize(order.occasion)],
+                            ['Occasion Detail', order.occasion_detail],
+                            ['Voice', order.voice_gender],
+                            ['Delivery', formatDate(order.delivery_date)],
+                            ['Email', order.customer_email],
+                            ['Payment Ref', order.paystack_reference || order.stripe_session_id],
+                            ['Created', formatDate(order.created_at)],
+                          ].map(([label, value]) => (
+                            <div key={label}>
+                              <span className="block font-display text-[10px] font-bold uppercase tracking-widest text-[#A08B74]">
+                                {label}
+                              </span>
+                              <p className="mt-1 break-words font-medium text-[#1C1008]">{value || '-'}</p>
+                            </div>
+                          ))}
                         </div>
-                        <div>
-                          <span className="text-[#A08B74] text-xs uppercase tracking-wider">
-                            From
-                          </span>
-                          <p className="text-[#1C1008] font-medium">{order.sender_name || '—'}</p>
+
+                        <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                          {[
+                            ['Special Qualities', order.special_qualities],
+                            ['Favorite Memories', order.favorite_memories],
+                            ['Special Message', order.special_message || order.story],
+                          ].map(([label, value]) => (
+                            <div key={label}>
+                              <span className="mb-2 block font-display text-xs font-bold uppercase tracking-wider text-primary">
+                                {label}
+                              </span>
+                              <p className="min-h-28 whitespace-pre-wrap rounded-lg border border-background-border bg-[#1C1008]/5 p-3 leading-relaxed text-[#5C4A2F]">
+                                {value || '-'}
+                              </p>
+                            </div>
+                          ))}
                         </div>
-                        <div>
-                          <span className="text-[#A08B74] text-xs uppercase tracking-wider">
-                            Voice
-                          </span>
-                          <p className="text-[#1C1008] font-medium">{order.voice_gender || '—'}</p>
-                        </div>
-                        <div>
-                          <span className="text-[#A08B74] text-xs uppercase tracking-wider">
-                            Delivery Date
-                          </span>
-                          <p className="text-[#1C1008] font-medium">
-                            {new Date(order.delivery_date).toLocaleDateString('en-NG')}
-                          </p>
-                        </div>
-                        <div className="col-span-2">
-                          <span className="text-[#A08B74] text-xs uppercase tracking-wider">
-                            Payment Ref
-                          </span>
-                          <p className="text-[#1C1008] font-mono text-xs break-all">
-                            {order.paystack_reference || '—'}
+
+                        <div className="mt-4 border-t border-background-border pt-4">
+                          <div className="mb-2 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                              <span className="material-symbols-outlined text-base text-violet-600">
+                                auto_awesome
+                              </span>
+                              <span className="font-display text-xs font-bold uppercase tracking-wider text-violet-700">
+                                AI Production Brief
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleGenerateBrief(order.id)}
+                              disabled={generatingId === order.id}
+                              className="rounded-full bg-violet-600 px-4 py-1.5 text-xs font-bold text-white disabled:opacity-60"
+                            >
+                              {generatingId === order.id ? 'Generating...' : hasBrief ? 'Regenerate' : 'Generate'}
+                            </button>
+                          </div>
+                          <p className="whitespace-pre-wrap rounded-lg border border-violet-500/20 bg-violet-500/5 p-4 leading-relaxed text-[#4C3B5C]">
+                            {order.ai_brief || 'AI brief pending generation. Use Generate Brief when this order is ready for production review.'}
                           </p>
                         </div>
                       </div>
-
-                      {/* Story Details */}
-                      <div className="space-y-4">
-                        {order.special_qualities && (
-                          <div>
-                            <span className="text-primary text-xs uppercase tracking-wider font-bold mb-1 block">
-                              Special Qualities
-                            </span>
-                            <p className="text-[#78614A] leading-relaxed bg-[#1C1008]/5 p-3 rounded-lg border border-background-border whitespace-pre-wrap">
-                              {order.special_qualities}
-                            </p>
-                          </div>
-                        )}
-                        {order.favorite_memories && (
-                          <div>
-                            <span className="text-primary text-xs uppercase tracking-wider font-bold mb-1 block">
-                              Favorite Memories
-                            </span>
-                            <p className="text-[#78614A] leading-relaxed bg-[#1C1008]/5 p-3 rounded-lg border border-background-border whitespace-pre-wrap">
-                              {order.favorite_memories}
-                            </p>
-                          </div>
-                        )}
-                        {order.special_message && (
-                          <div>
-                            <span className="text-primary text-xs uppercase tracking-wider font-bold mb-1 block">
-                              Special Message
-                            </span>
-                            <p className="text-[#78614A] leading-relaxed bg-[#1C1008]/5 p-3 rounded-lg border border-background-border whitespace-pre-wrap">
-                              {order.special_message}
-                            </p>
-                          </div>
-                        )}
-                        {order.story && !order.special_qualities && (
-                          <div>
-                            <span className="text-primary text-xs uppercase tracking-wider font-bold mb-1 block">
-                              Story Brief (Legacy)
-                            </span>
-                            <p className="text-[#78614A] leading-relaxed bg-[#1C1008]/5 p-3 rounded-lg border border-background-border whitespace-pre-wrap">
-                              {order.story}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* AI Production Brief */}
-                      {order.ai_brief ? (
-                        <div className="pt-4 border-t border-background-border">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="material-symbols-outlined text-base text-violet-500">
-                              auto_awesome
-                            </span>
-                            <span className="text-violet-600 text-xs uppercase tracking-wider font-bold">
-                              AI Production Brief
-                            </span>
-                          </div>
-                          <p className="text-[#78614A] leading-relaxed bg-violet-500/5 border border-violet-500/20 p-3 rounded-lg whitespace-pre-wrap text-sm">
-                            {order.ai_brief}
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="pt-4 border-t border-background-border flex items-center gap-2 text-[#A08B74] text-xs">
-                          <span className="material-symbols-outlined text-sm">hourglass_empty</span>
-                          AI brief pending generation
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
+                    )}
+                  </article>
+                );
+              })}
             </div>
           )}
 
-          {/* Pagination */}
           {pagination && pagination.totalPages > 1 && (
-            <div className="px-6 py-4 border-t border-background-border flex items-center justify-between gap-4">
-              <span className="text-xs text-[#A08B74] font-display">
+            <div className="flex items-center justify-between gap-4 border-t border-background-border px-5 py-4">
+              <span className="font-display text-xs text-[#A08B74]">
                 Page {pagination.page} of {pagination.totalPages}
               </span>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => {
-                    setCurrentPage((p) => Math.max(1, p - 1));
-                  }}
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={!pagination.hasPrev}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-background border border-background-border text-sm text-[#1C1008] disabled:opacity-40 hover:border-primary/50 transition-colors"
+                  className="rounded-lg border border-background-border bg-background px-3 py-1.5 text-sm text-[#1C1008] transition-colors hover:border-primary/50 disabled:opacity-40"
                 >
-                  <span className="material-symbols-outlined text-sm">chevron_left</span>
                   Prev
                 </button>
                 <button
-                  onClick={() => {
-                    setCurrentPage((p) => p + 1);
-                  }}
+                  type="button"
+                  onClick={() => setCurrentPage((p) => p + 1)}
                   disabled={!pagination.hasNext}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-background border border-background-border text-sm text-[#1C1008] disabled:opacity-40 hover:border-primary/50 transition-colors"
+                  className="rounded-lg border border-background-border bg-background px-3 py-1.5 text-sm text-[#1C1008] transition-colors hover:border-primary/50 disabled:opacity-40"
                 >
                   Next
-                  <span className="material-symbols-outlined text-sm">chevron_right</span>
                 </button>
               </div>
             </div>
           )}
-        </div>
-      </div>
+        </section>
+      </main>
     </div>
   );
 };

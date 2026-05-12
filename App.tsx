@@ -1,5 +1,5 @@
-import React, { useState, useEffect, createContext, useContext, useRef, useCallback } from 'react';
-import { HashRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { HashRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import PersistentPlayer from './components/PersistentPlayer';
@@ -10,38 +10,44 @@ import Library from './pages/Library';
 import PaymentSuccess from './pages/PaymentSuccess';
 import PaymentCancel from './pages/PaymentCancel';
 import Admin from './pages/Admin';
+import Verify from './pages/Verify';
+import Checkout from './pages/Checkout';
 import { Song } from './types';
+import { PlayerContext, PlayerContextType } from './contexts/PlayerContext';
 
 const PREVIEW_LIMIT_SECONDS = 30;
+const DIRECT_HASH_ROUTES = new Set([
+  '/admin',
+  '/create',
+  '/track',
+  '/library',
+  '/payment-success',
+  '/payment-cancel',
+  '/checkout',
+  '/checkout/return',
+  '/verify',
+]);
 
-// --- Audio Player Context ---
-interface PlayerContextType {
-  songs: Song[];
-  activeSong: Song | null;
-  isPlaying: boolean;
-  isPreviewLocked: boolean;
-  currentTime: number;
-  duration: number;
-  volume: number;
-  setActiveSong: (song: Song) => void;
-  playSong: (song: Song) => void;
-  togglePlay: () => void;
-  seek: (time: number) => void;
-  setVolume: (vol: number) => void;
-  skipNext: () => void;
-  skipPrev: () => void;
+function normalizeDirectHashRoute() {
+  if (typeof window === 'undefined' || window.location.hash) return;
+
+  const normalizedPath = window.location.pathname.replace(/\/$/, '') || '/';
+  if (!DIRECT_HASH_ROUTES.has(normalizedPath)) return;
+
+  window.history.replaceState(null, '', `/#${normalizedPath}${window.location.search}`);
 }
 
-const PlayerContext = createContext<PlayerContextType | null>(null);
-
-export function usePlayer() {
-  const ctx = useContext(PlayerContext);
-  if (!ctx) throw new Error('usePlayer must be used within PlayerProvider');
-  return ctx;
+function resolveMediaUrl(url: string) {
+  return new URL(url, window.location.origin).href;
 }
 
 const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const location = useLocation();
+  const isAdminRoute = location.pathname === '/admin';
+  const isCheckoutRoute = location.pathname.startsWith('/checkout');
   const [songs, setSongs] = useState<Song[]>([]);
+  const [isSongsLoading, setIsSongsLoading] = useState(true);
+  const [songsError, setSongsError] = useState<string | null>(null);
   const [activeSong, setActiveSong] = useState<Song | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPreviewLocked, setIsPreviewLocked] = useState(false);
@@ -50,43 +56,66 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [volume, setVolumeState] = useState(0.7);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  const loadSongs = useCallback(async () => {
+    setIsSongsLoading(true);
+    setSongsError(null);
+
+    try {
+      const res = await fetch('/api/songs');
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || `Songs request failed with status ${res.status}`);
+      }
+
+      const data = await res.json();
+      if (!Array.isArray(data)) {
+        throw new Error('Songs request returned an unexpected response.');
+      }
+
+      setSongs(data);
+      setActiveSong((current) => current || data[0] || null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load songs.';
+      console.error('Failed to fetch songs:', err);
+      setSongsError(message);
+      setSongs([]);
+    } finally {
+      setIsSongsLoading(false);
+    }
+  }, []);
+
   // Fetch songs from API
   useEffect(() => {
-    fetch('/api/songs')
-      .then((res) => res.json())
-      .then((data: Song[]) => {
-        setSongs(data);
-        if (data.length > 0 && !activeSong) {
-          setActiveSong(data[0]);
-        }
-      })
-      .catch((err) => console.error('Failed to fetch songs:', err));
-  }, []);
+    loadSongs();
+  }, [loadSongs]);
 
   const playSong = useCallback(
     (song: Song) => {
       const audio = audioRef.current;
       if (!audio) return;
 
+      if (!song.audioUrl) {
+        setActiveSong(song);
+        audio.removeAttribute('src');
+        setIsPlaying(false);
+        return;
+      }
+
       if (activeSong?.id !== song.id) {
         setActiveSong(song);
         setIsPreviewLocked(false); // reset lock when changing song
-        if (song.audioUrl) {
-          audio.src = song.audioUrl;
-          audio.load();
-        } else {
-          audio.src = '';
-          setIsPlaying(false);
-          return;
-        }
       }
 
-      if (song.audioUrl) {
-        audio
-          .play()
-          .then(() => setIsPlaying(true))
-          .catch(console.error);
+      const nextSrc = resolveMediaUrl(song.audioUrl);
+      if (audio.src !== nextSrc) {
+        audio.src = nextSrc;
+        audio.load();
       }
+
+      audio
+        .play()
+        .then(() => setIsPlaying(true))
+        .catch(console.error);
     },
     [activeSong]
   );
@@ -102,7 +131,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       // If src is not set, set it first
       if (!audio.src || audio.src === window.location.href) {
         if (activeSong.audioUrl) {
-          audio.src = activeSong.audioUrl;
+          audio.src = resolveMediaUrl(activeSong.audioUrl);
           audio.load();
         }
       }
@@ -157,6 +186,10 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       }
     };
     const onDurationChange = () => setDuration(audio.duration || 0);
+    const onError = () => {
+      setIsPlaying(false);
+      console.error('Audio failed to load:', audio.currentSrc || audio.src);
+    };
     const onEnded = () => {
       setIsPlaying(false);
       // Auto-advance to next song
@@ -170,11 +203,13 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
     audio.addEventListener('timeupdate', onTimeUpdate);
     audio.addEventListener('durationchange', onDurationChange);
+    audio.addEventListener('error', onError);
     audio.addEventListener('ended', onEnded);
 
     return () => {
       audio.removeEventListener('timeupdate', onTimeUpdate);
       audio.removeEventListener('durationchange', onDurationChange);
+      audio.removeEventListener('error', onError);
       audio.removeEventListener('ended', onEnded);
     };
   }, [activeSong, songs, playSong, volume]);
@@ -182,12 +217,15 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const contextValue: PlayerContextType = {
     songs,
     activeSong,
+    isSongsLoading,
+    songsError,
     isPlaying,
     isPreviewLocked,
     currentTime,
     duration,
     volume,
     setActiveSong,
+    reloadSongs: loadSongs,
     playSong,
     togglePlay,
     seek,
@@ -198,11 +236,11 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   return (
     <PlayerContext.Provider value={contextValue}>
-      <div className="min-h-screen flex flex-col pb-20">
-        <Header />
-        <main className="pt-16 flex-grow">{children}</main>
-        <Footer />
-        <PersistentPlayer />
+      <div className={`min-h-screen flex flex-col ${isAdminRoute || isCheckoutRoute ? '' : 'pb-20'}`}>
+        {!isAdminRoute && <Header />}
+        <main className={`${isAdminRoute ? '' : 'pt-16'} flex-grow`}>{children}</main>
+        {!isAdminRoute && <Footer />}
+        {!isAdminRoute && !isCheckoutRoute && <PersistentPlayer />}
 
         {/* Background Texture Overlay */}
         <div
@@ -217,6 +255,8 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 };
 
 const App: React.FC = () => {
+  normalizeDirectHashRoute();
+
   return (
     <Router>
       <AppLayout>
@@ -227,7 +267,10 @@ const App: React.FC = () => {
           <Route path="/library" element={<Library />} />
           <Route path="/payment-success" element={<PaymentSuccess />} />
           <Route path="/payment-cancel" element={<PaymentCancel />} />
+          <Route path="/checkout" element={<Checkout />} />
+          <Route path="/checkout/return" element={<Checkout />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/verify" element={<Verify />} />
         </Routes>
       </AppLayout>
     </Router>

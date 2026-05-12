@@ -2,7 +2,41 @@ const express = require('express');
 const router = express.Router();
 const { randomUUID: uuidv4 } = require('crypto');
 const { z } = require('zod');
-const db = require('../db.cjs');
+const { requireAuth } = require('../middleware/auth.cjs');
+const { PRICING, isFastDelivery } = require('../pricing.cjs');
+
+const PAYSTACK_BASE_URL = 'https://api.paystack.co';
+
+async function verifyPaystackPayment(reference) {
+    const secret = process.env.PAYSTACK_SECRET_KEY;
+    if (!secret) return { paid: false, amount: null };
+    const res = await fetch(`${PAYSTACK_BASE_URL}/transaction/verify/${encodeURIComponent(reference)}`, {
+        headers: { Authorization: `Bearer ${secret}` },
+        signal: AbortSignal.timeout(8000),
+    });
+    const data = await res.json();
+    return {
+        paid: !!(data.status && data.data?.status === 'success'),
+        amount: data.data?.amount ?? null,
+    };
+}
+
+async function verifyStripePayment(sessionId) {
+    const stripeKey = process.env.STRIPE_SECRET_KEY;
+    if (!stripeKey) return { paid: false, amount: null };
+    const stripe = require('stripe')(stripeKey);
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    return {
+        paid: session.payment_status === 'paid',
+        amount: session.amount_total ?? null,
+    };
+}
+
+let db;
+function getDb() {
+    if (!db) db = require('../db.cjs');
+    return db;
+}
 
 const DELIVERY_DAYS = 3;
 
@@ -14,13 +48,13 @@ const PRODUCTION_STEPS = [
     { title: 'Final Mastering', desc: 'Preparing the track for distribution.', icon: 'album' },
 ];
 
-// ── Validation schema ─────────────────────────────────────────────────────────
 const CreateOrderSchema = z.object({
     songTitle: z.string().max(200).optional(),
     genre: z.string().max(100).optional(),
     mood: z.string().max(100).optional(),
     tempo: z.number().int().min(40).max(300).optional(),
     occasion: z.string().max(200).optional(),
+    occasionDetail: z.string().max(500).optional(),
     story: z.string().max(5000).optional(),
     stripeSessionId: z.string().max(500).optional(),
     paystackReference: z.string().max(200).optional(),
@@ -31,6 +65,7 @@ const CreateOrderSchema = z.object({
     specialQualities: z.string().max(5000).optional(),
     favoriteMemories: z.string().max(5000).optional(),
     specialMessage: z.string().max(5000).optional(),
+    fastDelivery: z.union([z.boolean(), z.string()]).optional(),
 });
 
 function computeOrderProgress(order) {
@@ -66,6 +101,7 @@ function computeOrderProgress(order) {
         mood: order.mood,
         tempo: order.tempo,
         occasion: order.occasion,
+        occasionDetail: order.occasion_detail || null,
         story: order.story,
         status: overallProgress >= 1 ? 'completed' : order.status || 'in_production',
         createdAt: order.created_at,
@@ -85,15 +121,18 @@ function computeOrderProgress(order) {
     };
 }
 
-// GET /api/orders/track — return orders for a specific email
-router.get('/track', (req, res) => {
+// GET /api/orders/track — return orders for the authenticated user
+// Uses req.user.email from the verified JWT — the email param is ignored to prevent
+// horizontal privilege escalation (users can only see their own orders).
+router.get('/track', requireAuth, (req, res) => {
     try {
-        const email = req.query.email?.toString().toLowerCase().trim();
-        if (!email || !email.includes('@')) {
-            return res.status(400).json({ error: 'A valid email is required.' });
+        const dbConn = getDb();
+        const email = req.user.email;
+        if (!email) {
+            return res.status(400).json({ error: 'No email associated with this session.' });
         }
 
-        const orders = db.prepare(
+        const orders = dbConn.prepare(
             'SELECT * FROM orders WHERE customer_email = ? ORDER BY created_at DESC'
         ).all(email);
 
@@ -104,12 +143,17 @@ router.get('/track', (req, res) => {
     }
 });
 
-// GET /api/orders/:id — return single order status (supports full UUID or 8-char short ID)
+// GET /api/orders/:id — return single order (UUID or 8-char short ID)
+// The order id acts as a shareable tracking reference. Email-based order lists
+// still require magic-link authentication via /api/orders/track.
 router.get('/:id', (req, res) => {
     try {
-        const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id)
-            ?? db.prepare("SELECT * FROM orders WHERE UPPER(SUBSTR(id, 1, 8)) = UPPER(?) LIMIT 1").get(req.params.id.slice(0, 8));
+        const dbConn = getDb();
+        const order = dbConn.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id)
+            ?? dbConn.prepare("SELECT * FROM orders WHERE UPPER(SUBSTR(id, 1, 8)) = UPPER(?) LIMIT 1").get(req.params.id.slice(0, 8));
+
         if (!order) return res.status(404).json({ error: 'Order not found' });
+
         res.json(computeOrderProgress(order));
     } catch (err) {
         console.error('Error fetching order:', err);
@@ -117,65 +161,70 @@ router.get('/:id', (req, res) => {
     }
 });
 
-// POST /api/orders — create a new order (client-side fallback after payment)
-router.post('/', (req, res) => {
+// POST /api/orders — create a new order (client-side fallback after payment).
+// Requires a valid payment reference that is verified server-side before inserting.
+router.post('/', async (req, res) => {
     const parsed = CreateOrderSchema.safeParse(req.body);
     if (!parsed.success) {
         return res.status(400).json({ error: 'Invalid request data.', details: parsed.error.flatten() });
     }
 
-    const { songTitle, genre, mood, tempo, occasion, story, stripeSessionId, paystackReference, customerEmail, recipientType, senderName, voiceGender, specialQualities, favoriteMemories, specialMessage } = parsed.data;
+    const { songTitle, genre, mood, tempo, occasion, occasionDetail, story, stripeSessionId, paystackReference, customerEmail, recipientType, senderName, voiceGender, specialQualities, favoriteMemories, specialMessage, fastDelivery } = parsed.data;
+
+    if (!paystackReference && !stripeSessionId) {
+        return res.status(400).json({ error: 'A verified payment reference is required.' });
+    }
 
     try {
-        // Idempotency: if an order for this payment reference already exists, return it
+        const dbConn = getDb();
+        let verifiedAmount = null;
+
         if (paystackReference) {
-            const existing = db.prepare('SELECT * FROM orders WHERE paystack_reference = ?').get(paystackReference);
-            if (existing) {
-                return res.status(200).json(computeOrderProgress(existing));
+            const existing = dbConn.prepare('SELECT * FROM orders WHERE paystack_reference = ?').get(paystackReference);
+            if (existing) return res.status(200).json(computeOrderProgress(existing));
+
+            const payment = await verifyPaystackPayment(paystackReference);
+            if (!payment.paid) {
+                return res.status(402).json({ error: 'Payment not confirmed. Please wait a moment and try again.' });
             }
+            verifiedAmount = payment.amount;
         }
+
         if (stripeSessionId) {
-            const existing = db.prepare('SELECT * FROM orders WHERE stripe_session_id = ?').get(stripeSessionId);
-            if (existing) {
-                return res.status(200).json(computeOrderProgress(existing));
+            const existing = dbConn.prepare('SELECT * FROM orders WHERE stripe_session_id = ?').get(stripeSessionId);
+            if (existing) return res.status(200).json(computeOrderProgress(existing));
+
+            const payment = await verifyStripePayment(stripeSessionId);
+            if (!payment.paid) {
+                return res.status(402).json({ error: 'Payment not confirmed. Please wait a moment and try again.' });
             }
+            verifiedAmount = payment.amount;
         }
 
         const id = uuidv4();
         const createdAt = new Date().toISOString();
-        const deliveryDate = new Date(Date.now() + DELIVERY_DAYS * 24 * 60 * 60 * 1000).toISOString();
+        const deliveryDays = isFastDelivery(fastDelivery) ? 1 : DELIVERY_DAYS;
+        const deliveryDate = new Date(Date.now() + deliveryDays * 24 * 60 * 60 * 1000).toISOString();
 
-        db.prepare(`
+        dbConn.prepare(`
             INSERT INTO orders (
-                id, song_title, genre, mood, tempo, occasion, story,
+                id, song_title, genre, mood, tempo, occasion, occasion_detail, story,
                 status, created_at, delivery_date,
                 stripe_session_id, paystack_reference, amount, customer_email,
                 recipient_type, sender_name, voice_gender,
                 special_qualities, favorite_memories, special_message
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'in_production', ?, ?, ?, ?, 30000, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'in_production', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
-            id,
-            songTitle || 'Custom Song',
-            genre || '',
-            mood || '',
-            tempo || 100,
-            occasion || '',
-            story || '',
-            createdAt,
-            deliveryDate,
-            stripeSessionId || null,
-            paystackReference || null,
-            customerEmail || null,
-            recipientType || '',
-            senderName || '',
-            voiceGender || '',
-            specialQualities || '',
-            favoriteMemories || '',
-            specialMessage || ''
+            id, songTitle || 'Custom Song', genre || '', mood || '', tempo || 100,
+            occasion || '', occasionDetail || '', story || '', createdAt, deliveryDate,
+            stripeSessionId || null, paystackReference || null,
+            verifiedAmount || PRICING.ngn.standardKobo,
+            customerEmail || null, recipientType || '', senderName || '',
+            voiceGender || '', specialQualities || '', favoriteMemories || '', specialMessage || ''
         );
 
-        const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
+        const order = dbConn.prepare('SELECT * FROM orders WHERE id = ?').get(id);
         res.status(201).json(computeOrderProgress(order));
     } catch (err) {
         console.error('Error creating order:', err);

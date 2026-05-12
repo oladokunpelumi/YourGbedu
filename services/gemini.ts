@@ -1,25 +1,17 @@
-import { GoogleGenAI, Type } from '@google/genai';
-
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
-
-export async function brainstormStoryDetails(prompt: string) {
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: `Brainstorm 3 evocative and poetic details for a custom song based on this story: ${prompt}`,
-    config: {
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.STRING,
-        },
-      },
-    },
-  });
-
+// Brainstorm story details via the server-side proxy.
+// The Gemini API key never leaves the server — this module makes a plain
+// fetch to /api/brainstorm instead of calling Gemini directly.
+export async function brainstormStoryDetails(prompt: string): Promise<string[]> {
   try {
-    return JSON.parse(response.text || '[]');
-  } catch (e) {
+    const res = await fetch('/api/brainstorm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
     return [];
   }
 }

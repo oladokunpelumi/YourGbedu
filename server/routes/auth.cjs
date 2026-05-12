@@ -1,34 +1,58 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const jwt = require('jsonwebtoken');
-const db = require('../db.cjs');
-const { sendMagicLinkEmail } = require('../email.cjs');
+const { generateToken, revokeToken, requireAuth, COOKIE_OPTS } = require('../middleware/auth.cjs');
+const { getClientUrlFromRequest } = require('../client-url.cjs');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_dev_secret_change_in_prod';
 const TOKEN_TTL_MINUTES = 15;
 
-// ── Ensure magic_links table exists ──────────────────────────────────────────
-db.exec(`
-  CREATE TABLE IF NOT EXISTS magic_links (
-    token TEXT PRIMARY KEY,
-    email TEXT NOT NULL,
-    expires_at TEXT NOT NULL,
-    used INTEGER DEFAULT 0
-  );
-`);
+let db;
+function getDb() {
+    if (!db) db = require('../db.cjs');
+    return db;
+}
 
-// ── Ensure users table exists ─────────────────────────────────────────────────
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    email TEXT UNIQUE NOT NULL,
-    created_at TEXT NOT NULL
-  );
-`);
+let emailModule;
+function getEmailModule() {
+    if (!emailModule) emailModule = require('../email.cjs');
+    return emailModule;
+}
+
+// Store SHA-256(token) in the DB so even a full DB dump can't be used to
+// log in — the plaintext token only ever lives in the email link.
+function hashToken(plaintext) {
+    return crypto.createHash('sha256').update(plaintext).digest('hex');
+}
+
+let tablesEnsured = false;
+function ensureAuthTables() {
+    if (tablesEnsured) return;
+    const dbConn = getDb();
+
+    dbConn.exec(`
+      CREATE TABLE IF NOT EXISTS magic_links (
+        token TEXT PRIMARY KEY,
+        email TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        used INTEGER DEFAULT 0
+      );
+    `);
+
+    dbConn.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        email TEXT UNIQUE NOT NULL,
+        created_at TEXT NOT NULL
+      );
+    `);
+
+    tablesEnsured = true;
+}
 
 // POST /api/auth/request — send a magic link to the given email
 router.post('/request', async (req, res) => {
+    ensureAuthTables();
+    const dbConn = getDb();
     const { email } = req.body;
 
     if (!email || !email.includes('@')) {
@@ -36,25 +60,41 @@ router.post('/request', async (req, res) => {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + TOKEN_TTL_MINUTES * 60 * 1000).toISOString();
 
-    // Store the token
-    db.prepare('INSERT INTO magic_links (token, email, expires_at, used) VALUES (?, ?, ?, 0)')
-        .run(token, normalizedEmail, expiresAt);
+    // Always return the same response regardless of whether the email has orders —
+    // this prevents email enumeration. Only actually send if the address has at
+    // least one order so the endpoint can't be used to spam arbitrary addresses.
+    const hasOrders = dbConn.prepare('SELECT 1 FROM orders WHERE customer_email = ? LIMIT 1').get(normalizedEmail);
 
-    // Send the email (silently skips if RESEND_API_KEY not configured)
-    await sendMagicLinkEmail({ to: normalizedEmail, token });
+    if (hasOrders) {
+        const plainToken = crypto.randomBytes(32).toString('hex');
+        const tokenHash = hashToken(plainToken);
+        const expiresAt = new Date(Date.now() + TOKEN_TTL_MINUTES * 60 * 1000).toISOString();
 
+        dbConn.prepare('INSERT INTO magic_links (token, email, expires_at, used) VALUES (?, ?, ?, 0)')
+            .run(tokenHash, normalizedEmail, expiresAt);
+
+        await getEmailModule().sendMagicLinkEmail({
+            to: normalizedEmail,
+            token: plainToken,
+            clientUrl: getClientUrlFromRequest(req),
+        });
+    }
+
+    // Identical response whether or not an email was sent — prevents enumeration.
     res.json({ message: 'If that email has orders, a sign-in link has been sent.' });
 });
 
-// GET /api/auth/verify?token=xxx — exchange token for a JWT
-router.get('/verify', (req, res) => {
-    const { token } = req.query;
+// POST /api/auth/verify — exchange magic-link token for a session cookie.
+// Using POST keeps the token out of server access logs (it's in the body, not the URL).
+router.post('/verify', (req, res) => {
+    ensureAuthTables();
+    const dbConn = getDb();
+    const { token } = req.body;
     if (!token) return res.status(400).json({ error: 'Token is required.' });
 
-    const record = db.prepare('SELECT * FROM magic_links WHERE token = ?').get(token);
+    const tokenHash = hashToken(String(token));
+    const record = dbConn.prepare('SELECT * FROM magic_links WHERE token = ?').get(tokenHash);
 
     if (!record) return res.status(401).json({ error: 'Invalid or expired link.' });
     if (record.used) return res.status(401).json({ error: 'Link already used.' });
@@ -62,42 +102,41 @@ router.get('/verify', (req, res) => {
         return res.status(401).json({ error: 'Link has expired. Please request a new one.' });
     }
 
-    // Mark token used
-    db.prepare('UPDATE magic_links SET used = 1 WHERE token = ?').run(token);
+    dbConn.prepare('UPDATE magic_links SET used = 1 WHERE token = ?').run(tokenHash);
 
-    // Upsert user
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(record.email);
+    const existing = dbConn.prepare('SELECT id FROM users WHERE email = ?').get(record.email);
     let userId;
     if (existing) {
         userId = existing.id;
     } else {
-        userId = require('crypto').randomUUID();
-        db.prepare('INSERT INTO users (id, email, created_at) VALUES (?, ?, ?)')
+        userId = crypto.randomUUID();
+        dbConn.prepare('INSERT INTO users (id, email, created_at) VALUES (?, ?, ?)')
             .run(userId, record.email, new Date().toISOString());
     }
 
-    const isAdmin = record.email.toLowerCase() === (process.env.ADMIN_EMAIL || 'admin@yourgbedu.com').toLowerCase();
-    const jwtToken = jwt.sign(
-        { userId, email: record.email, role: isAdmin ? 'admin' : 'user' },
-        JWT_SECRET,
-        { expiresIn: '7d' }
-    );
+    // Magic link always issues a regular user token — admin access is only via
+    // /api/admin/login with username + password (HIGH-04 fix).
+    const jwtToken = generateToken({ id: userId, email: record.email, role: 'user' });
 
-    res.json({ token: jwtToken, email: record.email });
+    res.cookie('sonnetary_token', jwtToken, {
+        ...COOKIE_OPTS,
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    });
+
+    res.json({ email: record.email });
 });
 
-// GET /api/auth/me — return the current user's info from their JWT
-router.get('/me', (req, res) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
-    try {
-        const payload = jwt.verify(authHeader.split(' ')[1], JWT_SECRET);
-        res.json({ userId: payload.userId, email: payload.email, role: payload.role });
-    } catch {
-        res.status(401).json({ error: 'Invalid or expired token.' });
-    }
+// GET /api/auth/me — return the current user from their session cookie or Bearer token
+router.get('/me', requireAuth, (req, res) => {
+    res.json({ userId: req.user.userId, email: req.user.email, role: req.user.role });
+});
+
+// POST /api/auth/logout — revoke the current session cookie
+router.post('/logout', (req, res) => {
+    const token = req.cookies?.sonnetary_token;
+    if (token) revokeToken(token);
+    res.clearCookie('sonnetary_token', COOKIE_OPTS);
+    res.json({ message: 'Signed out.' });
 });
 
 module.exports = router;

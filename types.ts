@@ -41,6 +41,7 @@ export interface OrderData {
   mood: string;
   tempo: number;
   occasion: string;
+  occasionDetail?: string | null;
   story: string;
   status: string;
   createdAt: string;

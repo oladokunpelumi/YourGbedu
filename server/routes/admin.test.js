@@ -1,0 +1,272 @@
+/**
+ * Integration tests for the admin API routes.
+ *
+ * Key security invariants tested:
+ *  - Login uses bcrypt comparison (not plaintext)
+ *  - Successful login sets an HttpOnly cookie (token not in response body)
+ *  - Wrong credentials always return 401
+ *  - Protected routes reject requests without a valid admin cookie
+ *  - Logout revokes the session and clears the cookie
+ */
+import { describe, it, expect, vi } from 'vitest';
+import crypto from 'crypto';
+import os from 'os';
+import path from 'path';
+import { createRequire } from 'module';
+
+vi.stubEnv('PAYSTACK_SECRET_KEY', 'sk_test_mock');
+vi.stubEnv('NODE_ENV', 'test');
+vi.stubEnv('JWT_SECRET', 'test-secret-for-testing-only-32chars!!');
+vi.stubEnv('ADMIN_USERNAME', 'testadmin');
+vi.stubEnv('ADMIN_PASSWORD', 'supersecret_test_password_123!');
+vi.stubEnv('DB_PATH', path.join(os.tmpdir(), `sonnetary-admin-${process.pid}-${crypto.randomUUID()}.db`));
+
+const inMemoryDb = await (async () => {
+  const Database = (await import('better-sqlite3')).default;
+  const db = new Database(':memory:');
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS orders (
+      id TEXT PRIMARY KEY,
+      song_title TEXT,
+      genre TEXT,
+      mood TEXT,
+      tempo INTEGER,
+      occasion TEXT,
+      occasion_detail TEXT,
+      story TEXT,
+      status TEXT DEFAULT 'in_production',
+      created_at TEXT NOT NULL,
+      delivery_date TEXT NOT NULL,
+      stripe_session_id TEXT,
+      paystack_reference TEXT,
+      amount INTEGER DEFAULT 30000,
+      customer_email TEXT,
+      ai_brief TEXT,
+      recipient_type TEXT,
+      sender_name TEXT,
+      voice_gender TEXT,
+      special_qualities TEXT,
+      favorite_memories TEXT,
+      special_message TEXT
+    );
+    CREATE TABLE IF NOT EXISTS songs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      genre TEXT NOT NULL,
+      duration TEXT NOT NULL,
+      description TEXT NOT NULL,
+      cover_url TEXT NOT NULL,
+      artist TEXT,
+      tags TEXT,
+      audio_url TEXT,
+      story TEXT,
+      sort_order INTEGER DEFAULT 99
+    );
+    CREATE TABLE IF NOT EXISTS revoked_tokens (
+      jti TEXT PRIMARY KEY,
+      expires_at TEXT NOT NULL
+    );
+  `);
+  return db;
+})();
+
+vi.mock('../db.cjs', () => ({ default: inMemoryDb }));
+vi.mock('../email.cjs', () => ({
+  sendCompletionEmail: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('../services/gemini.cjs', () => ({
+  generateProductionBrief: vi.fn().mockResolvedValue('Generated production brief'),
+}));
+
+const { default: express } = await import('express');
+const { default: cookieParser } = await import('cookie-parser');
+const { default: adminRouter } = await import('../routes/admin.cjs');
+
+const app = express();
+app.use(express.json());
+app.use(cookieParser());
+app.use('/api/admin', adminRouter);
+
+const require = createRequire(import.meta.url);
+const routeDbModule = require('../db.cjs');
+const routeDb = routeDbModule.default || routeDbModule;
+
+describe('POST /api/admin/login', () => {
+  it('rejects wrong password', async () => {
+    const { default: supertest } = await import('supertest');
+    const res = await supertest(app)
+      .post('/api/admin/login')
+      .send({ username: 'testadmin', password: 'wrongpassword' })
+      .set('Content-Type', 'application/json');
+
+    expect(res.status).toBe(401);
+    expect(res.body.authenticated).toBeUndefined();
+  });
+
+  it('rejects wrong username', async () => {
+    const { default: supertest } = await import('supertest');
+    const res = await supertest(app)
+      .post('/api/admin/login')
+      .send({ username: 'wronguser', password: 'supersecret_test_password_123!' })
+      .set('Content-Type', 'application/json');
+
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects the hardcoded fallback password from the old code', async () => {
+    const { default: supertest } = await import('supertest');
+    const res = await supertest(app)
+      .post('/api/admin/login')
+      .send({ username: 'admin', password: 'yourgbedu2026' })
+      .set('Content-Type', 'application/json');
+
+    expect(res.status).toBe(401);
+  });
+
+  it('sets an HttpOnly cookie on valid login (token NOT in response body)', async () => {
+    const { default: supertest } = await import('supertest');
+    const res = await supertest(app)
+      .post('/api/admin/login')
+      .send({ username: 'testadmin', password: 'supersecret_test_password_123!' })
+      .set('Content-Type', 'application/json');
+
+    expect(res.status).toBe(200);
+    expect(res.body.authenticated).toBe(true);
+    // No token in body — it's in an HttpOnly cookie
+    expect(res.body.token).toBeUndefined();
+    const setCookie = res.headers['set-cookie'];
+    expect(setCookie).toBeDefined();
+    expect(setCookie.some((c) => c.startsWith('admin_token='))).toBe(true);
+    expect(setCookie.some((c) => c.includes('HttpOnly'))).toBe(true);
+  });
+});
+
+describe('GET /api/admin/orders (protected)', () => {
+  it('returns 401 without a cookie', async () => {
+    const { default: supertest } = await import('supertest');
+    const res = await supertest(app).get('/api/admin/orders');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 401 with a non-admin cookie', async () => {
+    const { default: supertest } = await import('supertest');
+    const jwt = (await import('jsonwebtoken')).default;
+    const userToken = jwt.sign(
+      { userId: 'u1', email: 'user@test.com', role: 'user', jti: crypto.randomUUID() },
+      'test-secret-for-testing-only-32chars!!',
+      { expiresIn: '1h' }
+    );
+    const res = await supertest(app)
+      .get('/api/admin/orders')
+      .set('Cookie', `admin_token=${userToken}`);
+
+    expect(res.status).toBe(403);
+  });
+
+  it('returns orders list for a valid admin session', async () => {
+    const { default: supertest } = await import('supertest');
+
+    // Login to get the admin cookie
+    const loginRes = await supertest(app)
+      .post('/api/admin/login')
+      .send({ username: 'testadmin', password: 'supersecret_test_password_123!' })
+      .set('Content-Type', 'application/json');
+
+    const cookie = loginRes.headers['set-cookie'];
+
+    const res = await supertest(app)
+      .get('/api/admin/orders')
+      .set('Cookie', cookie);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toBeDefined();
+    expect(Array.isArray(res.body.data)).toBe(true);
+  });
+});
+
+describe('POST /api/admin/orders/:id/ai-brief (protected)', () => {
+  it('rejects AI brief generation without a cookie', async () => {
+    const { default: supertest } = await import('supertest');
+    const res = await supertest(app).post('/api/admin/orders/order-ai-001/ai-brief');
+    expect(res.status).toBe(401);
+  });
+
+  it('stores an AI brief for a valid admin session', async () => {
+    const { default: supertest } = await import('supertest');
+    const orderId = crypto.randomUUID();
+
+    routeDb.prepare(`
+      INSERT INTO orders (
+        id, song_title, genre, occasion, occasion_detail, created_at, delivery_date,
+        customer_email, recipient_type, sender_name, voice_gender,
+        special_qualities, favorite_memories, special_message
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      orderId,
+      'Custom Song',
+      'Afro-Beats',
+      'anniversary',
+      '',
+      new Date().toISOString(),
+      new Date(Date.now() + 86400000).toISOString(),
+      'customer@test.com',
+      'Wife',
+      'Tunde',
+      'Male Voice',
+      'Kind and steady',
+      'Their first date',
+      'I love you'
+    );
+
+    const loginRes = await supertest(app)
+      .post('/api/admin/login')
+      .send({ username: 'testadmin', password: 'supersecret_test_password_123!' })
+      .set('Content-Type', 'application/json');
+
+    const res = await supertest(app)
+      .post(`/api/admin/orders/${orderId}/ai-brief`)
+      .set('Cookie', loginRes.headers['set-cookie']);
+
+    expect(res.status).toBe(200);
+    expect(res.body.aiBrief).toContain('Custom Afro-Beats song');
+    expect(res.body.aiBrief).toContain('Occasion: anniversary');
+
+    const row = routeDb.prepare('SELECT ai_brief FROM orders WHERE id = ?').get(orderId);
+    expect(row.ai_brief).toBe(res.body.aiBrief);
+  });
+});
+
+describe('POST /api/admin/logout', () => {
+  it('clears the admin cookie and revokes the session', async () => {
+    const { default: supertest } = await import('supertest');
+
+    // Login first
+    const loginRes = await supertest(app)
+      .post('/api/admin/login')
+      .send({ username: 'testadmin', password: 'supersecret_test_password_123!' })
+      .set('Content-Type', 'application/json');
+
+    const cookie = loginRes.headers['set-cookie'];
+
+    // Logout
+    const logoutRes = await supertest(app)
+      .post('/api/admin/logout')
+      .set('Cookie', cookie);
+
+    expect(logoutRes.status).toBe(200);
+
+    // The Set-Cookie header should clear the admin_token cookie
+    const clearCookie = logoutRes.headers['set-cookie'];
+    expect(clearCookie).toBeDefined();
+    // Cookie should be expired/cleared
+    expect(clearCookie.some((c) => c.includes('admin_token=;') || c.includes('Max-Age=0') || c.includes('Expires=Thu, 01 Jan 1970'))).toBe(true);
+
+    // Subsequent requests with the old cookie should be rejected (token is revoked)
+    const afterLogout = await supertest(app)
+      .get('/api/admin/orders')
+      .set('Cookie', cookie);
+
+    expect(afterLogout.status).toBe(401);
+  });
+});

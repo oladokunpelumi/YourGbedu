@@ -35,3 +35,23 @@ export const MOODS: { name: Mood; icon: string; img: string }[] = [
     img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAnjaO6YYEdtpaGgOeYjmMjycLvOg00DM40fLnw-bNEEhr9Y7UsWnwhHwA2zFoNncvNk1dsm7zN9IOrMIiyxyhcotIZYf4zZATOm5wC8k0AffponzAYMD3tVTmPPfKWiBGxibR_zIMPpaSbwgn5wDbafdApkhwF2viiX6VY28yEoHuyKhkX568epSw3VsCBqhMsecKbPmv0wKD5NPXatCjS9HpC6kyyQmQU53u6IQd--fWR2vLce5D7IiVx0Lzs5TxrBi_XkGIlCA',
   },
 ];
+
+export const DISCOUNTED_PRICING = {
+  paystack: {
+    standard: { current: '₦30,000', original: '₦60,000', amountKobo: 3_000_000 },
+    fast: { current: '₦50,000', original: '₦80,000', upgrade: '+₦20,000', amountKobo: 5_000_000 },
+  },
+  stripe: {
+    standard: { current: '$25', original: '$50', amountCents: 2_500 },
+    fast: { current: '$40', original: '$65', upgrade: '+$15.00', amountCents: 4_000 },
+  },
+} as const;
+
+export type PaymentProvider = keyof typeof DISCOUNTED_PRICING;
+
+export function getDiscountedPrice(provider: PaymentProvider | null, fastDelivery: boolean) {
+  const resolvedProvider = provider || 'paystack';
+  return fastDelivery
+    ? DISCOUNTED_PRICING[resolvedProvider].fast
+    : DISCOUNTED_PRICING[resolvedProvider].standard;
+}

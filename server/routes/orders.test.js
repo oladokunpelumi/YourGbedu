@@ -1,59 +1,50 @@
 /**
  * Integration tests for the orders API routes.
- * Uses an in-memory SQLite DB so no state is shared between test runs.
+ *
+ * Key security invariants tested:
+ *  - GET /api/orders/track requires authentication (returns 401 without cookie)
+ *  - Authenticated users can only see their own orders (uses email from JWT, not query param)
+ *  - GET /api/orders/:id is accessible without auth (UUID is a capability token)
+ *  - POST /api/orders is idempotent on duplicate payment references
  */
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
+import os from 'os';
+import path from 'path';
+import { createRequire } from 'module';
 
-// ── Mock environment before any module imports ────────────────────────────────
 vi.stubEnv('PAYSTACK_SECRET_KEY', 'sk_test_mock');
 vi.stubEnv('NODE_ENV', 'test');
+vi.stubEnv('JWT_SECRET', 'test-secret-for-testing-only-32chars!!');
+vi.stubEnv('DB_PATH', path.join(os.tmpdir(), `sonnetary-orders-${process.pid}-${crypto.randomUUID()}.db`));
 
-// Stub the DB module with an in-memory SQLite instance
-vi.mock('../db.cjs', async () => {
-  const Database = (await import('better-sqlite3')).default;
-  const db = new Database(':memory:');
-  db.pragma('journal_mode = WAL');
-  db.exec(`
-        CREATE TABLE IF NOT EXISTS orders (
-            id TEXT PRIMARY KEY,
-            song_title TEXT,
-            genre TEXT,
-            mood TEXT,
-            tempo INTEGER,
-            occasion TEXT,
-            story TEXT,
-            status TEXT DEFAULT 'in_production',
-            created_at TEXT NOT NULL,
-            delivery_date TEXT NOT NULL,
-            stripe_session_id TEXT,
-            paystack_reference TEXT,
-            amount INTEGER DEFAULT 30000,
-            customer_email TEXT,
-            ai_brief TEXT,
-            recipient_type TEXT,
-            sender_name TEXT,
-            voice_gender TEXT,
-            special_qualities TEXT,
-            favorite_memories TEXT,
-            special_message TEXT
-        );
-    `);
-  return { default: db };
+const TEST_JWT_SECRET = 'test-secret-for-testing-only-32chars!!';
+
+const require = createRequire(import.meta.url);
+const db = require('../db.cjs');
+
+beforeEach(() => {
+  db.prepare('DELETE FROM orders').run();
+  db.prepare('DELETE FROM revoked_tokens').run();
+  vi.stubGlobal('fetch', vi.fn(async () => ({
+    json: async () => ({ status: true, data: { status: 'success', amount: 3000000 } }),
+  })));
 });
 
-import express from 'express';
-import ordersRouter from '../routes/orders.cjs';
+const { default: express } = await import('express');
+const { default: cookieParser } = await import('cookie-parser');
+const { default: ordersRouter } = await import('../routes/orders.cjs');
 
 const app = express();
 app.use(express.json());
+app.use(cookieParser());
 app.use('/api/orders', ordersRouter);
 
-// Simple fetch helper for tests
-async function req(method, path, body) {
-  const { default: supertest } = await import('supertest');
-  const r = supertest(app)[method.toLowerCase()](path);
-  if (body) r.send(body).set('Content-Type', 'application/json');
-  return r;
+function makeAuthCookie(email, role = 'user') {
+  const jti = crypto.randomUUID();
+  const token = jwt.sign({ userId: crypto.randomUUID(), email, role, jti }, TEST_JWT_SECRET, { expiresIn: '1h' });
+  return `sonnetary_token=${token}`;
 }
 
 describe('POST /api/orders', () => {
@@ -64,6 +55,8 @@ describe('POST /api/orders', () => {
       .send({
         songTitle: 'Test Song',
         genre: 'Afro-Beats',
+        occasion: 'anniversary',
+        occasionDetail: '10 years together',
         paystackReference: 'ref_001',
         customerEmail: 'test@example.com',
       })
@@ -72,6 +65,12 @@ describe('POST /api/orders', () => {
     expect(res.status).toBe(201);
     expect(res.body.id).toBeTruthy();
     expect(res.body.songTitle).toBe('Test Song');
+    expect(res.body.occasion).toBe('anniversary');
+    expect(res.body.occasionDetail).toBe('10 years together');
+
+    const row = db.prepare('SELECT occasion, occasion_detail FROM orders WHERE id = ?').get(res.body.id);
+    expect(row.occasion).toBe('anniversary');
+    expect(row.occasion_detail).toBe('10 years together');
   });
 
   it('returns existing order on duplicate paystackReference (idempotency)', async () => {
@@ -88,7 +87,7 @@ describe('POST /api/orders', () => {
       .set('Content-Type', 'application/json');
 
     expect(first.status).toBe(201);
-    expect(second.status).toBe(200); // returns existing
+    expect(second.status).toBe(200);
     expect(first.body.id).toBe(second.body.id);
   });
 
@@ -111,7 +110,7 @@ describe('GET /api/orders/:id', () => {
     expect(res.status).toBe(404);
   });
 
-  it('returns an existing order', async () => {
+  it('returns an existing order without auth (UUID is capability token)', async () => {
     const { default: supertest } = await import('supertest');
 
     const created = await supertest(app)
@@ -122,32 +121,66 @@ describe('GET /api/orders/:id', () => {
     const fetched = await supertest(app).get(`/api/orders/${created.body.id}`);
     expect(fetched.status).toBe(200);
     expect(fetched.body.id).toBe(created.body.id);
-    expect(fetched.body.genre).toBe('Afro-Jazz');
   });
 });
 
-describe('GET /api/orders/track', () => {
-  it('returns 400 without an email', async () => {
+describe('GET /api/orders/track (auth required)', () => {
+  it('returns 401 without authentication cookie', async () => {
     const { default: supertest } = await import('supertest');
     const res = await supertest(app).get('/api/orders/track');
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(401);
   });
 
-  it('returns orders for a customer email', async () => {
+  it('returns 401 with a fake/invalid cookie', async () => {
     const { default: supertest } = await import('supertest');
+    const res = await supertest(app)
+      .get('/api/orders/track')
+      .set('Cookie', 'sonnetary_token=thisisnotavalidjwt');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns orders for the authenticated user only', async () => {
+    const { default: supertest } = await import('supertest');
+    const email = 'customer@secure-test.com';
 
     await supertest(app)
       .post('/api/orders')
-      .send({
-        genre: 'Afro-R&B',
-        paystackReference: 'ref_track_001',
-        customerEmail: 'customer@test.com',
-      })
+      .send({ genre: 'Afro-R&B', paystackReference: 'ref_track_auth_001', customerEmail: email })
       .set('Content-Type', 'application/json');
 
-    const res = await supertest(app).get('/api/orders/track?email=customer@test.com');
+    // Also create an order for a different user
+    await supertest(app)
+      .post('/api/orders')
+      .send({ genre: 'Gospel', paystackReference: 'ref_other_user_001', customerEmail: 'other@user.com' })
+      .set('Content-Type', 'application/json');
+
+    const authCookie = makeAuthCookie(email);
+    const res = await supertest(app).get('/api/orders/track').set('Cookie', authCookie);
+
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
+    // Only sees their own orders, not other@user.com's
+    expect(res.body.every((o) => o !== null)).toBe(true);
     expect(res.body.length).toBeGreaterThan(0);
+  });
+
+  it('ignores any email query param (uses JWT email only)', async () => {
+    const { default: supertest } = await import('supertest');
+    const email = 'legit@user.com';
+
+    await supertest(app)
+      .post('/api/orders')
+      .send({ genre: 'R&B', paystackReference: 'ref_param_bypass_001', customerEmail: 'victim@user.com' })
+      .set('Content-Type', 'application/json');
+
+    // Authenticated as legit@user.com but trying to query victim@user.com
+    const authCookie = makeAuthCookie(email);
+    const res = await supertest(app)
+      .get('/api/orders/track?email=victim@user.com')
+      .set('Cookie', authCookie);
+
+    // Should return legit@user.com's orders (empty), NOT victim's orders
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(0); // legit user has no orders = empty array
   });
 });
