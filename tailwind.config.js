@@ -9,52 +9,80 @@ export default {
   theme: {
     extend: {
       colors: {
-        /* ── Royal Gold Cinematic Palette ── */
-        canvas: '#D4AF37', // Reassigned to Royal Gold
-        'on-surface': '#241a00',
-        'on-surface-variant': '#c4a02e',
-        'outline-variant': '#8a7124',
+        /* Editorial YourGbedu Palette */
+        ivory: '#FAF6EE',
+        cream: '#FFFDF6',
+        terracotta: {
+          DEFAULT: '#B3522F',
+          dark: '#8B3E22',
+          soft: '#E8B89E',
+          pale: '#F7E5DA',
+        },
+        sage: {
+          DEFAULT: '#7C8B5C',
+          dark: '#5D6A42',
+          soft: '#C9D2B0',
+          pale: '#EEF2E2',
+        },
+        mustard: {
+          DEFAULT: '#C99B3E',
+          soft: '#F0DCA8',
+          pale: '#FBF0CF',
+        },
+        ink: {
+          DEFAULT: '#1F1B14',
+          soft: '#5A4F3F',
+          muted: '#8B7F6C',
+        },
+        line: {
+          DEFAULT: '#E5DDD0',
+          strong: '#C7BDA8',
+        },
+        canvas: '#FAF6EE',
+        'on-surface': '#1F1B14',
+        'on-surface-variant': '#8B7F6C',
+        'outline-variant': '#C7BDA8',
 
         primary: {
-          DEFAULT: '#D4AF37',
-          dark: '#c4a02e',
-          container: '#fff2d8',
+          DEFAULT: '#C99B3E',
+          dark: '#A77E2F',
+          container: '#FBF0CF',
         },
-        'on-primary': '#1a1400',
+        'on-primary': '#1F1B14',
 
         secondary: {
-          DEFAULT: '#9f402d',
-          dark: '#7d3122',
+          DEFAULT: '#B3522F',
+          dark: '#8B3E22',
         },
 
         tertiary: {
-          DEFAULT: '#006a6a',
+          DEFAULT: '#7C8B5C',
         },
 
-        obsidian: '#241a00',
+        obsidian: '#1F1B14',
 
         surface: {
-          DEFAULT: '#D4AF37',
-          bright: '#e2c15a',
+          DEFAULT: '#FAF6EE',
+          bright: '#FFFDF6',
           'container-lowest': '#ffffff',
-          'container-low': '#fff2d8',
-          container: '#ffebbc',
-          'container-high': '#ffe5a0',
-          'container-highest': '#ffe088',
-          variant: '#c4a02e',
+          'container-low': '#FFFDF6',
+          container: '#F5EDE2',
+          'container-high': '#EFE5D6',
+          'container-highest': '#E5DDD0',
+          variant: '#C7BDA8',
         },
 
         background: {
-          DEFAULT: '#D4AF37',
-          surface: '#e2c15a',
+          DEFAULT: '#FAF6EE',
+          surface: '#FFFDF6',
         },
       },
       fontFamily: {
-        display: ['Newsreader', 'Georgia', 'serif'],
-        headline: ['Newsreader', 'Georgia', 'serif'],
-        body: ['Inter', 'sans-serif'],
-        ui: ['"Plus Jakarta Sans"', 'sans-serif'],
-        label: ['"Plus Jakarta Sans"', 'sans-serif'],
+        display: ['"Cormorant Garamond"', 'Georgia', 'serif'],
+        headline: ['"Cormorant Garamond"', 'Georgia', 'serif'],
+        body: ['"DM Sans"', 'Inter', 'sans-serif'],
+        ui: ['"DM Sans"', 'Inter', 'sans-serif'],
+        label: ['"DM Sans"', 'Inter', 'sans-serif'],
       },
       borderRadius: {
         xl: '0.5rem',
@@ -68,9 +96,9 @@ export default {
         'section-lg': '7rem',
       },
       boxShadow: {
-        ambient: '0 10px 40px rgba(36, 26, 0, 0.06)',
-        'ambient-lg': '0 16px 60px rgba(36, 26, 0, 0.08)',
-        obsidian: '0 20px 50px rgba(36, 26, 0, 0.2)',
+        ambient: '0 10px 30px rgba(31, 27, 20, 0.06)',
+        'ambient-lg': '0 18px 50px rgba(31, 27, 20, 0.09)',
+        obsidian: '0 18px 44px rgba(31, 27, 20, 0.2)',
       },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',

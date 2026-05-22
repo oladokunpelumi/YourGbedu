@@ -23,10 +23,13 @@ const TEST_JWT_SECRET = 'test-secret-for-testing-only-32chars!!';
 
 const require = createRequire(import.meta.url);
 const db = require('../db.cjs');
+const emailModule = require('../email.cjs');
+const sendConfirmationEmailMock = vi.spyOn(emailModule, 'sendConfirmationEmail').mockResolvedValue(undefined);
 
 beforeEach(() => {
   db.prepare('DELETE FROM orders').run();
   db.prepare('DELETE FROM revoked_tokens').run();
+  sendConfirmationEmailMock.mockClear();
   vi.stubGlobal('fetch', vi.fn(async () => ({
     json: async () => ({ status: true, data: { status: 'success', amount: 3000000 } }),
   })));
@@ -71,6 +74,14 @@ describe('POST /api/orders', () => {
     const row = db.prepare('SELECT occasion, occasion_detail FROM orders WHERE id = ?').get(res.body.id);
     expect(row.occasion).toBe('anniversary');
     expect(row.occasion_detail).toBe('10 years together');
+    expect(sendConfirmationEmailMock).toHaveBeenCalledWith(expect.objectContaining({
+      to: 'test@example.com',
+      orderId: res.body.id.slice(0, 8).toUpperCase(),
+      genre: 'Afro-Beats',
+      deliveryDate: expect.any(String),
+      reference: 'ref_001',
+      amountLabel: '₦30,000',
+    }));
   });
 
   it('returns existing order on duplicate paystackReference (idempotency)', async () => {
@@ -89,6 +100,7 @@ describe('POST /api/orders', () => {
     expect(first.status).toBe(201);
     expect(second.status).toBe(200);
     expect(first.body.id).toBe(second.body.id);
+    expect(sendConfirmationEmailMock).not.toHaveBeenCalled();
   });
 
   it('rejects invalid email', async () => {

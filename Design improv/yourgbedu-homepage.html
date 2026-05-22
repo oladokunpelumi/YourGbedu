@@ -1,0 +1,1335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YourGbedu — Your story, our soundtrack</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ivory: #FAF6EE;
+    --cream: #FFFDF6;
+    --terracotta: #B3522F;
+    --terracotta-dark: #8B3E22;
+    --terracotta-soft: #E8B89E;
+    --sage: #7C8B5C;
+    --sage-dark: #5D6A42;
+    --sage-soft: #C9D2B0;
+    --mustard: #C99B3E;
+    --mustard-soft: #F0DCA8;
+    --ink: #1F1B14;
+    --ink-soft: #5A4F3F;
+    --ink-muted: #8B7F6C;
+    --line: #E5DDD0;
+    --line-strong: #C7BDA8;
+
+    --font-display: 'Cormorant Garamond', Georgia, serif;
+    --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+
+    --max-width: 1280px;
+    --gutter: clamp(1.25rem, 4vw, 2.5rem);
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--ivory);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.6;
+    font-feature-settings: 'ss01';
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  ::selection { background: var(--terracotta); color: var(--cream); }
+  a { color: inherit; text-decoration: none; }
+
+  .container {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 0 var(--gutter);
+  }
+
+  /* NAV */
+  nav {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    background: rgba(250, 246, 238, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid transparent;
+    transition: all 0.3s;
+  }
+  nav.scrolled { border-bottom-color: var(--line); }
+  nav .container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 76px;
+  }
+  .logo {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 28px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+  .nav-links {
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+    font-size: 14px;
+  }
+  .nav-links a {
+    color: var(--ink-soft);
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--terracotta); }
+  .nav-cta {
+    background: var(--ink);
+    color: var(--cream) !important;
+    padding: 0.7rem 1.3rem;
+    border-radius: 100px;
+    font-size: 13px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    transition: all 0.25s var(--ease-out);
+  }
+  .nav-cta:hover {
+    background: var(--terracotta);
+    color: var(--cream) !important;
+  }
+  @media (max-width: 760px) {
+    .nav-links a:not(.nav-cta) { display: none; }
+  }
+
+  /* HERO */
+  .hero {
+    padding: clamp(3rem, 8vw, 6rem) 0 clamp(4rem, 10vw, 7rem);
+    position: relative;
+    overflow: hidden;
+  }
+  .hero-eyebrow {
+    font-family: var(--font-body);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--terracotta);
+    font-weight: 500;
+    margin-bottom: 2rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .hero-eyebrow::before {
+    content: '';
+    width: 28px;
+    height: 1px;
+    background: var(--terracotta);
+  }
+
+  h1.hero-title {
+    font-family: var(--font-display);
+    font-size: clamp(3.5rem, 11vw, 9rem);
+    line-height: 0.92;
+    font-weight: 400;
+    letter-spacing: -0.025em;
+    color: var(--ink);
+    margin-bottom: 2rem;
+  }
+  h1.hero-title em {
+    font-style: italic;
+    color: var(--terracotta);
+    font-weight: 500;
+  }
+
+  .hero-body {
+    font-family: var(--font-display);
+    font-size: clamp(1.25rem, 2.2vw, 1.6rem);
+    font-style: italic;
+    font-weight: 400;
+    color: var(--ink-soft);
+    max-width: 32rem;
+    line-height: 1.4;
+    margin-bottom: 2.5rem;
+  }
+
+  .cta-row {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 1rem 1.75rem;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    border-radius: 100px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.25s var(--ease-out);
+  }
+  .btn-primary {
+    background: var(--ink);
+    color: var(--cream);
+  }
+  .btn-primary:hover {
+    background: var(--terracotta);
+    transform: translateY(-1px);
+  }
+  .btn-outline {
+    background: transparent;
+    color: var(--ink);
+    border: 1px solid var(--ink);
+  }
+  .btn-outline:hover {
+    background: var(--ink);
+    color: var(--cream);
+  }
+
+  .hero-meta {
+    margin-top: 4rem;
+    display: flex;
+    gap: 3rem;
+    flex-wrap: wrap;
+    align-items: flex-end;
+  }
+  .hero-meta-item {
+    border-top: 1px solid var(--line-strong);
+    padding-top: 0.85rem;
+    min-width: 140px;
+  }
+  .hero-meta-num {
+    font-family: var(--font-display);
+    font-size: 2.25rem;
+    font-weight: 500;
+    line-height: 1;
+    color: var(--ink);
+  }
+  .hero-meta-num em { color: var(--terracotta); font-style: italic; }
+  .hero-meta-label {
+    font-size: 12px;
+    color: var(--ink-muted);
+    margin-top: 0.45rem;
+    letter-spacing: 0.04em;
+  }
+
+  /* VINYL SECTION (terracotta) */
+  .section-vinyl {
+    background: var(--terracotta);
+    color: var(--cream);
+    padding: clamp(4rem, 10vw, 8rem) 0;
+    position: relative;
+    overflow: hidden;
+  }
+  .section-vinyl::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 20% 30%, rgba(139, 62, 34, 0.5) 0%, transparent 50%);
+    pointer-events: none;
+  }
+  .vinyl-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 3rem;
+    align-items: center;
+    position: relative;
+  }
+  @media (min-width: 880px) {
+    .vinyl-grid { grid-template-columns: 1fr 1fr; gap: 5rem; }
+  }
+  .vinyl-text-eyebrow {
+    font-family: var(--font-body);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--terracotta-soft);
+    margin-bottom: 1.5rem;
+  }
+  .vinyl-text h2 {
+    font-family: var(--font-display);
+    font-size: clamp(2.5rem, 6vw, 4.5rem);
+    font-weight: 400;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    margin-bottom: 1.5rem;
+    color: var(--cream);
+  }
+  .vinyl-text h2 em { font-style: italic; }
+  .vinyl-text p {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 1.3rem;
+    color: var(--terracotta-soft);
+    max-width: 24rem;
+    line-height: 1.4;
+    margin-bottom: 2rem;
+  }
+
+  /* Vinyl player */
+  .vinyl-card {
+    background: #0E0E0A;
+    border-radius: 24px;
+    padding: 2.5rem 2rem;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 30px 80px -20px rgba(0,0,0,0.4);
+  }
+  .vinyl-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+  }
+  .vinyl-meta-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: rgba(255, 253, 246, 0.4);
+  }
+  .vinyl-disc {
+    width: clamp(220px, 50vw, 320px);
+    height: clamp(220px, 50vw, 320px);
+    border-radius: 100%;
+    background: radial-gradient(circle, #1a1a1a 0%, #0E0E0A 30%, #1a1a1a 35%, #0E0E0A 40%, #1a1a1a 45%, #0E0E0A 50%, #1a1a1a 55%, #0E0E0A 60%, #1a1a1a 65%, #0E0E0A 70%, #1a1a1a 75%, #0E0E0A 80%);
+    position: relative;
+    margin: 0 auto 2rem;
+    cursor: pointer;
+    animation: spin 6s linear infinite;
+    animation-play-state: paused;
+  }
+  .vinyl-disc.playing { animation-play-state: running; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .vinyl-label-disc {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 38%;
+    height: 38%;
+    border-radius: 100%;
+    background: var(--terracotta);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--cream);
+    text-align: center;
+    padding: 1rem;
+  }
+  .vinyl-label-disc::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 8px;
+    height: 8px;
+    border-radius: 100%;
+    background: var(--ink);
+    z-index: 2;
+  }
+  .vinyl-title-disc {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: clamp(0.9rem, 1.5vw, 1.1rem);
+    line-height: 1;
+    margin-bottom: 0.25rem;
+  }
+  .vinyl-sub-disc {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    opacity: 0.75;
+  }
+  .play-button {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 56px;
+    height: 56px;
+    border-radius: 100%;
+    background: var(--cream);
+    color: var(--ink);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    transition: transform 0.2s var(--ease-out);
+    opacity: 0;
+  }
+  .vinyl-disc:hover ~ .play-button-overlay .play-button,
+  .play-button-overlay:hover .play-button { opacity: 1; }
+  .play-button:hover { transform: translate(-50%, -50%) scale(1.08); }
+  .play-button-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .play-button-overlay .play-button { pointer-events: auto; }
+
+  .vinyl-track-info {
+    text-align: center;
+  }
+  .vinyl-track-title {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 1.5rem;
+    color: var(--cream);
+    margin-bottom: 0.4rem;
+  }
+  .vinyl-track-genre {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: rgba(255, 253, 246, 0.5);
+  }
+  .vinyl-progress {
+    margin-top: 1.5rem;
+    height: 2px;
+    background: rgba(255, 253, 246, 0.15);
+    border-radius: 100px;
+    position: relative;
+    overflow: hidden;
+  }
+  .vinyl-progress-fill {
+    position: absolute;
+    inset: 0;
+    width: 0%;
+    background: var(--cream);
+    transition: width 0.3s;
+  }
+  .vinyl-time {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.6rem;
+    font-size: 11px;
+    color: rgba(255, 253, 246, 0.5);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* GENERIC SECTION */
+  .section {
+    padding: clamp(4rem, 10vw, 8rem) 0;
+  }
+  .section-head {
+    text-align: center;
+    margin-bottom: clamp(2.5rem, 5vw, 4rem);
+  }
+  .section-eyebrow {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--terracotta);
+    font-weight: 500;
+    margin-bottom: 1.25rem;
+  }
+  h2.section-title {
+    font-family: var(--font-display);
+    font-size: clamp(2.5rem, 6vw, 4.5rem);
+    font-weight: 400;
+    line-height: 1;
+    letter-spacing: -0.025em;
+    color: var(--ink);
+  }
+  h2.section-title em { font-style: italic; color: var(--terracotta); }
+  .section-sub {
+    margin-top: 1rem;
+    color: var(--ink-soft);
+    font-style: italic;
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    max-width: 36rem;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* HOW IT WORKS */
+  .how-steps {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  @media (min-width: 780px) { .how-steps { grid-template-columns: repeat(3, 1fr); gap: 2rem; } }
+  .how-step {
+    background: var(--cream);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 2rem;
+    position: relative;
+    transition: all 0.3s var(--ease-out);
+  }
+  .how-step:hover {
+    transform: translateY(-3px);
+    border-color: var(--terracotta);
+    box-shadow: 0 20px 40px -20px rgba(179, 82, 47, 0.15);
+  }
+  .how-num {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 3rem;
+    color: var(--terracotta);
+    line-height: 1;
+    margin-bottom: 1.5rem;
+    font-weight: 400;
+  }
+  .how-step h3 {
+    font-family: var(--font-display);
+    font-size: 1.65rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    margin-bottom: 0.65rem;
+    line-height: 1.1;
+  }
+  .how-step p {
+    color: var(--ink-soft);
+    font-size: 15px;
+    line-height: 1.55;
+  }
+
+  /* CATALOGUE */
+  .catalogue-list {
+    max-width: 56rem;
+    margin: 0 auto;
+  }
+  .catalogue-item {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 1.25rem;
+    align-items: center;
+    padding: 1.25rem 0;
+    border-bottom: 1px solid var(--line);
+    cursor: pointer;
+    transition: all 0.25s;
+  }
+  .catalogue-item:hover {
+    padding-left: 1rem;
+    padding-right: 1rem;
+    background: var(--cream);
+    border-radius: 12px;
+    border-color: transparent;
+  }
+  .cat-art {
+    width: 56px;
+    height: 56px;
+    border-radius: 100%;
+    background: radial-gradient(circle, #1a1a1a 0%, #0E0E0A 50%, #1a1a1a 70%);
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .cat-art::after {
+    content: '';
+    width: 18px;
+    height: 18px;
+    border-radius: 100%;
+    background: var(--terracotta);
+  }
+  .cat-art.s2::after { background: var(--mustard); }
+  .cat-art.s3::after { background: var(--sage); }
+  .cat-art.s4::after { background: var(--terracotta-soft); }
+  .cat-art.s5::after { background: var(--mustard); }
+  .cat-info {
+    min-width: 0;
+  }
+  .cat-eyebrow {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--ink-muted);
+    margin-bottom: 0.25rem;
+  }
+  .cat-title {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 1.5rem;
+    line-height: 1.1;
+    margin-bottom: 0.25rem;
+    font-weight: 500;
+  }
+  .cat-desc {
+    font-size: 13px;
+    color: var(--ink-soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+  }
+  .cat-duration {
+    font-size: 13px;
+    color: var(--ink-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* SONG FOR EVERYONE (sage section) */
+  .section-sage {
+    background: var(--sage);
+    color: var(--cream);
+  }
+  .section-sage .section-eyebrow { color: var(--sage-soft); }
+  .section-sage h2.section-title { color: var(--cream); }
+  .section-sage h2.section-title em { color: var(--mustard-soft); font-style: italic; }
+  .section-sage .section-sub { color: var(--sage-soft); }
+
+  .relationships-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+  @media (min-width: 600px) { .relationships-grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (min-width: 900px) { .relationships-grid { grid-template-columns: repeat(4, 1fr); } }
+
+  .relationship {
+    background: var(--sage-dark);
+    border-radius: 16px;
+    padding: 1.75rem 1.25rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s var(--ease-out);
+    border: 1px solid transparent;
+    color: var(--cream);
+  }
+  .relationship:hover {
+    background: var(--cream);
+    color: var(--sage-dark);
+    transform: translateY(-3px);
+  }
+  .rel-initial {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 2.25rem;
+    line-height: 1;
+    margin-bottom: 0.75rem;
+    font-weight: 500;
+  }
+  .rel-name {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 500;
+  }
+
+  /* GENRE SECTION */
+  .genre-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.85rem;
+  }
+  @media (min-width: 720px) { .genre-grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (min-width: 1024px) { .genre-grid { grid-template-columns: repeat(4, 1fr); } }
+
+  .genre {
+    background: var(--cream);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 1.5rem 1.25rem;
+    cursor: pointer;
+    transition: all 0.3s var(--ease-out);
+    position: relative;
+    overflow: hidden;
+  }
+  .genre:hover {
+    border-color: var(--terracotta);
+    transform: translateY(-2px);
+  }
+  .genre.featured {
+    background: var(--ink);
+    color: var(--cream);
+    border-color: var(--ink);
+  }
+  .genre.featured:hover {
+    background: var(--terracotta);
+    border-color: var(--terracotta);
+  }
+  .genre-name {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 1.35rem;
+    font-weight: 500;
+    margin-bottom: 0.4rem;
+    line-height: 1;
+  }
+  .genre-tag {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--ink-muted);
+  }
+  .genre.featured .genre-tag { color: var(--mustard-soft); }
+
+  /* FAQ */
+  .faq-list {
+    max-width: 48rem;
+    margin: 0 auto;
+  }
+  .faq-item {
+    border-bottom: 1px solid var(--line);
+  }
+  .faq-q {
+    width: 100%;
+    background: transparent;
+    border: none;
+    padding: 1.5rem 0;
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    font-weight: 500;
+    color: var(--ink);
+    cursor: pointer;
+    text-align: left;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    transition: color 0.2s;
+  }
+  .faq-q:hover { color: var(--terracotta); }
+  .faq-q-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 100px;
+    background: var(--ivory);
+    color: var(--terracotta);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s;
+    border: 1px solid var(--line);
+  }
+  .faq-item.open .faq-q-icon {
+    background: var(--terracotta);
+    color: var(--cream);
+    transform: rotate(45deg);
+  }
+  .faq-a {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s var(--ease-out);
+  }
+  .faq-item.open .faq-a { max-height: 500px; }
+  .faq-a-inner {
+    padding: 0 0 1.5rem 0;
+    color: var(--ink-soft);
+    font-size: 16px;
+    line-height: 1.6;
+    max-width: 36rem;
+  }
+
+  /* FINAL CTA (terracotta) */
+  .final-cta {
+    background: var(--terracotta);
+    color: var(--cream);
+    padding: clamp(5rem, 12vw, 9rem) 0;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .final-cta::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at top, rgba(255, 253, 246, 0.08), transparent 60%);
+  }
+  .final-cta h2 {
+    font-family: var(--font-display);
+    font-size: clamp(3rem, 9vw, 7rem);
+    font-weight: 400;
+    line-height: 0.95;
+    letter-spacing: -0.025em;
+    margin-bottom: 1.5rem;
+    color: var(--cream);
+    position: relative;
+  }
+  .final-cta h2 em { font-style: italic; color: var(--mustard-soft); }
+  .final-cta p {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 1.4rem;
+    color: var(--terracotta-soft);
+    margin-bottom: 2.5rem;
+    position: relative;
+  }
+  .final-cta .btn-cream {
+    background: var(--cream);
+    color: var(--ink);
+    position: relative;
+  }
+  .final-cta .btn-cream:hover {
+    background: var(--ink);
+    color: var(--cream);
+  }
+
+  /* FOOTER */
+  footer {
+    background: var(--ink);
+    color: var(--cream);
+    padding: 4rem 0 2rem;
+  }
+  .footer-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2rem;
+    margin-bottom: 3rem;
+  }
+  @media (min-width: 720px) { .footer-grid { grid-template-columns: 2fr 1fr 1fr 1fr; } }
+  .footer-brand .logo { color: var(--cream); font-size: 32px; }
+  .footer-brand p {
+    color: rgba(255, 253, 246, 0.5);
+    font-style: italic;
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    max-width: 22rem;
+    margin-top: 0.75rem;
+  }
+  .footer-col h4 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: rgba(255, 253, 246, 0.5);
+    margin-bottom: 1rem;
+    font-weight: 500;
+  }
+  .footer-col a {
+    display: block;
+    font-size: 14px;
+    color: rgba(255, 253, 246, 0.75);
+    padding: 0.35rem 0;
+    transition: color 0.2s;
+  }
+  .footer-col a:hover { color: var(--mustard-soft); }
+  .footer-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 1.5rem;
+    border-top: 1px solid rgba(255, 253, 246, 0.1);
+    font-size: 13px;
+    color: rgba(255, 253, 246, 0.4);
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  /* FLOATING PLAYER */
+  .float-player {
+    position: fixed;
+    bottom: 1.25rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: var(--cream);
+    border-radius: 100px;
+    padding: 0.5rem 0.5rem 0.5rem 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    box-shadow: 0 20px 40px -10px rgba(0,0,0,0.3);
+    z-index: 100;
+    max-width: calc(100vw - 2rem);
+  }
+  .float-player-art {
+    width: 36px;
+    height: 36px;
+    border-radius: 100%;
+    background: var(--terracotta);
+    flex-shrink: 0;
+    position: relative;
+    animation: spin 4s linear infinite;
+    animation-play-state: paused;
+  }
+  .float-player.playing .float-player-art { animation-play-state: running; }
+  .float-player-art::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 5px;
+    height: 5px;
+    border-radius: 100%;
+    background: var(--ink);
+  }
+  .float-info {
+    min-width: 0;
+    max-width: 160px;
+  }
+  .float-title {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 14px;
+    line-height: 1.1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .float-genre {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: rgba(255, 253, 246, 0.5);
+    margin-top: 0.15rem;
+  }
+  .float-play {
+    width: 36px;
+    height: 36px;
+    border-radius: 100%;
+    background: var(--cream);
+    color: var(--ink);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s;
+  }
+  .float-play:hover { transform: scale(1.08); }
+  .float-close {
+    width: 24px;
+    height: 24px;
+    border-radius: 100%;
+    background: transparent;
+    color: rgba(255, 253, 246, 0.5);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    margin-right: 0.25rem;
+  }
+  .float-close:hover { color: var(--cream); }
+  @media (max-width: 480px) {
+    .float-info { max-width: 100px; }
+  }
+
+  /* REVEAL */
+  .reveal {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.9s var(--ease-out), transform 0.9s var(--ease-out);
+  }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+    .reveal { opacity: 1; transform: none; }
+    .vinyl-disc, .float-player-art { animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<nav id="nav">
+  <div class="container">
+    <a href="#" class="logo">YourGbedu</a>
+    <div class="nav-links">
+      <a href="#catalogue">Catalogue</a>
+      <a href="#how">How it works</a>
+      <a href="#faq">FAQ</a>
+      <a href="yourgbedu-form.html" class="nav-cta">Create your song</a>
+    </div>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="container">
+    <div class="hero-eyebrow reveal">#1 Custom Song Platform · All Genres · Made in Lagos</div>
+    <h1 class="hero-title reveal">Hear what your<br>heart <em>meant to say.</em></h1>
+    <p class="hero-body reveal">Some feelings are too big for words. Tell us your story — we'll compose your royal masterpiece.</p>
+    <div class="cta-row reveal">
+      <a href="yourgbedu-form.html" class="btn btn-primary">Create your song</a>
+      <a href="#catalogue" class="btn btn-outline">Hear the catalogue</a>
+    </div>
+    <div class="hero-meta reveal">
+      <div class="hero-meta-item">
+        <div class="hero-meta-num">48<em>h</em></div>
+        <div class="hero-meta-label">From brief to delivery</div>
+      </div>
+      <div class="hero-meta-item">
+        <div class="hero-meta-num">12<em>+</em></div>
+        <div class="hero-meta-label">Afro genres covered</div>
+      </div>
+      <div class="hero-meta-item">
+        <div class="hero-meta-num">300<em>+</em></div>
+        <div class="hero-meta-label">Songs crafted, stories told</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section-vinyl">
+  <div class="container">
+    <div class="vinyl-grid">
+      <div class="vinyl-text reveal">
+        <div class="vinyl-text-eyebrow">Real songs · Real stories</div>
+        <h2>Hear it come <em>to life.</em></h2>
+        <p>A real cause. A real anniversary. A song made just for them — by YourGbedu's resident producers.</p>
+        <a href="#catalogue" class="btn btn-outline" style="border-color: var(--cream); color: var(--cream);">Browse catalogue</a>
+      </div>
+      <div class="vinyl-card reveal">
+        <div class="vinyl-meta">
+          <span class="vinyl-meta-label">Now playing</span>
+          <span class="vinyl-meta-label">YourGbedu · Original</span>
+        </div>
+        <div style="position: relative;">
+          <div class="vinyl-disc" id="vinyl-disc" onclick="togglePlay()">
+            <div class="vinyl-label-disc">
+              <div class="vinyl-title-disc">Anniversary</div>
+              <div class="vinyl-sub-disc">Afrobeats</div>
+            </div>
+          </div>
+          <div class="play-button-overlay">
+            <button class="play-button" id="play-btn" onclick="togglePlay()" aria-label="Play">
+              <svg id="play-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="vinyl-track-info">
+          <div class="vinyl-track-title">Anniversary</div>
+          <div class="vinyl-track-genre">Afrobeats · 4 minutes 32 seconds</div>
+          <div class="vinyl-progress"><div class="vinyl-progress-fill" id="progress-fill"></div></div>
+          <div class="vinyl-time"><span id="time-now">0:00</span><span>4:32</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="how">
+  <div class="container">
+    <div class="section-head reveal">
+      <div class="section-eyebrow">How it works</div>
+      <h2 class="section-title">Three steps. <em>One song.</em></h2>
+      <p class="section-sub">Tell us about the person, the moment, the message — we handle the rest.</p>
+    </div>
+    <div class="how-steps">
+      <div class="how-step reveal">
+        <div class="how-num">i.</div>
+        <h3>Fill out the brief.</h3>
+        <p>Tell us who it's for, the genre and vibe you want, and the memories that should live in the lyrics.</p>
+      </div>
+      <div class="how-step reveal">
+        <div class="how-num">ii.</div>
+        <h3>We create your song.</h3>
+        <p>A producer crafts a custom track for your story — composed, recorded, and mixed with royal precision.</p>
+      </div>
+      <div class="how-step reveal">
+        <div class="how-num">iii.</div>
+        <h3>Delivered in 48 hours.</h3>
+        <p>Your masterpiece arrives in your inbox, ready to share with the people who matter most.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="catalogue">
+  <div class="container">
+    <div class="section-head reveal">
+      <div class="section-eyebrow">Hear the work</div>
+      <h2 class="section-title">From our <em>catalogue.</em></h2>
+      <p class="section-sub">Real songs crafted for real people. Each one tells a story.</p>
+    </div>
+    <div class="catalogue-list">
+      <div class="catalogue-item reveal" onclick="playTrack('Anniversary','Afrobeats')">
+        <div class="cat-art"></div>
+        <div class="cat-info">
+          <div class="cat-eyebrow">Afrobeats</div>
+          <div class="cat-title">Anniversary</div>
+          <div class="cat-desc">A celebration of love and togetherness — crafted for a special couple whose love stood still.</div>
+        </div>
+        <div class="cat-duration">4:32</div>
+      </div>
+      <div class="catalogue-item reveal" onclick="playTrack('Valentine','Afro R&B')">
+        <div class="cat-art s2"></div>
+        <div class="cat-info">
+          <div class="cat-eyebrow">Afro R&B</div>
+          <div class="cat-title">Valentine</div>
+          <div class="cat-desc">A song to celebrate love. Soft, slow, and gentle enough to dance to in your kitchen.</div>
+        </div>
+        <div class="cat-duration">3:48</div>
+      </div>
+      <div class="catalogue-item reveal" onclick="playTrack('Mummy at 60','Highlife')">
+        <div class="cat-art s3"></div>
+        <div class="cat-info">
+          <div class="cat-eyebrow">Highlife</div>
+          <div class="cat-title">Mummy at 60</div>
+          <div class="cat-desc">A 60th-birthday tribute — a joyful Afro-Highlife celebration of a mother's love, life, and lessons.</div>
+        </div>
+        <div class="cat-duration">5:10</div>
+      </div>
+      <div class="catalogue-item reveal" onclick="playTrack('Like Roses','Afrobeats')">
+        <div class="cat-art s4"></div>
+        <div class="cat-info">
+          <div class="cat-eyebrow">Afrobeats</div>
+          <div class="cat-title">Like Roses (You are your name)</div>
+          <div class="cat-desc">For a sister whose name means joy. He spoke it on her wedding day.</div>
+        </div>
+        <div class="cat-duration">4:05</div>
+      </div>
+      <div class="catalogue-item reveal" onclick="playTrack('Mimi','Gospel')">
+        <div class="cat-art s5"></div>
+        <div class="cat-info">
+          <div class="cat-eyebrow">Gospel</div>
+          <div class="cat-title">Mimi (Give me wealth)</div>
+          <div class="cat-desc">For her milestone birthday — we wanted it to feel like worship and victory at once.</div>
+        </div>
+        <div class="cat-duration">4:55</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-sage">
+  <div class="container">
+    <div class="section-head reveal">
+      <div class="section-eyebrow">For whoever it's for</div>
+      <h2 class="section-title">A song for <em>everyone.</em></h2>
+      <p class="section-sub">Pick who it's for. We'll craft something they'll never forget.</p>
+    </div>
+    <div class="relationships-grid">
+      <div class="relationship reveal"><div class="rel-initial">P</div><div class="rel-name">Partner</div></div>
+      <div class="relationship reveal"><div class="rel-initial">C</div><div class="rel-name">Children</div></div>
+      <div class="relationship reveal"><div class="rel-initial">F</div><div class="rel-name">Father</div></div>
+      <div class="relationship reveal"><div class="rel-initial">M</div><div class="rel-name">Mother</div></div>
+      <div class="relationship reveal"><div class="rel-initial">S</div><div class="rel-name">Sibling</div></div>
+      <div class="relationship reveal"><div class="rel-initial">Fr</div><div class="rel-name">Friend</div></div>
+      <div class="relationship reveal"><div class="rel-initial">Y</div><div class="rel-name">Yourself</div></div>
+      <div class="relationship reveal"><div class="rel-initial">★</div><div class="rel-name">Special one</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="section-head reveal">
+      <div class="section-eyebrow">Every genre · One platform</div>
+      <h2 class="section-title">Whatever sound moves you, <em>we'll make it personal.</em></h2>
+    </div>
+    <div class="genre-grid">
+      <div class="genre featured reveal"><div class="genre-name">Afrobeats</div><div class="genre-tag">Most loved</div></div>
+      <div class="genre reveal"><div class="genre-name">Afro R&B</div><div class="genre-tag">Soulful</div></div>
+      <div class="genre reveal"><div class="genre-name">Afro Pop</div><div class="genre-tag">Bright</div></div>
+      <div class="genre reveal"><div class="genre-name">Afro Reggae</div><div class="genre-tag">Easy-going</div></div>
+      <div class="genre reveal"><div class="genre-name">Gospel</div><div class="genre-tag">Worship</div></div>
+      <div class="genre reveal"><div class="genre-name">Highlife</div><div class="genre-tag">Classic</div></div>
+      <div class="genre reveal"><div class="genre-name">Hip-Hop</div><div class="genre-tag">Bold</div></div>
+      <div class="genre reveal"><div class="genre-name">Pop</div><div class="genre-tag">Universal</div></div>
+      <div class="genre reveal"><div class="genre-name">Soul</div><div class="genre-tag">Deep</div></div>
+      <div class="genre reveal"><div class="genre-name">Spoken word</div><div class="genre-tag">Poetic</div></div>
+      <div class="genre reveal"><div class="genre-name">Lullaby</div><div class="genre-tag">Tender</div></div>
+      <div class="genre reveal"><div class="genre-name">Custom blend</div><div class="genre-tag">You name it</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="faq">
+  <div class="container">
+    <div class="section-head reveal">
+      <div class="section-eyebrow">Frequently asked</div>
+      <h2 class="section-title">Everything you need <em>to know.</em></h2>
+    </div>
+    <div class="faq-list">
+      <div class="faq-item reveal">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          What makes these songs special?
+          <span class="faq-q-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+        </button>
+        <div class="faq-a"><div class="faq-a-inner">Every song is written from scratch for the specific person and story you describe. No templates, no AI shortcuts — real producers, real voices, real instruments.</div></div>
+      </div>
+      <div class="faq-item reveal">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          How long does delivery take?
+          <span class="faq-q-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+        </button>
+        <div class="faq-a"><div class="faq-a-inner">Standard delivery is 48 hours from confirmed brief. Rush delivery (24 hours) is available at an additional cost.</div></div>
+      </div>
+      <div class="faq-item reveal">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          Can I get my song faster than 24 hours?
+          <span class="faq-q-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+        </button>
+        <div class="faq-a"><div class="faq-a-inner">In exceptional cases, yes — reach out directly and we'll do our best. Quality stays the priority either way.</div></div>
+      </div>
+      <div class="faq-item reveal">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          What themes can I write about?
+          <span class="faq-q-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+        </button>
+        <div class="faq-a"><div class="faq-a-inner">Anniversaries, birthdays, weddings, proposals, memorials, apologies, welcomes, just-because — and anything else you can describe.</div></div>
+      </div>
+      <div class="faq-item reveal">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          How will I receive the finished song?
+          <span class="faq-q-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+        </button>
+        <div class="faq-a"><div class="faq-a-inner">A private link via email with the high-quality audio file. You can stream, download, or share — it's yours to keep.</div></div>
+      </div>
+      <div class="faq-item reveal">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          Can I use the song at a church or event?
+          <span class="faq-q-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+        </button>
+        <div class="faq-a"><div class="faq-a-inner">Yes — you own personal-use rights to the song. For commercial use (broadcast, advertising, sale), get in touch about licensing.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="final-cta">
+  <div class="container">
+    <h2 class="reveal">Your story is <em>waiting to be heard.</em></h2>
+    <p class="reveal">Tell us once. Hear it forever.</p>
+    <a href="yourgbedu-form.html" class="btn btn-cream reveal">Create your song</a>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="#" class="logo">YourGbedu</a>
+        <p>Your story, our soundtrack. A digital permanence of feeling.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Product</h4>
+        <a href="yourgbedu-form.html">Create your song</a>
+        <a href="#catalogue">Catalogue</a>
+        <a href="#how">How it works</a>
+      </div>
+      <div class="footer-col">
+        <h4>Company</h4>
+        <a href="#">About</a>
+        <a href="#">Gallery</a>
+        <a href="#">Contact</a>
+      </div>
+      <div class="footer-col">
+        <h4>Legal</h4>
+        <a href="#">Privacy</a>
+        <a href="#">Terms</a>
+        <a href="#">Licensing</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 The Digital Curator · Permanent Collections</span>
+      <span style="font-style: italic; font-family: var(--font-display); color: var(--mustard-soft);">Made in Lagos.</span>
+    </div>
+  </div>
+</footer>
+
+<!-- Floating player -->
+<div class="float-player" id="float-player">
+  <div class="float-player-art"></div>
+  <div class="float-info">
+    <div class="float-title" id="float-title">Anniversary</div>
+    <div class="float-genre" id="float-genre">Afrobeats</div>
+  </div>
+  <button class="float-play" id="float-play" onclick="togglePlay()" aria-label="Play">
+    <svg id="float-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+  </button>
+  <button class="float-close" onclick="document.getElementById('float-player').style.display='none'" aria-label="Close">×</button>
+</div>
+
+<script>
+  // Nav scroll
+  const nav = document.getElementById('nav');
+  window.addEventListener('scroll', () => {
+    nav.classList.toggle('scrolled', window.scrollY > 8);
+  });
+
+  // Reveal
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((entry, i) => {
+      if (entry.isIntersecting) {
+        setTimeout(() => entry.target.classList.add('visible'), i * 50);
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -80px 0px' });
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+  // Hero stagger
+  document.querySelectorAll('.hero .reveal').forEach((el, i) => {
+    setTimeout(() => el.classList.add('visible'), 100 + i * 110);
+  });
+
+  // Vinyl player state
+  let isPlaying = false;
+  let progress = 0;
+  let progressInterval;
+
+  function togglePlay() {
+    isPlaying = !isPlaying;
+    const disc = document.getElementById('vinyl-disc');
+    const floatPlayer = document.getElementById('float-player');
+    const playIcon = document.getElementById('play-icon');
+    const floatIcon = document.getElementById('float-icon');
+    const playBtn = document.getElementById('play-btn');
+
+    if (isPlaying) {
+      disc.classList.add('playing');
+      floatPlayer.classList.add('playing');
+      playIcon.innerHTML = '<rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/>';
+      floatIcon.innerHTML = '<rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/>';
+      playBtn.style.opacity = '1';
+      progressInterval = setInterval(() => {
+        progress = (progress + 0.2) % 100;
+        document.getElementById('progress-fill').style.width = progress + '%';
+        const seconds = Math.floor(progress * 2.72);
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        document.getElementById('time-now').textContent = `${m}:${s.toString().padStart(2,'0')}`;
+      }, 100);
+    } else {
+      disc.classList.remove('playing');
+      floatPlayer.classList.remove('playing');
+      playIcon.innerHTML = '<path d="M8 5v14l11-7z"/>';
+      floatIcon.innerHTML = '<path d="M8 5v14l11-7z"/>';
+      playBtn.style.opacity = '';
+      clearInterval(progressInterval);
+    }
+  }
+
+  function playTrack(title, genre) {
+    document.getElementById('float-title').textContent = title;
+    document.getElementById('float-genre').textContent = genre;
+    document.getElementById('float-player').style.display = 'flex';
+    if (!isPlaying) togglePlay();
+  }
+
+  // FAQ
+  function toggleFaq(btn) {
+    const item = btn.parentElement;
+    item.classList.toggle('open');
+  }
+</script>
+
+</body>
+</html>

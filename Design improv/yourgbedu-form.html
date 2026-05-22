@@ -1,0 +1,1217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YourGbedu — Create your song</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ivory: #FAF6EE;
+    --cream: #FFFDF6;
+    --terracotta: #B3522F;
+    --terracotta-dark: #8B3E22;
+    --terracotta-soft: #E8B89E;
+    --terracotta-pale: #F5E5D9;
+    --sage: #7C8B5C;
+    --sage-dark: #5D6A42;
+    --sage-soft: #C9D2B0;
+    --mustard: #C99B3E;
+    --mustard-soft: #F0DCA8;
+    --ink: #1F1B14;
+    --ink-soft: #5A4F3F;
+    --ink-muted: #8B7F6C;
+    --line: #E5DDD0;
+    --line-strong: #C7BDA8;
+
+    --font-display: 'Cormorant Garamond', Georgia, serif;
+    --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+
+    --max-width: 1280px;
+    --gutter: clamp(1.25rem, 4vw, 2.5rem);
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--ivory);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.55;
+    font-feature-settings: 'ss01';
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+    padding-bottom: 100px;
+  }
+
+  ::selection { background: var(--terracotta); color: var(--cream); }
+  a { color: inherit; text-decoration: none; }
+  button { font-family: inherit; }
+
+  .container {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 0 var(--gutter);
+  }
+
+  /* NAV */
+  nav {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    background: rgba(250, 246, 238, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  nav .container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 76px;
+  }
+  .logo {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 28px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+  .nav-links {
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+    font-size: 14px;
+  }
+  .nav-links a {
+    color: var(--ink-soft);
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--terracotta); }
+  .save-tag {
+    font-size: 11px;
+    color: var(--ink-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .save-tag::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 100px;
+    background: var(--sage);
+  }
+  @media (max-width: 720px) {
+    .nav-links a:not(.save-tag) { display: none; }
+  }
+
+  /* PROGRESS BAR */
+  .progress-bar {
+    height: 2px;
+    background: var(--line);
+    position: relative;
+  }
+  .progress-fill {
+    position: absolute;
+    inset: 0;
+    width: 20%;
+    background: var(--terracotta);
+    transition: width 0.5s var(--ease-out);
+  }
+
+  /* PAGE HEAD */
+  .page-head {
+    padding: clamp(2.5rem, 6vw, 4rem) 0 clamp(2rem, 4vw, 3rem);
+  }
+  .eyebrow-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+  .page-eyebrow {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--terracotta);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .page-eyebrow::before {
+    content: '';
+    width: 24px;
+    height: 1px;
+    background: var(--terracotta);
+  }
+  .step-counter {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 14px;
+    color: var(--ink-muted);
+  }
+  .step-counter b {
+    color: var(--ink);
+    font-style: normal;
+    font-family: var(--font-body);
+    font-weight: 500;
+  }
+  h1.page-title {
+    font-family: var(--font-display);
+    font-size: clamp(2.5rem, 6.5vw, 4.5rem);
+    line-height: 0.95;
+    font-weight: 400;
+    letter-spacing: -0.025em;
+    margin-bottom: 0.75rem;
+  }
+  h1.page-title em { font-style: italic; color: var(--terracotta); }
+  .page-sub {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 1.3rem;
+    color: var(--ink-soft);
+    max-width: 36rem;
+  }
+
+  /* LAYOUT */
+  .form-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2rem;
+    padding-bottom: 3rem;
+  }
+  @media (min-width: 920px) {
+    .form-layout {
+      grid-template-columns: 280px 1fr;
+      gap: 4rem;
+      align-items: start;
+    }
+    .step-sidebar { position: sticky; top: 90px; }
+  }
+
+  /* SIDEBAR STEPS */
+  .step-sidebar {
+    background: var(--cream);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 1.5rem;
+  }
+  .sidebar-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--ink-muted);
+    margin-bottom: 1.25rem;
+    font-weight: 500;
+  }
+  .step-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .step-link {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.85rem 0.65rem;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.25s var(--ease-out);
+    border: 1px solid transparent;
+    background: transparent;
+    width: 100%;
+    text-align: left;
+  }
+  .step-link:hover { background: var(--ivory); }
+  .step-link.active {
+    background: var(--terracotta-pale);
+    border-color: var(--terracotta-soft);
+  }
+  .step-link.done .step-num-circle {
+    background: var(--sage);
+    color: var(--cream);
+    border-color: var(--sage);
+  }
+  .step-num-circle {
+    width: 28px;
+    height: 28px;
+    border-radius: 100%;
+    background: transparent;
+    border: 1px solid var(--line-strong);
+    color: var(--ink-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 14px;
+    font-weight: 500;
+    flex-shrink: 0;
+    transition: all 0.25s;
+  }
+  .step-link.active .step-num-circle {
+    background: var(--terracotta);
+    border-color: var(--terracotta);
+    color: var(--cream);
+  }
+  .step-link.done .step-num-circle svg { width: 12px; height: 12px; }
+  .step-text {
+    min-width: 0;
+    flex: 1;
+  }
+  .step-text-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink);
+    line-height: 1.2;
+  }
+  .step-text-meta {
+    font-size: 11px;
+    color: var(--ink-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 0.2rem;
+  }
+  .step-link.active .step-text-title { color: var(--terracotta-dark); }
+
+  /* MAIN FORM */
+  .form-main {
+    background: var(--cream);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: clamp(1.75rem, 4vw, 2.75rem);
+  }
+
+  .form-section {
+    display: none;
+  }
+  .form-section.active {
+    display: block;
+    animation: fadeIn 0.4s var(--ease-out);
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .form-section-head {
+    margin-bottom: 2rem;
+  }
+  .form-section-eyebrow {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--ink-muted);
+    font-weight: 500;
+    margin-bottom: 0.65rem;
+  }
+  .form-section-title {
+    font-family: var(--font-display);
+    font-size: clamp(1.85rem, 3.5vw, 2.5rem);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    margin-bottom: 0.5rem;
+  }
+  .form-section-title em { font-style: italic; color: var(--terracotta); }
+  .form-section-sub {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 1.1rem;
+    color: var(--ink-soft);
+  }
+
+  .field {
+    margin-bottom: 2rem;
+  }
+  .field-label {
+    display: block;
+    font-family: var(--font-display);
+    font-size: 1.35rem;
+    font-weight: 500;
+    color: var(--ink);
+    margin-bottom: 0.4rem;
+    letter-spacing: -0.01em;
+  }
+  .field-label em { font-style: italic; color: var(--terracotta); }
+  .field-hint {
+    font-size: 13px;
+    color: var(--ink-muted);
+    margin-bottom: 1rem;
+  }
+
+  /* PILL BUTTONS */
+  .pill-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .pill {
+    background: var(--ivory);
+    border: 1px solid var(--line);
+    border-radius: 100px;
+    padding: 0.65rem 1.1rem;
+    font-size: 14px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: all 0.2s var(--ease-out);
+    font-family: inherit;
+    user-select: none;
+  }
+  .pill:hover {
+    border-color: var(--terracotta);
+    color: var(--terracotta);
+  }
+  .pill.selected {
+    background: var(--terracotta);
+    color: var(--cream);
+    border-color: var(--terracotta);
+  }
+
+  /* TEXT INPUTS */
+  .input {
+    width: 100%;
+    background: var(--ivory);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 1rem 1.1rem;
+    font-family: inherit;
+    font-size: 15px;
+    color: var(--ink);
+    transition: all 0.2s;
+  }
+  .input:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    background: var(--cream);
+  }
+  .input::placeholder { color: var(--ink-muted); }
+
+  textarea.input {
+    resize: vertical;
+    min-height: 120px;
+    font-family: inherit;
+    line-height: 1.55;
+  }
+
+  /* MOOD SLIDER (for step 2 preview) */
+  .mood-card {
+    background: var(--ivory);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 1.25rem;
+  }
+  .mood-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+    font-size: 12px;
+    color: var(--ink-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .mood-track {
+    height: 6px;
+    background: var(--line);
+    border-radius: 100px;
+    position: relative;
+    margin: 0.5rem 0 0.75rem;
+    cursor: pointer;
+  }
+  .mood-fill {
+    position: absolute;
+    inset: 0;
+    width: 50%;
+    background: var(--terracotta);
+    border-radius: 100px;
+    transition: width 0.3s;
+  }
+  .mood-handle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 18px;
+    height: 18px;
+    background: var(--terracotta);
+    border: 3px solid var(--cream);
+    border-radius: 100%;
+    box-shadow: 0 2px 8px rgba(179,82,47,0.3);
+    transition: left 0.3s;
+  }
+
+  /* GENRE GRID (small) */
+  .genre-mini-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.55rem;
+  }
+  .genre-mini {
+    background: var(--ivory);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 0.95rem 1rem;
+    cursor: pointer;
+    transition: all 0.2s var(--ease-out);
+  }
+  .genre-mini:hover { border-color: var(--terracotta); }
+  .genre-mini.selected {
+    background: var(--terracotta);
+    color: var(--cream);
+    border-color: var(--terracotta);
+  }
+  .genre-mini-name {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 1.15rem;
+    font-weight: 500;
+    line-height: 1;
+    margin-bottom: 0.25rem;
+  }
+  .genre-mini-tag {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--ink-muted);
+  }
+  .genre-mini.selected .genre-mini-tag { color: var(--mustard-soft); }
+
+  /* REVIEW PANELS */
+  .review-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  @media (min-width: 600px) { .review-grid { grid-template-columns: 1fr 1fr; } }
+  .review-card {
+    background: var(--ivory);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 1.25rem;
+  }
+  .review-card-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--ink-muted);
+    margin-bottom: 0.5rem;
+  }
+  .review-card-value {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 1.35rem;
+    color: var(--ink);
+    line-height: 1.1;
+  }
+  .review-card-empty { color: var(--ink-muted); font-size: 14px; font-style: italic; font-family: var(--font-display); }
+  .review-edit {
+    font-size: 12px;
+    color: var(--terracotta);
+    text-decoration: none;
+    margin-top: 0.5rem;
+    display: inline-block;
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+  .review-edit:hover { text-decoration: underline; }
+
+  .summary-box {
+    background: var(--terracotta);
+    color: var(--cream);
+    border-radius: 16px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .summary-box::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -20%;
+    width: 60%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255,253,246,0.1), transparent 70%);
+  }
+  .summary-box-head {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--terracotta-soft);
+    margin-bottom: 0.75rem;
+    position: relative;
+  }
+  .summary-box-title {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 1.75rem;
+    line-height: 1.1;
+    position: relative;
+  }
+  .summary-box-meta {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(255,253,246,0.15);
+    font-size: 13px;
+    color: var(--terracotta-soft);
+    position: relative;
+  }
+
+  /* NAV BUTTONS */
+  .form-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--line);
+    margin-top: 2rem;
+    flex-wrap: wrap;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.95rem 1.75rem;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    border-radius: 100px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.25s var(--ease-out);
+  }
+  .btn-primary {
+    background: var(--ink);
+    color: var(--cream);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--terracotta);
+    transform: translateY(-1px);
+  }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-back {
+    background: transparent;
+    color: var(--ink-soft);
+  }
+  .btn-back:hover { color: var(--ink); }
+  .btn-submit {
+    background: var(--terracotta);
+    color: var(--cream);
+  }
+  .btn-submit:hover { background: var(--terracotta-dark); transform: translateY(-1px); }
+
+  /* FLOATING PLAYER */
+  .float-player {
+    position: fixed;
+    bottom: 1.25rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: var(--cream);
+    border-radius: 100px;
+    padding: 0.5rem 0.5rem 0.5rem 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    box-shadow: 0 20px 40px -10px rgba(0,0,0,0.3);
+    z-index: 100;
+    max-width: calc(100vw - 2rem);
+  }
+  .float-art {
+    width: 36px;
+    height: 36px;
+    border-radius: 100%;
+    background: var(--terracotta);
+    position: relative;
+    flex-shrink: 0;
+    animation: spin 4s linear infinite;
+    animation-play-state: paused;
+  }
+  .float-player.playing .float-art { animation-play-state: running; }
+  .float-art::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 5px;
+    height: 5px;
+    border-radius: 100%;
+    background: var(--ink);
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .float-info { min-width: 0; max-width: 180px; }
+  .float-title {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 14px;
+    line-height: 1.1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .float-genre {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: rgba(255, 253, 246, 0.5);
+    margin-top: 0.15rem;
+  }
+  .float-play {
+    width: 36px;
+    height: 36px;
+    border-radius: 100%;
+    background: var(--cream);
+    color: var(--ink);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s;
+  }
+  .float-play:hover { transform: scale(1.08); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+    .float-art { animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="container">
+    <a href="yourgbedu-homepage.html" class="logo">YourGbedu</a>
+    <div class="nav-links">
+      <span class="save-tag">Auto-saved</span>
+      <a href="yourgbedu-homepage.html">Back to site</a>
+    </div>
+  </div>
+</nav>
+
+<div class="progress-bar">
+  <div class="progress-fill" id="progress-fill"></div>
+</div>
+
+<div class="container">
+
+  <section class="page-head">
+    <div class="eyebrow-row">
+      <span class="page-eyebrow">Create your song</span>
+      <span class="step-counter">Step <b id="step-current">1</b> of <b>5</b></span>
+    </div>
+    <h1 class="page-title">Tell us your <em>story.</em></h1>
+    <p class="page-sub" id="page-sub">Some feelings are too big for words. We'll listen, then compose.</p>
+  </section>
+
+  <div class="form-layout">
+
+    <!-- SIDEBAR -->
+    <aside class="step-sidebar">
+      <div class="sidebar-label">Your brief</div>
+      <div class="step-list">
+        <button class="step-link active" data-step="1" onclick="goToStep(1)">
+          <span class="step-num-circle">i</span>
+          <span class="step-text">
+            <div class="step-text-title">Basics</div>
+            <div class="step-text-meta">Who · What · When</div>
+          </span>
+        </button>
+        <button class="step-link" data-step="2" onclick="goToStep(2)">
+          <span class="step-num-circle">ii</span>
+          <span class="step-text">
+            <div class="step-text-title">Style</div>
+            <div class="step-text-meta">Genre · Mood</div>
+          </span>
+        </button>
+        <button class="step-link" data-step="3" onclick="goToStep(3)">
+          <span class="step-num-circle">iii</span>
+          <span class="step-text">
+            <div class="step-text-title">Story</div>
+            <div class="step-text-meta">Memories · Details</div>
+          </span>
+        </button>
+        <button class="step-link" data-step="4" onclick="goToStep(4)">
+          <span class="step-num-circle">iv</span>
+          <span class="step-text">
+            <div class="step-text-title">Message</div>
+            <div class="step-text-meta">What to say</div>
+          </span>
+        </button>
+        <button class="step-link" data-step="5" onclick="goToStep(5)">
+          <span class="step-num-circle">v</span>
+          <span class="step-text">
+            <div class="step-text-title">Review</div>
+            <div class="step-text-meta">Confirm · Submit</div>
+          </span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- MAIN FORM -->
+    <main class="form-main">
+
+      <!-- STEP 1: BASICS -->
+      <section class="form-section active" data-section="1">
+        <div class="form-section-head">
+          <div class="form-section-eyebrow">Step i · Basics</div>
+          <h2 class="form-section-title">Let's start with <em>the basics.</em></h2>
+          <p class="form-section-sub">Who is this song for, and what's the occasion?</p>
+        </div>
+
+        <div class="field">
+          <label class="field-label">Who's <em>this</em> for?</label>
+          <p class="field-hint">Pick the relationship that fits closest.</p>
+          <div class="pill-group" data-field="relationship">
+            <button class="pill">Husband</button>
+            <button class="pill">Wife</button>
+            <button class="pill">Boyfriend</button>
+            <button class="pill">Girlfriend</button>
+            <button class="pill">Children</button>
+            <button class="pill">Father</button>
+            <button class="pill">Mother</button>
+            <button class="pill">Sibling</button>
+            <button class="pill">Friend</button>
+            <button class="pill">Myself</button>
+            <button class="pill">Other</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label">What's the <em>occasion?</em></label>
+          <p class="field-hint">The moment this song will live inside.</p>
+          <div class="pill-group" data-field="occasion">
+            <button class="pill">Birthday</button>
+            <button class="pill">Anniversary</button>
+            <button class="pill">Wedding</button>
+            <button class="pill">Valentine</button>
+            <button class="pill">Appreciation</button>
+            <button class="pill">Apology</button>
+            <button class="pill">Memorial</button>
+            <button class="pill">Graduation</button>
+            <button class="pill">Proposal</button>
+            <button class="pill">Welcome baby</button>
+            <button class="pill">Just because</button>
+            <button class="pill">Other</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label">What's <em>your</em> name?</label>
+          <p class="field-hint">So we know what to call you in the lyrics if it fits.</p>
+          <input class="input" type="text" placeholder="e.g. Tola" data-field="name">
+        </div>
+
+        <div class="form-actions">
+          <span></span>
+          <button class="btn btn-primary" onclick="nextStep()">
+            Continue
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </section>
+
+      <!-- STEP 2: STYLE -->
+      <section class="form-section" data-section="2">
+        <div class="form-section-head">
+          <div class="form-section-eyebrow">Step ii · Style</div>
+          <h2 class="form-section-title">What should it <em>sound like?</em></h2>
+          <p class="form-section-sub">Pick a genre. We'll handle the production.</p>
+        </div>
+
+        <div class="field">
+          <label class="field-label">Choose a <em>genre.</em></label>
+          <p class="field-hint">Not sure? Pick Afrobeats — most-loved.</p>
+          <div class="genre-mini-grid" data-field="genre">
+            <button class="genre-mini selected">
+              <div class="genre-mini-name">Afrobeats</div>
+              <div class="genre-mini-tag">Most loved</div>
+            </button>
+            <button class="genre-mini">
+              <div class="genre-mini-name">Afro R&B</div>
+              <div class="genre-mini-tag">Soulful</div>
+            </button>
+            <button class="genre-mini">
+              <div class="genre-mini-name">Afro Pop</div>
+              <div class="genre-mini-tag">Bright</div>
+            </button>
+            <button class="genre-mini">
+              <div class="genre-mini-name">Gospel</div>
+              <div class="genre-mini-tag">Worship</div>
+            </button>
+            <button class="genre-mini">
+              <div class="genre-mini-name">Highlife</div>
+              <div class="genre-mini-tag">Classic</div>
+            </button>
+            <button class="genre-mini">
+              <div class="genre-mini-name">Hip-Hop</div>
+              <div class="genre-mini-tag">Bold</div>
+            </button>
+            <button class="genre-mini">
+              <div class="genre-mini-name">Soul</div>
+              <div class="genre-mini-tag">Deep</div>
+            </button>
+            <button class="genre-mini">
+              <div class="genre-mini-name">Lullaby</div>
+              <div class="genre-mini-tag">Tender</div>
+            </button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label">Pick a <em>vibe.</em></label>
+          <p class="field-hint">Soft and intimate, or loud and celebratory?</p>
+          <div class="mood-card">
+            <div class="mood-row">
+              <span>Soft</span>
+              <span>Celebratory</span>
+            </div>
+            <div class="mood-track" id="mood-track">
+              <div class="mood-fill" id="mood-fill"></div>
+              <div class="mood-handle" id="mood-handle"></div>
+            </div>
+            <div class="mood-row">
+              <span style="text-transform:none; letter-spacing: 0; color: var(--ink); font-size: 13px;" id="mood-label">Balanced — measured warmth.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn btn-back" onclick="prevStep()">← Back</button>
+          <button class="btn btn-primary" onclick="nextStep()">
+            Continue
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </section>
+
+      <!-- STEP 3: STORY -->
+      <section class="form-section" data-section="3">
+        <div class="form-section-head">
+          <div class="form-section-eyebrow">Step iii · Story</div>
+          <h2 class="form-section-title">Tell us <em>about them.</em></h2>
+          <p class="form-section-sub">The details that will live in the lyrics.</p>
+        </div>
+
+        <div class="field">
+          <label class="field-label">What's <em>their</em> name?</label>
+          <input class="input" type="text" placeholder="e.g. Adaeze" data-field="recipient-name">
+        </div>
+
+        <div class="field">
+          <label class="field-label">Share a memory or two.</label>
+          <p class="field-hint">Where you met, an inside joke, the moment you knew. Specifics make the song theirs.</p>
+          <textarea class="input" placeholder="The first time we danced was at a wedding in Ikoyi. You said my shirt looked like a parachute. I still wear it." data-field="memories"></textarea>
+        </div>
+
+        <div class="field">
+          <label class="field-label">Any words or phrases <em>they</em> use?</label>
+          <p class="field-hint">Pet names, in-jokes, the way they sign off a text.</p>
+          <input class="input" type="text" placeholder="e.g. 'my own', 'small thing'" data-field="phrases">
+        </div>
+
+        <div class="form-actions">
+          <button class="btn btn-back" onclick="prevStep()">← Back</button>
+          <button class="btn btn-primary" onclick="nextStep()">
+            Continue
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </section>
+
+      <!-- STEP 4: MESSAGE -->
+      <section class="form-section" data-section="4">
+        <div class="form-section-head">
+          <div class="form-section-eyebrow">Step iv · Message</div>
+          <h2 class="form-section-title">What do you want <em>to say?</em></h2>
+          <p class="form-section-sub">The feeling at the heart of the song.</p>
+        </div>
+
+        <div class="field">
+          <label class="field-label">In <em>one sentence</em>, what's the message?</label>
+          <p class="field-hint">If they only heard the chorus, what should they walk away knowing?</p>
+          <textarea class="input" placeholder="That after everything, I still choose her. Every morning." data-field="message"></textarea>
+        </div>
+
+        <div class="field">
+          <label class="field-label">Anything you want us to <em>avoid?</em></label>
+          <p class="field-hint">Topics, words, or vibes that wouldn't fit.</p>
+          <input class="input" type="text" placeholder="e.g. avoid mentioning her ex, keep it joyful not sad" data-field="avoid">
+        </div>
+
+        <div class="form-actions">
+          <button class="btn btn-back" onclick="prevStep()">← Back</button>
+          <button class="btn btn-primary" onclick="nextStep()">
+            Continue
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </section>
+
+      <!-- STEP 5: REVIEW -->
+      <section class="form-section" data-section="5">
+        <div class="form-section-head">
+          <div class="form-section-eyebrow">Step v · Review</div>
+          <h2 class="form-section-title">One look <em>before we begin.</em></h2>
+          <p class="form-section-sub">Edit anything that's not quite right.</p>
+        </div>
+
+        <div class="summary-box">
+          <div class="summary-box-head">Your custom song</div>
+          <div class="summary-box-title" id="summary-title">A song for someone special — Afrobeats, balanced.</div>
+          <div class="summary-box-meta">Delivered to your inbox in 48 hours.</div>
+        </div>
+
+        <div class="review-grid">
+          <div class="review-card">
+            <div class="review-card-label">For</div>
+            <div class="review-card-value" id="review-relationship"><span class="review-card-empty">Not set</span></div>
+            <a class="review-edit" onclick="goToStep(1)">Edit</a>
+          </div>
+          <div class="review-card">
+            <div class="review-card-label">Occasion</div>
+            <div class="review-card-value" id="review-occasion"><span class="review-card-empty">Not set</span></div>
+            <a class="review-edit" onclick="goToStep(1)">Edit</a>
+          </div>
+          <div class="review-card">
+            <div class="review-card-label">Genre</div>
+            <div class="review-card-value" id="review-genre">Afrobeats</div>
+            <a class="review-edit" onclick="goToStep(2)">Edit</a>
+          </div>
+          <div class="review-card">
+            <div class="review-card-label">From</div>
+            <div class="review-card-value" id="review-name"><span class="review-card-empty">Not set</span></div>
+            <a class="review-edit" onclick="goToStep(1)">Edit</a>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn btn-back" onclick="prevStep()">← Back</button>
+          <button class="btn btn-submit" onclick="submitForm()">
+            Submit · Begin composing
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<!-- Floating player -->
+<div class="float-player" id="float-player">
+  <div class="float-art"></div>
+  <div class="float-info">
+    <div class="float-title">Anniversary</div>
+    <div class="float-genre">Sample · Afrobeats</div>
+  </div>
+  <button class="float-play" id="float-play" onclick="togglePlay()" aria-label="Play preview">
+    <svg id="float-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+  </button>
+</div>
+
+<script>
+  // State
+  let currentStep = 1;
+  const totalSteps = 5;
+  let formData = {
+    relationship: null,
+    occasion: null,
+    name: '',
+    genre: 'Afrobeats',
+    mood: 50,
+    recipientName: '',
+    memories: '',
+    phrases: '',
+    message: '',
+    avoid: ''
+  };
+
+  // Page subs per step
+  const pageSubs = {
+    1: "Some feelings are too big for words. We'll listen, then compose.",
+    2: "Pick a sound. We'll bring your story into it.",
+    3: "Specifics turn a song into theirs.",
+    4: "The heart of it all — in your own words.",
+    5: "Ready? We'll start producing as soon as you confirm."
+  };
+
+  function goToStep(step) {
+    if (step < 1 || step > totalSteps) return;
+    currentStep = step;
+
+    // Update sections
+    document.querySelectorAll('.form-section').forEach(s => s.classList.remove('active'));
+    document.querySelector(`.form-section[data-section="${step}"]`).classList.add('active');
+
+    // Update sidebar
+    document.querySelectorAll('.step-link').forEach((link, i) => {
+      link.classList.remove('active', 'done');
+      const idx = i + 1;
+      if (idx === step) link.classList.add('active');
+      else if (idx < step) {
+        link.classList.add('done');
+        link.querySelector('.step-num-circle').innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+      } else {
+        const romans = ['i','ii','iii','iv','v'];
+        link.querySelector('.step-num-circle').textContent = romans[idx-1];
+      }
+    });
+
+    // Progress
+    document.getElementById('progress-fill').style.width = ((step / totalSteps) * 100) + '%';
+    document.getElementById('step-current').textContent = step;
+    document.getElementById('page-sub').textContent = pageSubs[step];
+
+    // Update review on step 5
+    if (step === 5) updateReview();
+
+    // Scroll to top of form
+    window.scrollTo({ top: 200, behavior: 'smooth' });
+  }
+
+  function nextStep() {
+    if (currentStep < totalSteps) goToStep(currentStep + 1);
+  }
+  function prevStep() {
+    if (currentStep > 1) goToStep(currentStep - 1);
+  }
+
+  // Pill selection (single)
+  document.querySelectorAll('.pill-group').forEach(group => {
+    const field = group.dataset.field;
+    group.addEventListener('click', (e) => {
+      if (!e.target.classList.contains('pill')) return;
+      group.querySelectorAll('.pill').forEach(p => p.classList.remove('selected'));
+      e.target.classList.add('selected');
+      formData[field] = e.target.textContent.trim();
+    });
+  });
+
+  // Genre selection
+  document.querySelector('[data-field="genre"]').addEventListener('click', (e) => {
+    const btn = e.target.closest('.genre-mini');
+    if (!btn) return;
+    document.querySelectorAll('.genre-mini').forEach(g => g.classList.remove('selected'));
+    btn.classList.add('selected');
+    formData.genre = btn.querySelector('.genre-mini-name').textContent.trim();
+  });
+
+  // Text inputs
+  document.querySelectorAll('.input').forEach(input => {
+    input.addEventListener('input', (e) => {
+      const field = input.dataset.field;
+      if (field === 'name') formData.name = e.target.value;
+      else if (field === 'recipient-name') formData.recipientName = e.target.value;
+      else if (field === 'memories') formData.memories = e.target.value;
+      else if (field === 'phrases') formData.phrases = e.target.value;
+      else if (field === 'message') formData.message = e.target.value;
+      else if (field === 'avoid') formData.avoid = e.target.value;
+    });
+  });
+
+  // Mood slider
+  const moodTrack = document.getElementById('mood-track');
+  const moodFill = document.getElementById('mood-fill');
+  const moodHandle = document.getElementById('mood-handle');
+  const moodLabel = document.getElementById('mood-label');
+  const moodLabels = {
+    0: "Whisper-soft — for late-night listening.",
+    20: "Tender — quiet emotion, intimate.",
+    40: "Warm — gentle, but full of feeling.",
+    50: "Balanced — measured warmth.",
+    60: "Hopeful — building, but contained.",
+    80: "Joyful — celebration, but elegant.",
+    100: "Full celebration — turn it up, dance."
+  };
+  function getMoodLabel(v) {
+    const keys = Object.keys(moodLabels).map(Number).sort((a,b)=>Math.abs(a-v)-Math.abs(b-v));
+    return moodLabels[keys[0]];
+  }
+  function setMood(percent) {
+    formData.mood = percent;
+    moodFill.style.width = percent + '%';
+    moodHandle.style.left = percent + '%';
+    moodLabel.textContent = getMoodLabel(percent);
+  }
+  moodTrack.addEventListener('click', (e) => {
+    const rect = moodTrack.getBoundingClientRect();
+    const percent = Math.round(((e.clientX - rect.left) / rect.width) * 100);
+    setMood(Math.max(0, Math.min(100, percent)));
+  });
+  let isDragging = false;
+  moodHandle.addEventListener('mousedown', () => isDragging = true);
+  window.addEventListener('mouseup', () => isDragging = false);
+  window.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const rect = moodTrack.getBoundingClientRect();
+    const percent = Math.round(((e.clientX - rect.left) / rect.width) * 100);
+    setMood(Math.max(0, Math.min(100, percent)));
+  });
+
+  // Review
+  function updateReview() {
+    const empty = '<span class="review-card-empty">Not set</span>';
+    document.getElementById('review-relationship').innerHTML = formData.relationship || empty;
+    document.getElementById('review-occasion').innerHTML = formData.occasion || empty;
+    document.getElementById('review-genre').textContent = formData.genre;
+    document.getElementById('review-name').innerHTML = formData.name || empty;
+
+    const occ = formData.occasion || 'special moment';
+    const rel = formData.relationship ? `for your ${formData.relationship.toLowerCase()}` : 'for someone special';
+    const moodWord = formData.mood < 40 ? 'tender' : formData.mood < 65 ? 'warm' : 'celebratory';
+    document.getElementById('summary-title').textContent =
+      `An ${occ.toLowerCase()} song ${rel} — ${formData.genre}, ${moodWord}.`;
+  }
+
+  // Submit
+  function submitForm() {
+    const btn = event.target.closest('button');
+    btn.disabled = true;
+    btn.innerHTML = `Composing your brief… <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation: spin 0.7s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`;
+    setTimeout(() => {
+      alert('In production: brief submitted, producer notified, confirmation email sent. Delivery in 48 hours.');
+      btn.disabled = false;
+      btn.innerHTML = 'Submit · Begin composing <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>';
+    }, 1200);
+  }
+
+  // Float player
+  let playing = false;
+  function togglePlay() {
+    playing = !playing;
+    const fp = document.getElementById('float-player');
+    const icon = document.getElementById('float-icon');
+    if (playing) {
+      fp.classList.add('playing');
+      icon.innerHTML = '<rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/>';
+    } else {
+      fp.classList.remove('playing');
+      icon.innerHTML = '<path d="M8 5v14l11-7z"/>';
+    }
+  }
+
+  // Init
+  setMood(50);
+</script>
+
+</body>
+</html>

@@ -236,7 +236,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   return (
     <PlayerContext.Provider value={contextValue}>
-      <div className={`min-h-screen flex flex-col ${isAdminRoute || isCheckoutRoute ? '' : 'pb-20'}`}>
+      <div className={`min-h-screen flex flex-col ${isAdminRoute || isCheckoutRoute ? '' : 'pb-28 md:pb-24'}`}>
         {!isAdminRoute && <Header />}
         <main className={`${isAdminRoute ? '' : 'pt-16'} flex-grow`}>{children}</main>
         {!isAdminRoute && <Footer />}

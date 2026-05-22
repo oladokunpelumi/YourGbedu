@@ -3,33 +3,35 @@ import { Link } from 'react-router-dom';
 
 const PaymentCancel: React.FC = () => {
   return (
-    <div className="max-w-2xl mx-auto px-6 py-24 flex flex-col items-center justify-center min-h-[60vh] gap-8">
-      <div className="w-24 h-24 rounded-full bg-background-surface border border-background-border flex items-center justify-center">
-        <span className="material-symbols-outlined text-5xl text-[#A08B74]">close</span>
+    <div className="flex min-h-[60vh] flex-col items-center justify-center bg-ivory px-6 py-24">
+      <div className="mx-auto flex max-w-2xl flex-col items-center gap-8 rounded-2xl border border-line bg-cream p-6 text-center sm:p-8">
+      <div className="flex h-20 w-20 items-center justify-center rounded-full bg-terracotta-pale text-terracotta">
+        <span className="material-symbols-outlined text-5xl" aria-hidden="true">close</span>
       </div>
 
-      <div className="text-center">
-        <h2 className="text-3xl font-bold text-[#1C1008] mb-3 font-display">Payment Cancelled</h2>
-        <p className="text-[#78614A] text-lg font-body max-w-md">
-          No worries — your song brief has been saved. You can pick up right where you left off
+      <div>
+        <h1 className="font-headline text-5xl font-medium leading-none text-ink">Payment cancelled</h1>
+        <p className="mt-4 max-w-md text-base leading-7 text-ink-soft">
+          No worries. Your song brief has been saved. You can pick up right where you left off
           whenever you're ready.
         </p>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md">
+      <div className="flex w-full max-w-md flex-col gap-3 sm:flex-row">
         <Link
           to="/create"
-          className="flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-primary text-white font-bold hover:bg-primary-dark transition-all"
+          className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-full bg-ink px-6 py-3 font-label text-sm font-bold uppercase tracking-[0.14em] text-cream transition-colors hover:bg-terracotta"
         >
           <span className="material-symbols-outlined">arrow_back</span>
           Return to Brief
         </Link>
         <Link
           to="/"
-          className="flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-[#1C1008]/5 border border-background-border text-[#1C1008] font-bold hover:bg-[#1C1008]/10 transition-all"
+          className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-full border border-line-strong px-6 py-3 font-label text-sm font-bold uppercase tracking-[0.14em] text-ink-soft transition-colors hover:border-terracotta hover:text-terracotta"
         >
           Back to Home
         </Link>
+      </div>
       </div>
     </div>
   );

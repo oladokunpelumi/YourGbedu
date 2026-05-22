@@ -1,8 +1,7 @@
 const express = require('express');
 const router = express.Router();
 
-// GET /api/geo/country — detect user's country from IP address
-router.get('/country', async (req, res) => {
+async function detectCountry(req, res) {
     try {
         // Respect x-forwarded-for for reverse proxies (Railway, etc.)
         const forwarded = req.headers['x-forwarded-for'];
@@ -35,6 +34,10 @@ router.get('/country', async (req, res) => {
         // Fail open: default to Nigeria (Paystack) so Nigerian users are never broken
         res.json({ country: 'NG', isNigeria: true, source: 'fallback' });
     }
-});
+}
+
+// GET /api/geo and /api/geo/country — detect user's country from IP address.
+router.get('/', detectCountry);
+router.get('/country', detectCountry);
 
 module.exports = router;

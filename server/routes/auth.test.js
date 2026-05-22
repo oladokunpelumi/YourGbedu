@@ -71,6 +71,22 @@ describe('POST /api/auth/request', () => {
       .set('Content-Type', 'application/json');
     expect(res.status).toBe(200);
     expect(res.body.message).toBeTruthy();
+    expect(sendMagicLinkEmailMock).not.toHaveBeenCalled();
+  });
+
+  it('does not send a magic link when the email has no matching orders', async () => {
+    const { default: supertest } = await import('supertest');
+    const res = await supertest(app)
+      .post('/api/auth/request')
+      .send({ email: 'empty@example.com' })
+      .set('Content-Type', 'application/json');
+
+    expect(res.status).toBe(200);
+    expect(res.body.message).toBe('If that email has orders, a sign-in link has been sent.');
+    expect(sendMagicLinkEmailMock).not.toHaveBeenCalled();
+
+    const row = db.prepare('SELECT token FROM magic_links WHERE email = ?').get('empty@example.com');
+    expect(row).toBeUndefined();
   });
 
   it('rejects an invalid email', async () => {
@@ -100,6 +116,11 @@ describe('POST /api/auth/request', () => {
       .post('/api/auth/request')
       .send({ email: 'hashtest@example.com' })
       .set('Content-Type', 'application/json');
+
+    expect(sendMagicLinkEmailMock).toHaveBeenCalledWith(expect.objectContaining({
+      to: 'hashtest@example.com',
+      clientUrl: 'http://localhost:3000',
+    }));
 
     // The email function receives the plaintext token
     const plainToken = sendMagicLinkEmailMock.mock.lastCall?.[0]?.token;

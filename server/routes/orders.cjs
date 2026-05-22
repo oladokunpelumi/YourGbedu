@@ -38,7 +38,14 @@ function getDb() {
     return db;
 }
 
-const DELIVERY_DAYS = 3;
+let emailModule;
+function getEmailModule() {
+    if (!emailModule) emailModule = require('../email.cjs');
+    return emailModule;
+}
+
+const STANDARD_DELIVERY_HOURS = 48;
+const FAST_DELIVERY_HOURS = 24;
 
 const PRODUCTION_STEPS = [
     { title: 'Brief Received', desc: 'Your story and preferences have been analyzed.', icon: 'check' },
@@ -47,6 +54,12 @@ const PRODUCTION_STEPS = [
     { title: 'Mixing', desc: 'Balancing levels and adding effects.', icon: 'tune' },
     { title: 'Final Mastering', desc: 'Preparing the track for distribution.', icon: 'album' },
 ];
+
+function formatPaidAmount(amount, provider) {
+    if (typeof amount !== 'number') return undefined;
+    if (provider === 'stripe') return `$${(amount / 100).toFixed(2)} USD`;
+    return `₦${(amount / 100).toLocaleString('en-NG')}`;
+}
 
 const CreateOrderSchema = z.object({
     songTitle: z.string().max(200).optional(),
@@ -203,8 +216,8 @@ router.post('/', async (req, res) => {
 
         const id = uuidv4();
         const createdAt = new Date().toISOString();
-        const deliveryDays = isFastDelivery(fastDelivery) ? 1 : DELIVERY_DAYS;
-        const deliveryDate = new Date(Date.now() + deliveryDays * 24 * 60 * 60 * 1000).toISOString();
+        const deliveryHours = isFastDelivery(fastDelivery) ? FAST_DELIVERY_HOURS : STANDARD_DELIVERY_HOURS;
+        const deliveryDate = new Date(Date.now() + deliveryHours * 60 * 60 * 1000).toISOString();
 
         dbConn.prepare(`
             INSERT INTO orders (
@@ -225,6 +238,17 @@ router.post('/', async (req, res) => {
         );
 
         const order = dbConn.prepare('SELECT * FROM orders WHERE id = ?').get(id);
+        if (customerEmail) {
+            void getEmailModule().sendConfirmationEmail({
+                to: customerEmail,
+                orderId: id.slice(0, 8).toUpperCase(),
+                genre,
+                mood,
+                deliveryDate,
+                reference: paystackReference || stripeSessionId,
+                amountLabel: formatPaidAmount(verifiedAmount, stripeSessionId ? 'stripe' : 'paystack'),
+            });
+        }
         res.status(201).json(computeOrderProgress(order));
     } catch (err) {
         console.error('Error creating order:', err);
