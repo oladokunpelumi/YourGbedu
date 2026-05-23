@@ -11,7 +11,7 @@
 
 ## What the App Does
 
-YourGbedu is an online platform that lets you commission a custom, professionally produced song for someone you care about. The process is simple: you answer a few questions about the person, the occasion, and the emotion you want to capture — and within three days, you receive a fully produced, one-of-a-kind track made just for them. From birthdays and weddings to anniversaries and heartfelt surprises, YourGbedu transforms personal stories into music.
+YourGbedu is an online platform that lets you commission a custom, professionally produced song for someone you care about. The process is simple: you answer a few questions about the person, the occasion, and the emotion you want to capture, and we build and deliver a fully produced, one-of-a-kind track within 48 hours. From birthdays and weddings to anniversaries and heartfelt surprises, YourGbedu transforms personal stories into music.
 
 ---
 
@@ -26,7 +26,7 @@ Meaningful gifts are hard to find. Most presents are forgotten — YourGbedu cre
 - **Personalised song briefs** — a simple guided form that collects everything the music team needs: the recipient's story, the mood, the occasion, and the preferred sound
 - **Secure payments** — fast, reliable checkout so your order is confirmed instantly
 - **Order tracking** — check your order status at any time using just your email address or order number
-- **3-day turnaround** — professionally produced tracks delivered quickly, so you're never scrambling before a special occasion
+- **48-hour crafted delivery** — we build and deliver professionally produced tracks quickly, so you're never scrambling before a special occasion
 - **Completion notifications** — automatic email delivery when your song is ready
 
 ---
