@@ -304,7 +304,7 @@ const Home: React.FC = () => {
           <div className="relative">
             <div className="editorial-panel overflow-hidden p-3">
               <img
-                src="/images/Homepage.png"
+                src="/images/Homepage.jpg"
                 alt="A YourGbedu artist listening through a finished custom song"
                 className="aspect-[4/5] w-full rounded-2xl object-cover sepia-[0.12]"
               />

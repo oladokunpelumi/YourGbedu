@@ -222,7 +222,7 @@ const PaymentSuccess: React.FC = () => {
         </div>
 
         <img
-          src="/images/Composing.png"
+          src="/images/Composing.jpg"
           alt="A YourGbedu production scene"
           className="hidden h-full min-h-[520px] w-full object-cover sepia-[0.12] lg:block"
         />

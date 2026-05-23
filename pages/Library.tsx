@@ -47,7 +47,7 @@ const Library: React.FC = () => {
           </div>
           <div className="relative overflow-hidden rounded-2xl bg-ink">
             <img
-              src="/images/Listen.png"
+              src="/images/Listen.jpg"
               alt="A listening-room scene for YourGbedu catalogue samples"
               className="aspect-[4/3] w-full object-cover opacity-75 sepia-[0.14] mix-blend-luminosity"
             />
