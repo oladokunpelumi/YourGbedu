@@ -56,6 +56,10 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [volume, setVolumeState] = useState(0.7);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [location.pathname, location.search]);
+
   const loadSongs = useCallback(async () => {
     setIsSongsLoading(true);
     setSongsError(null);
@@ -236,7 +240,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   return (
     <PlayerContext.Provider value={contextValue}>
-      <div className={`min-h-screen flex flex-col ${isAdminRoute || isCheckoutRoute ? '' : 'pb-20'}`}>
+      <div className={`min-h-screen flex flex-col ${isAdminRoute || isCheckoutRoute ? '' : 'pb-28 md:pb-24'}`}>
         {!isAdminRoute && <Header />}
         <main className={`${isAdminRoute ? '' : 'pt-16'} flex-grow`}>{children}</main>
         {!isAdminRoute && <Footer />}

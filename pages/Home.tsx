@@ -1,9 +1,72 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { usePlayer } from '../contexts/PlayerContext';
 import FAQ from '../components/FAQ';
 
-// Sound toggle for the music video
+const PROCESS_STEPS = [
+  {
+    id: '01',
+    title: 'Tell us the heart of it',
+    desc: 'Share who the song is for, the occasion, the memories, and the words you want them to feel.',
+  },
+  {
+    id: '02',
+    title: 'We shape the record',
+    desc: 'Your brief becomes lyrics, melody, arrangement, vocals, and a final master built around the story.',
+  },
+  {
+    id: '03',
+    title: 'Receive it ready to share',
+    desc: 'Your finished song arrives by email with a private tracker and a polished file for the moment.',
+  },
+];
+
+const RELATIONSHIPS = [
+  {
+    label: 'Parents',
+    slug: 'parents',
+    visual: 'parents',
+    tone: 'bg-sage-pale text-sage-dark',
+    eyebrow: 'For the ones who raised you',
+    caption: 'Gratitude, birthdays, legacy, prayers, and the memories that shaped home.',
+  },
+  {
+    label: 'Friends & Loved Ones',
+    slug: 'friends-loved-ones',
+    visual: 'loved_ones',
+    tone: 'bg-mustard-pale text-[#6F521F]',
+    eyebrow: 'For your chosen circle',
+    caption: 'Inside jokes, loyalty, celebration, encouragement, and shared history.',
+  },
+  {
+    label: 'Partner',
+    slug: 'partner',
+    visual: 'partner',
+    tone: 'bg-terracotta-pale text-terracotta-dark',
+    eyebrow: 'For romantic stories',
+    caption: 'Anniversaries, proposals, Valentine moments, apologies, and devotion.',
+  },
+  {
+    label: 'Yourself',
+    slug: 'yourself',
+    visual: 'yourself',
+    tone: 'bg-[#F4EADB] text-ink-soft',
+    eyebrow: 'For your own chapter',
+    caption: 'Healing, courage, self-belief, new seasons, and words you need to hear.',
+  },
+];
+
+const GENRES = [
+  ['Afro-Beats', 'Vibrant and rhythmic'],
+  ['Afro-R&B', 'Romantic and groovy'],
+  ['Afro-House', 'Energetic and electric'],
+  ['Afro-Reggae', 'Warm island pulse'],
+  ['Gospel', 'Uplifting and spiritual'],
+  ['R&B', 'Smooth and soulful'],
+  ['Hip-Hop', 'Bold and rhythmic'],
+  ['Highlife', 'Joyful and cultural'],
+];
+
 const SoundToggleVideo: React.FC = () => {
   const [muted, setMuted] = useState(true);
   const toggle = useCallback(() => {
@@ -12,16 +75,154 @@ const SoundToggleVideo: React.FC = () => {
     video.muted = !video.muted;
     setMuted(video.muted);
   }, []);
+
   return (
     <button
       onClick={toggle}
-      className="absolute top-4 right-4 z-10 flex items-center gap-1.5 bg-black/50 backdrop-blur-sm text-white px-3 py-1.5 rounded-full text-xs font-label uppercase tracking-wider hover:bg-black/70 transition-colors"
+      className="absolute right-4 top-4 z-10 inline-flex items-center gap-2 rounded-full border border-cream/20 bg-ink/70 px-4 py-2 font-label text-xs font-bold uppercase tracking-[0.14em] text-cream backdrop-blur transition-colors hover:bg-ink"
     >
-      <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
+      <span className="material-symbols-outlined text-sm" aria-hidden="true">
         {muted ? 'volume_off' : 'volume_up'}
       </span>
-      {muted ? 'Tap for Sound' : 'Mute'}
+      {muted ? 'Sound' : 'Mute'}
     </button>
+  );
+};
+
+const PeoplePortrait: React.FC<{ variant: string }> = ({ variant }) => {
+  const head = (cx: number, cy: number, r = 16, opacity = 0.9) => (
+    <circle cx={cx} cy={cy} r={r} fill="currentColor" opacity={opacity} />
+  );
+  const body = (d: string, opacity = 0.18) => (
+    <path d={d} fill="currentColor" opacity={opacity} />
+  );
+  const line = (d: string, opacity = 0.28) => (
+    <path d={d} fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" opacity={opacity} />
+  );
+
+  let portrait: React.ReactNode;
+  switch (variant) {
+    case 'parents':
+      portrait = (
+        <>
+          {head(72, 62, 17, 0.82)}
+          {head(126, 62, 17)}
+          {head(100, 90, 12, 0.72)}
+          {body('M38 132c8-33 27-50 56-50s48 17 56 50H38Z')}
+          {body('M75 132c5-24 17-37 34-37s29 13 34 37H75Z', 0.14)}
+          {line('M62 43c10-14 28-14 39 0M111 43c10-14 28-14 39 0', 0.26)}
+          {line('M78 103c15 12 29 12 44 0', 0.34)}
+        </>
+      );
+      break;
+    case 'loved_ones':
+      portrait = (
+        <>
+          {head(62, 72, 13, 0.7)}
+          {head(92, 58, 16)}
+          {head(122, 68, 14, 0.78)}
+          {head(145, 82, 11, 0.62)}
+          {body('M35 134c9-34 31-52 65-52s56 18 65 52H35Z')}
+          {line('M58 102c27 20 58 20 84 0', 0.32)}
+          <path d="M100 112c-7-8-20-8-20 4 0 12 20 22 20 22s20-10 20-22c0-12-13-12-20-4Z" fill="currentColor" opacity="0.17" />
+        </>
+      );
+      break;
+    case 'partner':
+      portrait = (
+        <>
+          {head(80, 64, 16)}
+          {head(120, 64, 16, 0.78)}
+          {body('M50 128c10-28 30-42 58-42s48 14 58 42H50Z')}
+          {line('M94 94c8 8 20 8 28 0', 0.45)}
+          <path d="M100 112c-7-8-20-8-20 4 0 12 20 22 20 22s20-10 20-22c0-12-13-12-20-4Z" fill="currentColor" opacity="0.2" />
+        </>
+      );
+      break;
+    case 'mother':
+      portrait = (
+        <>
+          {head(96, 58, 18)}
+          {body('M52 132c7-36 26-55 50-55s43 19 50 55H52Z')}
+          {head(126, 94, 12, 0.62)}
+          {body('M106 132c4-22 16-32 30-32s26 10 30 32h-60Z', 0.16)}
+          {line('M72 44c16-18 48-18 64 0', 0.3)}
+        </>
+      );
+      break;
+    case 'father':
+      portrait = (
+        <>
+          {head(100, 58, 18)}
+          {body('M42 132c11-33 32-50 58-50s47 17 58 50H42Z')}
+          {line('M78 84h44', 0.35)}
+          {line('M72 108c18 10 38 10 56 0', 0.24)}
+        </>
+      );
+      break;
+    case 'children':
+      portrait = (
+        <>
+          {head(78, 70, 13)}
+          {head(104, 58, 15, 0.78)}
+          {head(130, 72, 13, 0.7)}
+          {body('M48 132c6-26 20-40 38-40s32 14 38 40H48Z')}
+          {body('M84 132c6-31 21-46 42-46s36 15 42 46H84Z', 0.14)}
+          {line('M70 48l-8-10M136 50l9-10M104 36v-13', 0.28)}
+        </>
+      );
+      break;
+    case 'friend':
+      portrait = (
+        <>
+          {head(76, 62, 16)}
+          {head(124, 62, 16, 0.78)}
+          {body('M42 132c10-30 29-45 56-45s46 15 56 45H42Z')}
+          {line('M82 94c12 12 24 12 36 0', 0.4)}
+          {line('M62 96c16 14 60 14 76 0', 0.18)}
+        </>
+      );
+      break;
+    case 'sibling':
+      portrait = (
+        <>
+          {head(86, 62, 16)}
+          {head(118, 78, 14, 0.76)}
+          {body('M54 132c8-31 25-48 52-48s44 17 52 48H54Z')}
+          {line('M72 98c20 14 38 14 58 0', 0.32)}
+          {line('M82 40c13-10 31-10 44 0', 0.22)}
+        </>
+      );
+      break;
+    case 'yourself':
+      portrait = (
+        <>
+          {head(100, 70, 20)}
+          {body('M54 134c9-34 26-51 46-51s37 17 46 51H54Z')}
+          {line('M100 34V20M74 44 64 32M126 44l10-12M66 82H50M134 82h16', 0.3)}
+          <circle cx="100" cy="72" r="44" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.16" />
+        </>
+      );
+      break;
+    default:
+      portrait = (
+        <>
+          {head(75, 70, 13)}
+          {head(103, 58, 16, 0.84)}
+          {head(131, 72, 13, 0.68)}
+          {body('M42 134c8-33 28-50 58-50s50 17 58 50H42Z')}
+          {line('M60 104c24 18 56 18 80 0', 0.28)}
+          <circle cx="151" cy="43" r="7" fill="currentColor" opacity="0.2" />
+        </>
+      );
+  }
+
+  return (
+    <svg viewBox="0 0 200 160" className="h-full w-full" role="img" aria-hidden="true">
+      <rect x="18" y="18" width="164" height="124" rx="28" fill="currentColor" opacity="0.07" />
+      <circle cx="100" cy="76" r="58" fill="currentColor" opacity="0.06" />
+      {portrait}
+    </svg>
   );
 };
 
@@ -36,9 +237,8 @@ const Home: React.FC = () => {
     togglePlay,
     isPlaying,
   } = usePlayer();
-
-  // Scroll-reveal: stagger curator cards as they enter the viewport
   const revealRefs = useRef<(HTMLDivElement | null)[]>([]);
+
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -49,348 +249,332 @@ const Home: React.FC = () => {
           }
         });
       },
-      { threshold: 0.15 }
+      { threshold: 0.14 }
     );
-    revealRefs.current.forEach((el) => { if (el) observer.observe(el); });
+
+    revealRefs.current.forEach((el) => {
+      if (el) observer.observe(el);
+    });
+
     return () => observer.disconnect();
   }, []);
 
   return (
-    <div className="flex flex-col">
-      {/* ── Hero Section: Cinematic Royal Gold ─────────────────────────────── */}
-      <section className="relative md:min-h-[95vh] flex items-start md:items-center px-4 sm:px-6 lg:px-12 pt-28 pb-16 md:pt-24 md:pb-0 overflow-hidden bg-gradient-to-br from-[#D4AF37] via-[#e2c15a] to-[#D4AF37]">
-        <div className="max-w-[1920px] mx-auto w-full grid grid-cols-1 md:grid-cols-12 gap-8 z-10 md:pt-10">
-          <div className="col-span-1 md:col-span-7 flex flex-col justify-center text-center md:text-left z-20">
-            <span className="font-label uppercase tracking-[0.2em] text-sm md:text-base text-obsidian font-semibold mb-6 block">
-              #1 Custom Song Platform Across all Genres
-            </span>
-            <h1 className="font-headline italic text-6xl md:text-8xl lg:text-[10rem] text-obsidian leading-[0.9] mb-8 lg:-ml-2">
-              Hear what <br />
-              your heart <br />
-              <span className="opacity-80">meant to say.</span>
+    <div className="editorial-shell flex flex-col">
+      <section className="flex min-h-[100svh] items-center px-5 pb-10 pt-20 sm:px-8 sm:pb-12 sm:pt-24 lg:px-12 lg:py-20">
+        <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] lg:items-center lg:gap-10">
+          <div>
+            <p className="editorial-kicker mb-4">Custom songs across every occasion</p>
+            <h1 className="font-headline text-6xl font-medium leading-[0.92] text-ink sm:text-7xl lg:text-8xl">
+              Hear what your heart <em className="text-terracotta">meant to say.</em>
             </h1>
-            <p className="font-body text-xl md:text-2xl text-obsidian/80 max-w-xl mb-12 leading-relaxed mx-auto md:mx-0">
-              Some feelings are too big for words. Tell us your story, and we’ll compose your royal
-              masterpiece.
+            <p className="mt-6 max-w-2xl font-body text-lg leading-8 text-ink-soft sm:text-xl">
+              Tell us the story, the person, and the moment. YourGbedu turns it into a finished song
+              with lyrics, vocals, production, and a delivery flow that still feels personal.
             </p>
-            <div>
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
               <Link
                 to="/create"
-                className="inline-block bg-obsidian text-primary px-12 py-5 font-label uppercase tracking-widest text-sm rounded-full hover:scale-[1.02] transition-all duration-500 shadow-[0_6px_18px_rgba(36,26,0,0.14)]"
+                className="inline-flex min-h-12 items-center justify-center rounded-full bg-ink px-8 py-3 font-label text-sm font-bold uppercase tracking-[0.14em] text-cream transition-colors hover:bg-terracotta"
               >
-                Create Your Song
+                Create your song
+              </Link>
+              <Link
+                to="/library"
+                className="inline-flex min-h-12 items-center justify-center rounded-full border border-line-strong bg-cream px-8 py-3 font-label text-sm font-bold uppercase tracking-[0.14em] text-ink-soft transition-colors hover:border-terracotta hover:text-terracotta"
+              >
+                Hear the catalogue
               </Link>
             </div>
-          </div>
-          {/* Hero Image (hidden on small screens, huge on desktop) */}
-          <div className="hidden md:block col-span-5 relative h-[600px] lg:h-[750px] -mt-10 lg:-mt-20">
-            <div className="absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-[#D4AF37] to-transparent z-10"></div>
-            <img
-              src="/images/Homepage.png"
-              alt="Cinematic Hero"
-              className="w-full h-full object-cover rounded-2xl shadow-2xl sepia-[.2] contrast-125 hover:sepia-0 transition-all duration-1000"
-            />
-          </div>
-        </div>
 
-        {/* Ornamental Elements */}
-        <div className="absolute -top-24 -right-24 w-[500px] h-[500px] bg-white/10 blur-[120px] rounded-full point-events-none"></div>
-        <div className="absolute bottom-10 -left-20 w-[400px] h-[400px] bg-obsidian/5 blur-[100px] rounded-full pointer-events-none"></div>
-      </section>
-
-      {/* ── Music Video: Real Song. Real Story. ─────────────────────────────── */}
-      <section className="py-20 sm:py-28 px-6 sm:px-12 bg-obsidian overflow-hidden">
-        <div className="max-w-5xl mx-auto">
-          {/* Header */}
-          <div className="text-center mb-10">
-            <span className="font-label uppercase tracking-[0.3em] text-xs text-primary/50 mb-3 block">
-              Real Song. Real Story.
-            </span>
-            <h2 className="font-headline italic text-4xl md:text-6xl text-primary leading-[0.95] mb-4">
-              Hear it come to life.
-            </h2>
-            <p className="font-body text-primary/60 text-base max-w-lg mx-auto">
-              A real couple. A real anniversary. A song made just for them — by YourGbedu.
-            </p>
-          </div>
-
-          {/* Video container — Instagram Reels style on mobile, cinematic on desktop */}
-          <div className="relative mx-auto w-full max-w-sm md:max-w-3xl">
-            <div className="relative rounded-2xl overflow-hidden bg-black shadow-[0_0_80px_rgba(212,175,55,0.15)] ring-1 ring-primary/10 group">
-              <video
-                data-mv
-                src="/musics/Music%20Video/Anniversary_Music_Video.mp4"
-                autoPlay
-                muted
-                loop
-                playsInline
-                preload="metadata"
-                className="w-full aspect-[9/16] md:aspect-video object-cover"
-              />
-
-              {/* Sound toggle overlay */}
-              <SoundToggleVideo />
-
-              {/* Bottom label */}
-              <div className="absolute bottom-0 left-0 right-0 px-5 py-4 bg-gradient-to-t from-black/80 to-transparent pointer-events-none">
-                <p className="font-headline italic text-white text-xl">Anniversary</p>
-                <p className="font-label text-xs uppercase tracking-widest text-white/60">Afro-Beats • YourGbedu Original</p>
-              </div>
+            <div className="mt-9 grid max-w-2xl grid-cols-3 gap-3 border-y border-line py-4">
+              {[
+                ['48h', 'built & delivered'],
+                ['12+', 'occasion arcs'],
+                ['100%', 'story led'],
+              ].map(([value, label]) => (
+                <div key={label}>
+                  <p className="font-headline text-4xl font-semibold leading-none text-ink">
+                    {value}
+                  </p>
+                  <p className="mt-2 font-label text-[10px] font-bold uppercase tracking-[0.16em] text-ink-muted">
+                    {label}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* CTA below video */}
-          <div className="text-center mt-10">
-            <Link
-              to="/create"
-              className="inline-block bg-primary text-obsidian px-12 py-4 font-label uppercase tracking-widest text-sm rounded-full hover:scale-[1.02] transition-all duration-300 shadow-[0_6px_18px_rgba(212,175,55,0.18)]"
-            >
-              Create Your Song
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Features Section: The Digital Curator ────────────────────────────── */}
-      <section className="py-20 sm:py-28 px-6 sm:px-12 bg-surface">
-        <div className="max-w-7xl mx-auto">
-          <div className="mb-12 text-center md:text-left">
-            <h2 className="font-headline italic text-4xl md:text-5xl max-w-2xl text-obsidian leading-[0.95]">
-              How YourGbedu Works
-            </h2>
-          </div>
-
-          {/* Staggered process cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-8 lg:gap-12">
-            {[
-              {
-                id: '01',
-                title: 'Fill out the form',
-                desc: 'Pick your genre & fill in your story. Tell us everything — the more detail, the more personal the song.',
-              },
-              {
-                id: '02',
-                title: 'We Create Your Song',
-                desc: 'Our team crafts a custom track just for you — composed, recorded, and mixed with royal precision.',
-              },
-              {
-                id: '03',
-                title: 'Delivered in 48 Hours via Email',
-                desc: 'Your mastered song lands in your inbox, ready to share with the people who matter most.',
-              },
-            ].map((step, idx) => (
-              <div
-                key={step.id}
-                ref={(el) => { revealRefs.current[idx] = el; }}
-                style={{ transitionDelay: `${idx * 120}ms` }}
-                className={`reveal group ${idx === 1 ? 'md:mt-10' : ''}`}
-              >
-                {/* Mobile: compact horizontal card */}
-                <div className="flex md:hidden items-center gap-4 bg-obsidian/5 rounded-2xl ring-1 ring-obsidian/10 px-5 py-4 group-hover:bg-obsidian/8 transition-colors">
-                  <span className="font-headline italic text-4xl text-obsidian/20 leading-none w-10 flex-shrink-0">{step.id}</span>
-                  <div>
-                    <h3 className="font-headline italic text-lg text-obsidian mb-1">{step.title}</h3>
-                    <p className="font-body text-obsidian/70 text-sm leading-relaxed">{step.desc}</p>
-                  </div>
-                </div>
-
-                {/* Desktop: square card with spinning ring */}
-                <div className="hidden md:flex flex-col space-y-5">
-                  <div className="aspect-square relative overflow-hidden bg-obsidian/5 rounded-2xl shadow-md ring-1 ring-obsidian/10 flex items-center justify-center p-6 group-hover:-translate-y-2 transition-transform duration-700">
-                    <h4 className="absolute top-3 right-5 font-headline italic text-5xl text-obsidian/10 group-hover:text-obsidian/20 transition-colors uppercase">
-                      {step.id}
-                    </h4>
-                    <div className="w-3/4 h-3/4 rounded-full border border-obsidian/10 animate-[spin_60s_linear_infinite] group-hover:border-obsidian/30 transition-colors"></div>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
-                      <h3 className="font-headline text-2xl md:text-3xl italic text-obsidian group-hover:scale-105 transition-transform">
-                        {step.title}
-                      </h3>
-                    </div>
-                  </div>
-                  <div className="max-w-sm px-1">
-                    <p className="font-body text-obsidian/80 leading-relaxed">{step.desc}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Audio Playback / Listening Room Fused ──────────────────────────── */}
-      <section className="py-32 sm:py-40 bg-obsidian text-primary overflow-hidden relative">
-        <div className="max-w-7xl mx-auto px-6 sm:px-12 relative z-10">
-          <div className="text-center mb-16">
-            <h2 className="font-headline italic text-5xl md:text-7xl mb-12">Check Out Our Catalogue</h2>
-          </div>
-
-          {/* Fluid Sound Visualization embedded centrally */}
-          <div className="h-64 flex flex-col items-center justify-center relative mb-24 max-w-4xl mx-auto">
-            <svg
-              className="absolute inset-0 w-full h-full opacity-60 pointer-events-none"
-              viewBox="0 0 800 200"
-              preserveAspectRatio="none"
-            >
-              <path
-                className={`fluid-thread stroke-primary transition-all duration-[3000ms] ${isPlaying ? 'opacity-100 scale-y-110' : 'opacity-50'}`}
-                d="M 0 100 Q 200 20 400 100 T 800 100"
-                fill="none"
-                strokeWidth="2"
+          <div className="relative">
+            <div className="editorial-panel overflow-hidden p-3">
+              <img
+                src="/images/Homepage.jpg"
+                alt="A YourGbedu artist listening through a finished custom song"
+                className="aspect-[4/5] w-full rounded-2xl object-cover sepia-[0.12] lg:aspect-auto lg:h-[52svh] lg:max-h-[620px] lg:min-h-[420px]"
               />
-              <path
-                className={`fluid-thread stroke-primary/40 transition-all duration-[2000ms] ${isPlaying ? 'opacity-100 -scale-y-125' : 'opacity-40'}`}
-                d="M 0 100 Q 200 180 400 100 T 800 100"
-                fill="none"
-                strokeWidth="1"
-              />
-              <path
-                className={`fluid-thread stroke-primary/20 transition-all duration-[4000ms] ${isPlaying ? 'opacity-100 scale-y-150' : 'opacity-20'}`}
-                d="M 0 100 Q 150 50 400 100 T 800 100"
-                fill="none"
-                strokeWidth="3"
-              />
-            </svg>
-
-            <button
-              onClick={togglePlay}
-              className={`relative z-20 w-32 h-32 rounded-full bg-primary flex items-center justify-center shadow-[0_8px_28px_rgba(212,175,55,0.22)] transition-all duration-500 ${isPlaying ? 'scale-105 shadow-[0_10px_34px_rgba(212,175,55,0.28)]' : 'hover:scale-[1.02]'}`}
-            >
-              <span
-                className="material-symbols-outlined text-obsidian text-6xl"
-                style={{ fontVariationSettings: "'FILL' 1" }}
-              >
-                {isPlaying ? 'pause' : 'play_arrow'}
-              </span>
-            </button>
-
-            <div className="absolute -bottom-16 flex flex-col items-center space-y-3 pb-8">
-              <p className="font-headline italic text-3xl md:text-4xl">
-                {activeSong ? activeSong.title : 'Select a frequency'}
-              </p>
-              <p className="font-label text-xs uppercase tracking-widest text-primary/70">
-                {activeSong ? `${activeSong.genre} • ${activeSong.duration}` : 'Idle'}
-              </p>
-            </div>
-          </div>
-
-          {/* The Grid of Tracks */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mt-40">
-            {songs.map((song) => (
-              <div
-                key={song.id}
-                className={`flex items-center gap-6 p-6 rounded-2xl cursor-pointer transition-all duration-500 border border-primary/10 ${activeSong?.id === song.id ? 'bg-primary/10 border-primary/30' : 'bg-transparent hover:bg-primary/5'}`}
-                onClick={() => playSong(song)}
-              >
-                <div className="relative w-24 h-24 flex-shrink-0 rounded-xl overflow-hidden shadow-obsidian">
-                  <img
-                    src={song.coverUrl}
-                    alt={song.title}
-                    loading="lazy"
-                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                  />
-                  <div className="absolute inset-0 bg-obsidian/40 flex items-center justify-center">
-                    {activeSong?.id === song.id && isPlaying ? (
-                      <span className="material-symbols-outlined text-primary text-3xl animate-pulse">
-                        equalizer
-                      </span>
-                    ) : (
-                      <span className="material-symbols-outlined text-primary text-3xl opacity-0 group-hover:opacity-100 transition-opacity">
-                        play_circle
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-label text-primary/60 uppercase tracking-widest mb-1">
-                    {song.genre}
+              <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-4 border-t border-line px-2 py-5">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-mustard-pale text-mustard">
+                  <span className="material-symbols-outlined text-2xl" aria-hidden="true">
+                    graphic_eq
                   </span>
-                  <h4 className="text-xl font-headline italic text-primary mb-2 line-clamp-1">
-                    {song.title}
-                  </h4>
-                  <p className="text-sm font-body text-primary/70 line-clamp-2 leading-relaxed">
-                    {song.description}
+                </div>
+                <div>
+                  <p className="font-headline text-2xl italic leading-none text-ink">
+                    Real stories, produced like records.
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-ink-soft">
+                    Built for birthdays, anniversaries, apologies, memorials, proposals, and the
+                    quiet moments that deserve music too.
                   </p>
                 </div>
               </div>
-            ))}
+            </div>
           </div>
-
-          {isSongsLoading && songs.length === 0 && (
-            <div className="mt-24 text-center text-primary/70">
-              <span className="material-symbols-outlined mb-3 block text-4xl" aria-hidden="true">
-                library_music
-              </span>
-              <p className="font-display text-lg">Loading songs...</p>
-            </div>
-          )}
-
-          {songsError && !isSongsLoading && (
-            <div className="mx-auto mt-24 max-w-xl rounded-2xl border border-primary/20 bg-primary/10 px-6 py-5 text-center text-primary">
-              <span className="material-symbols-outlined mb-2 block text-3xl" aria-hidden="true">
-                cloud_off
-              </span>
-              <p className="font-display text-lg font-bold">Catalogue unavailable</p>
-              <p className="mt-1 text-sm text-primary/75">{songsError}</p>
-              <button
-                type="button"
-                onClick={reloadSongs}
-                className="mt-4 rounded-full bg-primary px-5 py-2 text-xs font-bold uppercase tracking-widest text-obsidian"
-              >
-                Try Again
-              </button>
-            </div>
-          )}
         </div>
-
-        {/* Texture overlay for the section */}
-        <div
-          className="absolute inset-0 opacity-10 pointer-events-none mix-blend-overlay"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
-          }}
-        ></div>
       </section>
 
-      {/* ── A Song for Everyone ─────────────────────────────────────────────── */}
-      <section className="py-32 sm:py-40 px-6 sm:px-12 bg-obsidian">
-        <div className="max-w-7xl mx-auto">
-          <div className="mb-16 text-center">
-            <h2 className="font-headline italic text-5xl md:text-7xl text-primary leading-[0.95] mb-4">
-              A Song for Everyone
+      <section className="bg-terracotta px-5 py-20 text-cream sm:px-8 lg:px-12 lg:py-28">
+        <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
+          <div>
+            <p className="font-label text-xs font-bold uppercase tracking-[0.18em] text-terracotta-soft">
+              Real song. Real story.
+            </p>
+            <h2 className="mt-4 font-headline text-5xl font-medium leading-none sm:text-6xl">
+              Hear it come <em className="text-mustard-soft">to life.</em>
             </h2>
-            <p className="font-body text-primary/60 text-lg max-w-xl mx-auto">
-              Pick who it's for and we'll craft something they'll never forget.
+            <p className="mt-5 max-w-md text-base leading-7 text-cream/75">
+              A real anniversary became a polished song. The visual language stays warm and
+              grounded, letting the music carry the emotion.
+            </p>
+            <Link
+              to="/create"
+              className="mt-8 inline-flex min-h-12 items-center justify-center rounded-full bg-cream px-7 py-3 font-label text-xs font-bold uppercase tracking-[0.14em] text-ink transition-colors hover:bg-ink hover:text-cream"
+            >
+              Start your brief
+            </Link>
+          </div>
+
+          <div className="relative overflow-hidden rounded-[1.25rem] border border-cream/15 bg-ink shadow-[0_20px_50px_rgba(31,27,20,0.22)]">
+            <video
+              data-mv
+              src="/musics/Music%20Video/Anniversary_Music_Video.mp4"
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              className="aspect-[9/16] w-full object-cover sm:aspect-video"
+            />
+            <SoundToggleVideo />
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink via-ink/70 to-transparent px-5 pb-5 pt-14">
+              <p className="font-headline text-2xl italic text-cream">Anniversary</p>
+              <p className="font-label text-[10px] font-bold uppercase tracking-[0.16em] text-cream/60">
+                Afro-Beats sample
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-ivory px-5 py-20 sm:px-8 lg:px-12 lg:py-28" id="how">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-12 max-w-2xl">
+            <p className="editorial-kicker mb-4">How YourGbedu works</p>
+            <h2 className="font-headline text-5xl font-medium leading-none text-ink sm:text-6xl">
+              A focused brief, then a finished record.
+            </h2>
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-3">
+            {PROCESS_STEPS.map((step, idx) => (
+              <div
+                key={step.id}
+                ref={(el) => {
+                  revealRefs.current[idx] = el;
+                }}
+                className="reveal rounded-2xl border border-line bg-cream p-6 transition-transform duration-300 hover:-translate-y-1"
+              >
+                <p className="font-headline text-5xl italic text-terracotta/30">{step.id}</p>
+                <h3 className="mt-8 font-headline text-3xl font-semibold leading-none text-ink">
+                  {step.title}
+                </h3>
+                <p className="mt-4 text-sm leading-7 text-ink-soft">{step.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-cream px-5 py-20 sm:px-8 lg:px-12 lg:py-28" id="catalogue">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-12 grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-end">
+            <div>
+              <p className="editorial-kicker mb-4">The listening room</p>
+              <h2 className="font-headline text-5xl font-medium leading-none text-ink sm:text-6xl">
+                Catalogue samples without the noise.
+              </h2>
+            </div>
+            <p className="max-w-2xl text-base leading-7 text-ink-soft lg:justify-self-end">
+              Browse real examples, then use the floating player for a calm preview. The art leans
+              into vinyl and editorial cover treatments instead of generic interface decoration.
             </p>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-            {[
-              { label: 'For Your Partner',   icon: 'favorite',         gradient: 'from-[#3d2e00] to-[#241a00]' },
-              { label: 'For Your Children',  icon: 'child_care',       gradient: 'from-[#2a1f00] to-[#1a1400]' },
-              { label: 'For Your Father',    icon: 'man',              gradient: 'from-[#332500] to-[#241a00]' },
-              { label: 'For Your Mother',    icon: 'woman',            gradient: 'from-[#3a2800] to-[#241a00]' },
-              { label: 'For Your Sibling',   icon: 'people',           gradient: 'from-[#2e2200] to-[#1a1400]' },
-              { label: 'For Your Friend',    icon: 'group',            gradient: 'from-[#3d2e00] to-[#241a00]' },
-              { label: 'For Yourself',       icon: 'self_improvement', gradient: 'from-[#241a00] to-[#0d0a00]' },
-              { label: 'For Anyone Special', icon: 'star',             gradient: 'from-[#2a1f00] to-[#241a00]' },
-            ].map((item) => (
+          <div className="grid gap-8 lg:grid-cols-[380px_minmax(0,1fr)]">
+            <div className="rounded-[1.4rem] bg-ink p-7 text-cream">
+              <div className="mx-auto flex aspect-square max-w-[280px] items-center justify-center rounded-full border border-cream/10 bg-[radial-gradient(circle,#3a3123_0_17%,#15120d_18%_28%,#2a2218_29%_36%,#100d09_37%_100%)] shadow-[inset_0_0_0_16px_rgba(255,253,246,0.03)]">
+                <button
+                  type="button"
+                  onClick={togglePlay}
+                  className="flex h-20 w-20 items-center justify-center rounded-full bg-mustard text-ink transition-transform hover:scale-105"
+                  aria-label={isPlaying ? 'Pause catalogue sample' : 'Play catalogue sample'}
+                >
+                  <span className="material-symbols-outlined text-4xl" aria-hidden="true">
+                    {isPlaying ? 'pause' : 'play_arrow'}
+                  </span>
+                </button>
+              </div>
+              <p className="mt-8 font-label text-[10px] font-bold uppercase tracking-[0.18em] text-mustard-soft">
+                Now selected
+              </p>
+              <h3 className="mt-2 font-headline text-4xl italic leading-none text-cream">
+                {activeSong?.title || 'Select a sample'}
+              </h3>
+              <p className="mt-3 text-sm leading-6 text-cream/60">
+                {activeSong ? `${activeSong.genre} - ${activeSong.duration}` : 'The first song will load when the catalogue is ready.'}
+              </p>
+            </div>
+
+            <div className="grid gap-4">
+              {songs.slice(0, 5).map((song) => {
+                const isCurrent = activeSong?.id === song.id;
+                return (
+                  <button
+                    type="button"
+                    key={song.id}
+                    onClick={() => playSong(song)}
+                    className={`grid grid-cols-[72px_minmax(0,1fr)_auto] items-center gap-4 rounded-2xl border p-3 text-left transition-colors ${
+                      isCurrent
+                        ? 'border-terracotta bg-terracotta-pale'
+                        : 'border-line bg-ivory hover:border-terracotta/60 hover:bg-cream'
+                    }`}
+                  >
+                    <img
+                      src={song.coverUrl}
+                      alt=""
+                      loading="lazy"
+                      className="h-[72px] w-[72px] rounded-xl object-cover"
+                    />
+                    <span className="min-w-0">
+                      <span className="block font-label text-[10px] font-bold uppercase tracking-[0.16em] text-ink-muted">
+                        {song.genre}
+                      </span>
+                      <span className="mt-1 block truncate font-headline text-2xl italic leading-none text-ink">
+                        {song.title}
+                      </span>
+                      <span className="mt-2 line-clamp-1 block text-sm text-ink-soft">
+                        {song.description}
+                      </span>
+                    </span>
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-ink text-cream">
+                      <span className="material-symbols-outlined text-xl" aria-hidden="true">
+                        {isCurrent && isPlaying ? 'pause' : 'play_arrow'}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+
+              {isSongsLoading && songs.length === 0 && (
+                <div className="rounded-2xl border border-line bg-ivory p-8 text-center text-ink-muted">
+                  Loading songs...
+                </div>
+              )}
+
+              {songsError && !isSongsLoading && (
+                <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center text-red-700">
+                  <p className="font-bold">Catalogue unavailable</p>
+                  <p className="mt-1 text-sm">{songsError}</p>
+                  <button
+                    type="button"
+                    onClick={reloadSongs}
+                    className="mt-4 rounded-full bg-ink px-5 py-2 font-label text-xs font-bold uppercase tracking-[0.14em] text-cream"
+                  >
+                    Try again
+                  </button>
+                </div>
+              )}
+
+              <Link
+                to="/library"
+                className="inline-flex min-h-12 items-center justify-center rounded-full border border-line-strong px-7 py-3 font-label text-xs font-bold uppercase tracking-[0.14em] text-ink-soft transition-colors hover:border-terracotta hover:text-terracotta"
+              >
+                Open full catalogue
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-sage px-5 py-20 text-cream sm:px-8 lg:px-12 lg:py-28">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-12 max-w-2xl">
+            <p className="font-label text-xs font-bold uppercase tracking-[0.18em] text-sage-soft">
+              A song for everyone
+            </p>
+            <h2 className="mt-4 font-headline text-5xl font-medium leading-none sm:text-6xl">
+              Four simple paths into the people you love.
+            </h2>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {RELATIONSHIPS.map((item) => (
               <Link
                 key={item.label}
-                to="/create"
-                className={`group relative aspect-square rounded-2xl bg-gradient-to-br ${item.gradient} ring-1 ring-primary/10 overflow-hidden flex flex-col justify-between p-5 hover:ring-primary/30 hover:scale-[1.03] transition-all duration-500`}
+                to={`/create?recipient=${item.slug}`}
+                className="group flex min-h-[360px] flex-col rounded-2xl border border-cream/15 bg-cream/10 p-4 transition-colors hover:bg-cream hover:text-ink"
               >
-                {/* Icon centered */}
-                <div className="flex-1 flex items-center justify-center">
-                  <span
-                    className="material-symbols-outlined text-primary/40 group-hover:text-primary/70 transition-colors duration-500"
-                    style={{ fontSize: '72px', fontVariationSettings: "'FILL' 1" }}
-                  >
-                    {item.icon}
-                  </span>
+                <div className={`flex aspect-[4/3] items-center justify-center overflow-hidden rounded-xl ${item.tone}`}>
+                  <PeoplePortrait variant={item.visual} />
                 </div>
-                {/* Label bottom-left */}
-                <p className="font-headline italic text-lg md:text-xl text-primary leading-tight">
-                  {item.label}
+                <p className="mt-5 font-label text-[10px] font-bold uppercase tracking-[0.16em] text-cream/55 group-hover:text-ink-muted">
+                  {item.eyebrow}
+                </p>
+                <h3 className="mt-1 font-headline text-3xl italic leading-none">{item.label}</h3>
+                <p className="mt-3 text-sm leading-6 text-cream/70 group-hover:text-ink-soft">
+                  {item.caption}
+                </p>
+                <span className="mt-auto pt-6 font-label text-[10px] font-bold uppercase tracking-[0.16em] text-sage-soft group-hover:text-terracotta">
+                  Start this brief
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-ivory px-5 py-20 sm:px-8 lg:px-12 lg:py-28">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-10 text-center">
+            <p className="editorial-kicker mb-4">Genre palette</p>
+            <h2 className="font-headline text-5xl font-medium leading-none text-ink sm:text-6xl">
+              Every genre, one personal brief.
+            </h2>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {GENRES.map(([name, desc], idx) => (
+              <Link
+                key={name}
+                to="/create"
+                className={`rounded-2xl border p-5 transition-transform hover:-translate-y-1 ${
+                  idx === 0
+                    ? 'border-ink bg-ink text-cream'
+                    : 'border-line bg-cream text-ink hover:border-terracotta'
+                }`}
+              >
+                <p className="font-headline text-3xl italic leading-none">{name}</p>
+                <p className={`mt-3 font-label text-[10px] font-bold uppercase tracking-[0.14em] ${idx === 0 ? 'text-mustard-soft' : 'text-ink-muted'}`}>
+                  {desc}
                 </p>
               </Link>
             ))}
@@ -398,72 +582,22 @@ const Home: React.FC = () => {
         </div>
       </section>
 
-      {/* ── Browse by Genre ─────────────────────────────────────────────────── */}
-      <section className="py-24 sm:py-32 px-6 sm:px-12 bg-surface">
-        <div className="max-w-7xl mx-auto">
-          <div className="mb-12 text-center">
-            <h2 className="font-headline italic text-5xl md:text-6xl text-obsidian leading-[0.95] mb-4">
-              Every Genre. One Platform.
-            </h2>
-            <p className="font-body text-obsidian/60 text-lg max-w-xl mx-auto">
-              Whatever sound moves you — we'll make it personal.
-            </p>
-          </div>
+      <FAQ />
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-            {[
-              { name: 'Afro-Beats',  icon: 'music_note',               desc: 'Vibrant & Rhythmic' },
-              { name: 'Afro-R&B',   icon: 'favorite',                 desc: 'Romantic & Groovy' },
-              { name: 'Afro-House',  icon: 'speaker',                  desc: 'Energetic & Electric' },
-              { name: 'Afro-Reggae', icon: 'queue_music',              desc: 'Island Vibes' },
-              { name: 'Gospel',      icon: 'volunteer_activism',       desc: 'Uplifting & Spiritual' },
-              { name: 'R&B',         icon: 'radio',                    desc: 'Smooth & Soulful' },
-              { name: 'Hip-Hop',     icon: 'mic',                      desc: 'Bold & Rhythmic' },
-              { name: 'Pop',         icon: 'album',                    desc: 'Catchy & Bright' },
-              { name: 'Soul',        icon: 'sentiment_very_satisfied', desc: 'Deep & Emotive' },
-              { name: 'Highlife',    icon: 'celebration',              desc: 'Joyful & Cultural' },
-            ].map((genre) => (
-              <Link
-                key={genre.name}
-                to="/create"
-                className="group flex flex-col items-center text-center gap-3 p-5 rounded-2xl bg-obsidian/5 ring-1 ring-obsidian/10 hover:bg-obsidian hover:ring-obsidian transition-all duration-400 hover:-translate-y-1"
-              >
-                <span
-                  className="material-symbols-outlined text-obsidian/50 group-hover:text-primary transition-colors duration-400"
-                  style={{ fontSize: '36px', fontVariationSettings: "'FILL' 1" }}
-                >
-                  {genre.icon}
-                </span>
-                <div>
-                  <p className="font-headline italic text-obsidian group-hover:text-primary text-base leading-tight transition-colors duration-400">
-                    {genre.name}
-                  </p>
-                  <p className="font-label text-[10px] uppercase tracking-widest text-obsidian/40 group-hover:text-primary/60 mt-1 transition-colors duration-400">
-                    {genre.desc}
-                  </p>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* FAQ Section (Adapting to Royal Gold) */}
-      <div className="bg-surface">
-        <FAQ />
-      </div>
-
-      {/* ── CTA Section: The Royal Finale ──────────────────────────────────── */}
-      <section className="py-40 px-6 sm:px-12 bg-surface">
-        <div className="flex flex-col items-center text-center max-w-5xl mx-auto">
-          <h2 className="font-headline italic text-5xl md:text-7xl lg:text-8xl mb-12 leading-[1.1] text-obsidian">
-            Your story is waiting to be heard.
+      <section className="bg-terracotta px-5 py-24 text-center text-cream sm:px-8 lg:px-12 lg:py-32">
+        <div className="mx-auto max-w-4xl">
+          <h2 className="font-headline text-6xl font-medium leading-none sm:text-7xl">
+            Your story is waiting <em className="text-mustard-soft">to be heard.</em>
           </h2>
+          <p className="mx-auto mt-6 max-w-2xl text-base leading-7 text-cream/75">
+            A few thoughtful answers are enough for our producers to begin shaping something
+            specific, emotional, and ready for the person you love.
+          </p>
           <Link
             to="/create"
-            className="bg-obsidian text-primary px-16 py-6 font-label uppercase tracking-[0.2em] text-sm rounded-full shadow-[0_8px_24px_rgba(36,26,0,0.14)] hover:-translate-y-1 transition-all duration-500"
+            className="mt-9 inline-flex min-h-12 items-center justify-center rounded-full bg-cream px-8 py-3 font-label text-sm font-bold uppercase tracking-[0.14em] text-ink transition-colors hover:bg-ink hover:text-cream"
           >
-            Create Your Song
+            Create your song
           </Link>
         </div>
       </section>

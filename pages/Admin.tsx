@@ -42,10 +42,16 @@ interface Stats {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  in_production: 'border-blue-500/30 bg-blue-500/10 text-blue-700',
-  completed: 'border-green-500/30 bg-green-500/10 text-green-700',
-  cancelled: 'border-red-500/30 bg-red-500/10 text-red-600',
+  in_production: 'border-terracotta/25 bg-terracotta-pale text-terracotta-dark',
+  completed: 'border-sage-soft bg-sage-pale text-sage-dark',
+  cancelled: 'border-red-200 bg-red-50 text-red-700',
 };
+
+const adminInputClass =
+  'rounded-xl border border-line bg-ivory px-4 py-3 font-body text-sm text-ink placeholder:text-ink-muted transition-colors focus:border-terracotta focus:bg-cream focus:outline-none focus:ring-4 focus:ring-terracotta/10';
+
+const adminActionClass =
+  'inline-flex items-center justify-center gap-2 rounded-full bg-ink px-4 py-2 font-label text-xs font-bold uppercase tracking-[0.12em] text-cream transition-colors hover:bg-terracotta disabled:cursor-not-allowed disabled:opacity-50';
 
 function adminFetch(url: string, options: RequestInit = {}) {
   return fetch(url, { ...options, credentials: 'include' });
@@ -272,8 +278,8 @@ const Admin: React.FC = () => {
 
   if (authenticated === null) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <span className="material-symbols-outlined animate-spin text-4xl text-primary">
+      <div className="flex min-h-screen items-center justify-center bg-ivory">
+        <span className="material-symbols-outlined animate-spin text-4xl text-terracotta">
           progress_activity
         </span>
       </div>
@@ -282,15 +288,20 @@ const Admin: React.FC = () => {
 
   if (!authenticated) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-background px-8 pb-20 pt-32">
-        <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-background-border bg-background-surface p-10 shadow-sm">
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent" />
+      <div className="flex min-h-screen flex-col items-center justify-center bg-ivory px-5 py-12">
+        <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-line bg-cream p-6 shadow-ambient sm:p-9">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-terracotta" />
           <div className="relative mb-8 text-center">
-            <span className="material-symbols-outlined mb-4 block text-4xl text-primary/80">
+            <span className="material-symbols-outlined mb-4 block text-4xl text-terracotta">
               admin_panel_settings
             </span>
-            <h2 className="font-display text-2xl font-bold text-[#1C1008]">Admin Login</h2>
-            <p className="mt-3 font-body text-sm text-[#A08B74]">Sign in to work on orders</p>
+            <p className="font-label text-[10px] font-bold uppercase tracking-[0.18em] text-terracotta">
+              Production Workbench
+            </p>
+            <h2 className="mt-3 font-headline text-4xl font-medium leading-none text-ink">
+              Admin login
+            </h2>
+            <p className="mt-3 font-body text-sm text-ink-soft">Sign in to work on orders</p>
           </div>
 
           <form onSubmit={handleLogin} className="relative space-y-5">
@@ -300,28 +311,28 @@ const Admin: React.FC = () => {
               </div>
             )}
             <div>
-              <label className="mb-2 block pl-1 font-display text-xs font-medium uppercase tracking-widest text-[#A08B74]">
+              <label className="mb-2 block font-label text-xs font-bold uppercase tracking-[0.14em] text-ink-muted">
                 Username
               </label>
               <input
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full rounded-xl border border-background-border bg-background px-4 py-3.5 font-body text-sm text-[#1C1008] transition-all placeholder-[#A08B74] focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className={`w-full ${adminInputClass}`}
                 placeholder="Enter username"
                 autoComplete="username"
                 required
               />
             </div>
             <div>
-              <label className="mb-2 block pl-1 font-display text-xs font-medium uppercase tracking-widest text-[#A08B74]">
+              <label className="mb-2 block font-label text-xs font-bold uppercase tracking-[0.14em] text-ink-muted">
                 Password
               </label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-xl border border-background-border bg-background px-4 py-3.5 font-body text-sm text-[#1C1008] transition-all placeholder-[#A08B74] focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className={`w-full ${adminInputClass}`}
                 placeholder="Password"
                 autoComplete="current-password"
                 required
@@ -330,12 +341,12 @@ const Admin: React.FC = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="mt-6 w-full rounded-xl bg-[#241a00] px-6 py-4 font-display text-sm font-bold uppercase tracking-wider text-primary transition-all hover:bg-[#352600] disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-6 w-full rounded-full bg-ink px-6 py-4 font-label text-sm font-bold uppercase tracking-[0.14em] text-cream transition-colors hover:bg-terracotta disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isLoading ? 'Authenticating...' : 'Access Workbench'}
             </button>
             <div className="pt-6 text-center">
-              <Link to="/" className="text-xs text-[#A08B74] transition-colors hover:text-[#1C1008]">
+              <Link to="/" className="font-label text-xs font-bold uppercase tracking-[0.12em] text-ink-muted transition-colors hover:text-terracotta">
                 Back to Home
               </Link>
             </div>
@@ -346,14 +357,14 @@ const Admin: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-10 border-b border-background-border bg-background-surface px-6 py-4">
+    <div className="min-h-screen bg-ivory">
+      <header className="sticky top-0 z-10 border-b border-line bg-cream/92 px-5 py-4 backdrop-blur-xl sm:px-6">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="font-display text-xs font-bold uppercase tracking-[0.2em] text-[#8a7124]">
+            <p className="font-label text-xs font-bold uppercase tracking-[0.18em] text-terracotta">
               Production Workbench
             </p>
-            <h1 className="font-serif text-3xl font-bold italic text-[#1C1008]">
+            <h1 className="font-headline text-4xl font-medium italic leading-none text-ink">
               Orders to Work On
             </h1>
           </div>
@@ -361,7 +372,7 @@ const Admin: React.FC = () => {
             <button
               type="button"
               onClick={() => fetchData(currentPage)}
-              className="inline-flex items-center gap-2 rounded-full border border-background-border px-4 py-2 text-sm text-[#78614A] transition-colors hover:border-primary/50 hover:text-[#1C1008]"
+              className="inline-flex items-center gap-2 rounded-full border border-line-strong px-4 py-2 text-sm font-semibold text-ink-soft transition-colors hover:border-terracotta hover:text-terracotta"
             >
               <span className="material-symbols-outlined text-base">refresh</span>
               Refresh
@@ -374,7 +385,7 @@ const Admin: React.FC = () => {
               <span className="material-symbols-outlined text-base">logout</span>
               Log Out
             </button>
-            <Link to="/" className="rounded-full border border-background-border px-4 py-2 text-sm text-[#78614A] hover:text-[#1C1008]">
+            <Link to="/" className="rounded-full border border-line-strong px-4 py-2 text-sm font-semibold text-ink-soft hover:border-terracotta hover:text-terracotta">
               Site
             </Link>
           </div>
@@ -391,24 +402,24 @@ const Admin: React.FC = () => {
           ].map((stat) => (
             <div
               key={stat.label}
-              className="flex items-center gap-3 rounded-xl border border-background-border bg-background-surface px-4 py-3"
+              className="flex items-center gap-3 rounded-xl border border-line bg-cream px-4 py-3"
             >
-              <span className="material-symbols-outlined text-xl text-primary">{stat.icon}</span>
+              <span className="material-symbols-outlined text-xl text-terracotta">{stat.icon}</span>
               <div>
-                <p className="font-display text-[10px] font-bold uppercase tracking-widest text-[#A08B74]">
+                <p className="font-label text-[10px] font-bold uppercase tracking-[0.16em] text-ink-muted">
                   {stat.label}
                 </p>
-                <p className="font-display text-lg font-bold text-[#1C1008]">{stat.value}</p>
+                <p className="font-label text-lg font-bold text-ink">{stat.value}</p>
               </div>
             </div>
           ))}
         </section>
 
-        <section className="overflow-hidden rounded-2xl border border-background-border bg-background-surface">
-          <div className="flex flex-col gap-4 border-b border-background-border px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+        <section className="overflow-hidden rounded-2xl border border-line bg-cream">
+          <div className="flex flex-col gap-4 border-b border-line px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h2 className="font-display text-lg font-bold text-[#1C1008]">Order Queue</h2>
-              <p className="text-sm text-[#78614A]">
+              <h2 className="font-headline text-3xl font-medium leading-none text-ink">Order Queue</h2>
+              <p className="mt-1 text-sm text-ink-soft">
                 Expand an order to review the brief, export JSON, or generate the production brief.
               </p>
             </div>
@@ -421,7 +432,8 @@ const Admin: React.FC = () => {
                   setSearch(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-56 rounded-lg border border-background-border bg-background px-3 py-2 text-sm text-[#1C1008] placeholder-[#A08B74] focus:outline-none focus:ring-1 focus:ring-primary"
+                aria-label="Search orders"
+                className={`w-full sm:w-64 ${adminInputClass}`}
               />
               <select
                 value={statusFilter}
@@ -429,7 +441,8 @@ const Admin: React.FC = () => {
                   setStatusFilter(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="rounded-lg border border-background-border bg-background px-3 py-2 text-sm text-[#1C1008] focus:outline-none focus:ring-1 focus:ring-primary"
+                aria-label="Filter orders by status"
+                className={adminInputClass}
               >
                 <option value="">All statuses</option>
                 <option value="in_production">In Production</option>
@@ -439,7 +452,7 @@ const Admin: React.FC = () => {
               <button
                 type="button"
                 onClick={handleExportQueue}
-                className="inline-flex items-center gap-2 rounded-lg bg-[#241a00] px-4 py-2 font-display text-xs font-bold uppercase tracking-wider text-primary"
+                className={adminActionClass}
               >
                 <span className="material-symbols-outlined text-base">download</span>
                 Export Queue JSON
@@ -448,27 +461,33 @@ const Admin: React.FC = () => {
           </div>
 
           {adminMessage && (
-            <div className="border-b border-background-border bg-[#FFF8E5] px-5 py-3 text-sm text-[#5C4A2F]">
+            <div role="status" className="border-b border-line bg-mustard-pale px-5 py-3 text-sm font-medium text-[#6F521F]">
               {adminMessage}
             </div>
           )}
 
           {isLoading ? (
             <div className="flex items-center justify-center p-16">
-              <span className="material-symbols-outlined animate-spin text-3xl text-primary">
+              <span className="material-symbols-outlined animate-spin text-3xl text-terracotta">
                 progress_activity
               </span>
             </div>
           ) : orders.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-3 p-16 text-[#A08B74]">
+            <div className="flex flex-col items-center justify-center gap-3 p-16 text-ink-muted">
               <span className="material-symbols-outlined text-4xl">inbox</span>
               <p>No orders match this view</p>
             </div>
           ) : (
-            <div className="divide-y divide-background-border">
+            <div className="divide-y divide-line">
               {orders.map((order) => {
                 const isExpanded = expandedId === order.id;
                 const hasBrief = !!order.ai_brief?.trim();
+                const orderSummary = [
+                  labelize(order.occasion),
+                  order.genre || 'Custom',
+                  order.voice_gender || 'Voice TBD',
+                  formatDate(order.created_at),
+                ].filter((value) => value && value !== '-');
 
                 return (
                   <article key={order.id} className="px-5 py-4">
@@ -478,36 +497,36 @@ const Admin: React.FC = () => {
                         onClick={() => setExpandedId(isExpanded ? null : order.id)}
                         className="flex min-w-0 flex-1 items-center gap-4 text-left"
                       >
-                        <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
-                          <span className="material-symbols-outlined text-primary">music_note</span>
+                        <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-mustard-pale">
+                          <span className="material-symbols-outlined text-mustard">music_note</span>
                         </div>
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-mono text-sm font-bold text-[#1C1008]">
+                            <span className="font-mono text-sm font-bold text-ink">
                               #{order.id.slice(0, 8).toUpperCase()}
                             </span>
                             <span className={`rounded-full border px-2 py-0.5 text-xs font-bold ${STATUS_COLORS[order.status] || STATUS_COLORS.in_production}`}>
                               {order.status.replace('_', ' ')}
                             </span>
-                            <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${hasBrief ? 'bg-violet-500/10 text-violet-700' : 'bg-amber-500/10 text-amber-700'}`}>
+                            <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${hasBrief ? 'bg-sage-pale text-sage-dark' : 'bg-mustard-pale text-[#6F521F]'}`}>
                               {hasBrief ? 'AI brief ready' : 'AI brief pending'}
                             </span>
                           </div>
-                          <p className="mt-1 truncate text-sm text-[#78614A]">
-                            {labelize(order.occasion)} · {order.genre || 'Custom'} · {order.voice_gender || 'Voice TBD'} · {formatDate(order.created_at)}
+                          <p className="mt-1 truncate text-sm text-ink-soft">
+                            {orderSummary.join(' · ')}
                           </p>
                         </div>
                       </button>
 
                       <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-                        <span className="font-display text-sm font-bold text-[#1C1008]">
+                        <span className="font-label text-sm font-bold text-ink">
                           {formatAmount(order.amount)}
                         </span>
                         <select
                           value={order.status}
                           onChange={(e) => handleStatusUpdate(order.id, e.target.value)}
                           disabled={updatingId === order.id}
-                          className="rounded-lg border border-background-border bg-background px-3 py-2 text-xs text-[#1C1008] focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+                          className="rounded-lg border border-line bg-ivory px-3 py-2 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-terracotta/20 disabled:opacity-50"
                         >
                           <option value="in_production">In Production</option>
                           <option value="completed">Completed</option>
@@ -516,7 +535,7 @@ const Admin: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => handleExportOrder(order)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-background-border px-3 py-2 text-xs font-bold text-[#5C4A2F] hover:border-primary/50"
+                          className="inline-flex items-center gap-1 rounded-lg border border-line-strong px-3 py-2 text-xs font-bold text-ink-soft hover:border-terracotta hover:text-terracotta"
                         >
                           <span className="material-symbols-outlined text-sm">download</span>
                           JSON
@@ -525,7 +544,7 @@ const Admin: React.FC = () => {
                           type="button"
                           onClick={() => handleGenerateBrief(order.id)}
                           disabled={generatingId === order.id}
-                          className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-[#241a00] disabled:cursor-not-allowed disabled:opacity-60"
+                          className="inline-flex items-center gap-1 rounded-lg bg-terracotta px-3 py-2 text-xs font-bold text-cream disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <span className={`material-symbols-outlined text-sm ${generatingId === order.id ? 'animate-spin' : ''}`}>
                             {generatingId === order.id ? 'progress_activity' : 'auto_awesome'}
@@ -535,7 +554,7 @@ const Admin: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => setExpandedId(isExpanded ? null : order.id)}
-                          className="flex size-9 items-center justify-center rounded-lg border border-background-border text-[#78614A] hover:text-[#1C1008]"
+                          className="flex size-9 items-center justify-center rounded-lg border border-line-strong text-ink-muted hover:text-ink"
                           aria-label={isExpanded ? 'Collapse order' : 'Expand order'}
                         >
                           <span className="material-symbols-outlined text-base">
@@ -546,8 +565,8 @@ const Admin: React.FC = () => {
                     </div>
 
                     {isExpanded && (
-                      <div className="mt-4 rounded-xl border border-background-border bg-background p-4 text-sm">
-                        <div className="grid gap-3 border-b border-background-border pb-4 md:grid-cols-3">
+                      <div className="mt-4 rounded-xl border border-line bg-ivory p-4 text-sm">
+                        <div className="grid gap-3 border-b border-line pb-4 md:grid-cols-3">
                           {[
                             ['For', order.recipient_type],
                             ['From', order.sender_name],
@@ -560,10 +579,10 @@ const Admin: React.FC = () => {
                             ['Created', formatDate(order.created_at)],
                           ].map(([label, value]) => (
                             <div key={label}>
-                              <span className="block font-display text-[10px] font-bold uppercase tracking-widest text-[#A08B74]">
+                              <span className="block font-label text-[10px] font-bold uppercase tracking-[0.16em] text-ink-muted">
                                 {label}
                               </span>
-                              <p className="mt-1 break-words font-medium text-[#1C1008]">{value || '-'}</p>
+                              <p className="mt-1 break-words font-medium text-ink">{value || '-'}</p>
                             </div>
                           ))}
                         </div>
@@ -575,23 +594,23 @@ const Admin: React.FC = () => {
                             ['Special Message', order.special_message || order.story],
                           ].map(([label, value]) => (
                             <div key={label}>
-                              <span className="mb-2 block font-display text-xs font-bold uppercase tracking-wider text-primary">
+                              <span className="mb-2 block font-label text-xs font-bold uppercase tracking-[0.14em] text-terracotta">
                                 {label}
                               </span>
-                              <p className="min-h-28 whitespace-pre-wrap rounded-lg border border-background-border bg-[#1C1008]/5 p-3 leading-relaxed text-[#5C4A2F]">
+                              <p className="min-h-28 whitespace-pre-wrap rounded-lg border border-line bg-cream p-3 leading-relaxed text-ink-soft">
                                 {value || '-'}
                               </p>
                             </div>
                           ))}
                         </div>
 
-                        <div className="mt-4 border-t border-background-border pt-4">
+                        <div className="mt-4 border-t border-line pt-4">
                           <div className="mb-2 flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2">
-                              <span className="material-symbols-outlined text-base text-violet-600">
+                              <span className="material-symbols-outlined text-base text-terracotta">
                                 auto_awesome
                               </span>
-                              <span className="font-display text-xs font-bold uppercase tracking-wider text-violet-700">
+                              <span className="font-label text-xs font-bold uppercase tracking-[0.14em] text-terracotta">
                                 AI Production Brief
                               </span>
                             </div>
@@ -599,12 +618,12 @@ const Admin: React.FC = () => {
                               type="button"
                               onClick={() => handleGenerateBrief(order.id)}
                               disabled={generatingId === order.id}
-                              className="rounded-full bg-violet-600 px-4 py-1.5 text-xs font-bold text-white disabled:opacity-60"
+                              className="rounded-full bg-ink px-4 py-1.5 text-xs font-bold text-cream hover:bg-terracotta disabled:opacity-60"
                             >
                               {generatingId === order.id ? 'Generating...' : hasBrief ? 'Regenerate' : 'Generate'}
                             </button>
                           </div>
-                          <p className="whitespace-pre-wrap rounded-lg border border-violet-500/20 bg-violet-500/5 p-4 leading-relaxed text-[#4C3B5C]">
+                          <p className="whitespace-pre-wrap rounded-lg border border-terracotta/20 bg-terracotta-pale/60 p-4 leading-relaxed text-ink-soft">
                             {order.ai_brief || 'AI brief pending generation. Use Generate Brief when this order is ready for production review.'}
                           </p>
                         </div>
@@ -617,8 +636,8 @@ const Admin: React.FC = () => {
           )}
 
           {pagination && pagination.totalPages > 1 && (
-            <div className="flex items-center justify-between gap-4 border-t border-background-border px-5 py-4">
-              <span className="font-display text-xs text-[#A08B74]">
+            <div className="flex items-center justify-between gap-4 border-t border-line px-5 py-4">
+              <span className="font-label text-xs text-ink-muted">
                 Page {pagination.page} of {pagination.totalPages}
               </span>
               <div className="flex items-center gap-2">
@@ -626,7 +645,7 @@ const Admin: React.FC = () => {
                   type="button"
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={!pagination.hasPrev}
-                  className="rounded-lg border border-background-border bg-background px-3 py-1.5 text-sm text-[#1C1008] transition-colors hover:border-primary/50 disabled:opacity-40"
+                  className="rounded-lg border border-line bg-ivory px-3 py-1.5 text-sm text-ink transition-colors hover:border-terracotta disabled:opacity-40"
                 >
                   Prev
                 </button>
@@ -634,7 +653,7 @@ const Admin: React.FC = () => {
                   type="button"
                   onClick={() => setCurrentPage((p) => p + 1)}
                   disabled={!pagination.hasNext}
-                  className="rounded-lg border border-background-border bg-background px-3 py-1.5 text-sm text-[#1C1008] transition-colors hover:border-primary/50 disabled:opacity-40"
+                  className="rounded-lg border border-line bg-ivory px-3 py-1.5 text-sm text-ink transition-colors hover:border-terracotta disabled:opacity-40"
                 >
                   Next
                 </button>

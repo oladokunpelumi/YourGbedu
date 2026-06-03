@@ -24,6 +24,12 @@ function hashToken(plaintext) {
     return crypto.createHash('sha256').update(plaintext).digest('hex');
 }
 
+function redactEmail(email) {
+    const [name, domain] = String(email || '').split('@');
+    if (!name || !domain) return 'unknown';
+    return `${name.slice(0, Math.min(2, name.length))}${name.length > 2 ? '***' : '*'}@${domain}`;
+}
+
 let tablesEnsured = false;
 function ensureAuthTables() {
     if (tablesEnsured) return;
@@ -74,11 +80,16 @@ router.post('/request', async (req, res) => {
         dbConn.prepare('INSERT INTO magic_links (token, email, expires_at, used) VALUES (?, ?, ?, 0)')
             .run(tokenHash, normalizedEmail, expiresAt);
 
-        await getEmailModule().sendMagicLinkEmail({
+        const delivery = await getEmailModule().sendMagicLinkEmail({
             to: normalizedEmail,
             token: plainToken,
             clientUrl: getClientUrlFromRequest(req),
         });
+        console.info(
+            `[Auth] Magic link request processed | email=${redactEmail(normalizedEmail)} | delivery=${delivery?.ok ? 'sent' : delivery?.reason || 'unknown'}`
+        );
+    } else {
+        console.info(`[Auth] Magic link request skipped | email=${redactEmail(normalizedEmail)} | reason=no_matching_orders`);
     }
 
     // Identical response whether or not an email was sent — prevents enumeration.

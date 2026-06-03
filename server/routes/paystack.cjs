@@ -13,7 +13,8 @@ const InitializeSchema = z.object({
 });
 
 const PAYSTACK_BASE_URL = 'https://api.paystack.co';
-const DELIVERY_DAYS = 3;
+const STANDARD_DELIVERY_HOURS = 48;
+const FAST_DELIVERY_HOURS = 24;
 
 let db;
 function getDb() {
@@ -164,9 +165,11 @@ router.post('/webhook', (req, res) => {
 
         const id = uuidv4();
         const createdAt = new Date().toISOString();
-        const actualDeliveryDays = isFastDelivery(metadata?.fastDelivery) ? 1 : DELIVERY_DAYS;
+        const actualDeliveryHours = isFastDelivery(metadata?.fastDelivery)
+            ? FAST_DELIVERY_HOURS
+            : STANDARD_DELIVERY_HOURS;
         const deliveryDate = new Date(
-            Date.now() + actualDeliveryDays * 24 * 60 * 60 * 1000
+            Date.now() + actualDeliveryHours * 60 * 60 * 1000
         ).toISOString();
 
         try {
@@ -210,6 +213,7 @@ router.post('/webhook', (req, res) => {
                     mood: metadata?.mood,
                     deliveryDate,
                     reference,
+                    amountLabel: typeof amount === 'number' ? `₦${(amount / 100).toLocaleString('en-NG')}` : undefined,
                 });
             }
         } catch (err) {

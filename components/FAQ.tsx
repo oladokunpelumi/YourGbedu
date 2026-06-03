@@ -8,11 +8,11 @@ const QA = [
   },
   {
     q: 'How long does it take to receive the song?',
-    a: 'Your finished custom song is delivered in 3 days. Optionally, if you need your song faster, we can deliver in 24 hours for an extra fee—simply select the priority delivery upgrade after you purchase your song.',
+    a: 'We build and deliver your custom song in 48 hours. If you need it sooner, choose the 24-hour priority delivery upgrade during your brief.',
   },
   {
     q: 'Can I get my custom song faster in 24 hours?',
-    a: "Yes! While standard delivery takes a few days, we offer priority 24 hour delivery for an additional fee. Simply select the priority delivery upgrade after you purchase your song, and we'll have your masterpiece ready in just 24 hours.",
+    a: 'Yes. Standard delivery means we build and deliver your custom song in 48 hours. If the moment is closer, choose the priority upgrade and we will build and deliver it in 24 hours.',
   },
   {
     q: 'What themes can I write about?',
@@ -40,29 +40,27 @@ const FAQ: React.FC = () => {
   };
 
   return (
-    <section className="py-24 bg-surface-container-low">
+    <section className="bg-cream py-20 sm:py-24">
       <div className="max-w-4xl mx-auto px-6">
-        <h2 className="text-4xl md:text-5xl font-bold text-center mb-4 font-display text-[#241a00] editorial-headline">
-          Frequently Asked
-          <br />
-          Questions
+        <h2 className="text-center font-headline text-5xl font-medium leading-none text-ink md:text-6xl">
+          Frequently asked <em className="text-terracotta">questions</em>
         </h2>
-        <p className="text-center text-[#78614A] font-body mb-16 max-w-lg mx-auto">
+        <p className="mx-auto mb-14 mt-5 max-w-lg text-center font-body text-base leading-7 text-ink-soft">
           Everything you need to know about creating your custom song.
         </p>
 
-        <div className="flex flex-col gap-[1.7rem]">
+        <div className="flex flex-col border-y border-line">
           {QA.map((item, idx) => (
             <div
               key={idx}
-              className={`rounded-md p-6 transition-colors cursor-pointer ${openIndex === idx ? 'bg-surface-container-lowest shadow-ambient' : 'bg-surface-bright hover:bg-surface-container-lowest'}`}
+              className="cursor-pointer border-b border-line last:border-b-0"
               onClick={() => toggleOpen(idx)}
             >
-              <button className="w-full flex items-center justify-between text-left focus:outline-none group">
-                <h3 className="text-lg md:text-xl font-display font-medium text-[#241a00]">
+              <button className="group flex w-full items-center justify-between gap-4 py-6 text-left">
+                <h3 className="font-headline text-2xl font-medium leading-tight text-ink md:text-3xl">
                   {item.q}
                 </h3>
-                <div className="text-[#78614A] group-hover:text-[#241a00] transition-colors shrink-0 ml-4">
+                <div className="ml-4 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line bg-ivory text-terracotta transition-colors group-hover:border-terracotta">
                   {openIndex === idx ? <Minus className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
                 </div>
               </button>
@@ -70,7 +68,7 @@ const FAQ: React.FC = () => {
               <div
                 className={`overflow-hidden transition-all duration-300 ease-in-out ${openIndex === idx ? 'max-h-[800px] mt-4 opacity-100' : 'max-h-0 opacity-0'}`}
               >
-                <div className="text-base text-[#78614A] leading-relaxed font-body whitespace-pre-wrap">
+                <div className="max-w-3xl pb-6 font-body text-base leading-7 text-ink-soft whitespace-pre-wrap">
                   {item.a}
                 </div>
               </div>
@@ -78,15 +76,15 @@ const FAQ: React.FC = () => {
           ))}
         </div>
 
-        <div className="mt-20 text-center flex flex-col items-center">
-          <h4 className="text-xl font-bold mb-2 font-display text-[#241a00]">
+        <div className="mt-16 flex flex-col items-center text-center">
+          <h4 className="mb-2 font-headline text-3xl font-medium text-ink">
             Got More Questions?
           </h4>
-          <p className="text-base text-[#78614A] font-body">
+          <p className="font-body text-base text-ink-soft">
             Reach out to us at{' '}
             <a
               href="mailto:hello@yourgbedu.com"
-              className="text-secondary hover:text-secondary-dark transition-colors font-medium"
+              className="font-medium text-terracotta transition-colors hover:text-terracotta-dark"
             >
               hello@yourgbedu.com
             </a>

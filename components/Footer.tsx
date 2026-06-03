@@ -3,28 +3,33 @@ import { Link } from 'react-router-dom';
 
 const Footer: React.FC = () => {
   return (
-    <footer className="w-full py-12 px-8 bg-[#fff2d8] border-t-4 border-primary mt-auto z-10 relative">
-      <div className="flex flex-col md:flex-row justify-between items-center space-y-8 md:space-y-0 max-w-7xl mx-auto font-headline text-sm tracking-wide">
-        <div className="italic text-lg text-[#241a00]">YourGbedu</div>
-        <div className="flex flex-wrap justify-center gap-6 md:space-x-12 md:gap-0">
-          <Link to="/" className="text-[#5e5e63] hover:text-[#241a00] underline transition-all">
+    <footer className="relative z-10 mt-auto w-full border-t border-line bg-ink px-6 pb-32 pt-12 text-cream md:pb-28">
+      <div className="mx-auto grid max-w-7xl gap-10 md:grid-cols-[1.4fr_1fr_auto] md:items-end">
+        <div>
+          <div className="font-headline text-3xl italic text-cream">YourGbedu</div>
+          <p className="mt-3 max-w-md font-headline text-xl italic leading-7 text-cream/55">
+            Personal songs for moments that deserve more than a message.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-5 font-label text-xs font-bold uppercase tracking-[0.14em]">
+          <Link to="/" className="text-cream/65 transition-colors hover:text-mustard-soft">
             Home
           </Link>
           <Link
             to="/library"
-            className="text-[#5e5e63] hover:text-[#241a00] underline transition-all"
+            className="text-cream/65 transition-colors hover:text-mustard-soft"
           >
-            Library
+            Catalogue
           </Link>
           <a
             href="mailto:hello@yourgbedu.com"
-            className="text-[#5e5e63] hover:text-[#241a00] underline transition-all"
+            className="text-cream/65 transition-colors hover:text-mustard-soft"
           >
             Contact
           </a>
         </div>
-        <div className="text-[#241a00]">
-          © {new Date().getFullYear()} The Digital Curator • Permanent Collection
+        <div className="font-label text-xs text-cream/45">
+          © {new Date().getFullYear()} YourGbedu
         </div>
       </div>
     </footer>

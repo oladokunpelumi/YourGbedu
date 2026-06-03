@@ -49,6 +49,93 @@ export const DISCOUNTED_PRICING = {
 
 export type PaymentProvider = keyof typeof DISCOUNTED_PRICING;
 
+export const OCCASION_ACCENTS = {
+  birthday: {
+    label: 'Birthday',
+    tone: 'Celebratory',
+    accent: '#C99B3E',
+    soft: '#FBF0CF',
+    text: '#6F521F',
+  },
+  anniversary: {
+    label: 'Anniversary',
+    tone: 'Reflective romantic',
+    accent: '#B3522F',
+    soft: '#F7E5DA',
+    text: '#8B3E22',
+  },
+  wedding: {
+    label: 'Wedding',
+    tone: 'Joyful devotional',
+    accent: '#7C8B5C',
+    soft: '#EEF2E2',
+    text: '#5D6A42',
+  },
+  valentine: {
+    label: 'Valentine',
+    tone: 'Romantic intimate',
+    accent: '#B3522F',
+    soft: '#F7E5DA',
+    text: '#8B3E22',
+  },
+  appreciation: {
+    label: 'Appreciation',
+    tone: 'Warm grateful',
+    accent: '#C99B3E',
+    soft: '#FBF0CF',
+    text: '#6F521F',
+  },
+  apology: {
+    label: 'Apology',
+    tone: 'Vulnerable healing',
+    accent: '#B3522F',
+    soft: '#F7E5DA',
+    text: '#8B3E22',
+  },
+  memorial: {
+    label: 'Memorial',
+    tone: 'Tender honoring',
+    accent: '#7C8B5C',
+    soft: '#EEF2E2',
+    text: '#5D6A42',
+  },
+  graduation: {
+    label: 'Graduation',
+    tone: 'Proud aspirational',
+    accent: '#C99B3E',
+    soft: '#FBF0CF',
+    text: '#6F521F',
+  },
+  proposal: {
+    label: 'Proposal',
+    tone: 'Intimate declarative',
+    accent: '#B3522F',
+    soft: '#F7E5DA',
+    text: '#8B3E22',
+  },
+  welcome_baby: {
+    label: 'Welcome Baby',
+    tone: 'Wonder-filled',
+    accent: '#7C8B5C',
+    soft: '#EEF2E2',
+    text: '#5D6A42',
+  },
+  just_because: {
+    label: 'Just Because',
+    tone: 'Spontaneous heartfelt',
+    accent: '#C99B3E',
+    soft: '#FBF0CF',
+    text: '#6F521F',
+  },
+  other: {
+    label: 'Other',
+    tone: 'Personal',
+    accent: '#8B7F6C',
+    soft: '#F5EDE2',
+    text: '#5A4F3F',
+  },
+} as const;
+
 export function getDiscountedPrice(provider: PaymentProvider | null, fastDelivery: boolean) {
   const resolvedProvider = provider || 'paystack';
   return fastDelivery

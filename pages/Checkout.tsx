@@ -410,161 +410,161 @@ const Checkout: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto my-6 grid min-h-[calc(100vh-96px)] max-w-6xl gap-6 px-4 sm:px-6 lg:grid-cols-[360px_minmax(0,1fr)]">
-      <aside className="rounded-2xl border border-[#E8D5A3]/60 bg-[#FFFDF5] p-6 shadow-[0_8px_28px_rgba(36,26,0,0.06)]">
-        <p className="font-display text-xs font-bold uppercase tracking-[0.2em] text-[#8a7124]">
-          Secure checkout
-        </p>
-        <h1 className="mt-3 font-serif text-4xl font-bold italic leading-tight text-[#241a00]">
-          Finish your song order
-        </h1>
-        <p className="mt-3 text-sm leading-relaxed text-[#5C4A2F]">
-          Your payment is handled by {providerLabel}. YourGbedu never stores card details.
-        </p>
+    <div className="bg-ivory px-5 py-8 sm:px-8 lg:px-12">
+      <div className="mx-auto grid min-h-[calc(100vh-96px)] max-w-6xl gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
+        <aside className="self-start rounded-2xl border border-line bg-cream p-6">
+          <p className="editorial-kicker">Secure checkout</p>
+          <h1 className="mt-4 font-headline text-5xl font-medium leading-none text-ink">
+            Finish your <em className="text-terracotta">song order</em>
+          </h1>
+          <p className="mt-4 text-sm leading-6 text-ink-soft">
+            Your payment is handled by {providerLabel}. YourGbedu never stores card details.
+          </p>
 
-        {brief && price && (
-          <>
-            <div className="mt-8 rounded-2xl border border-[#E8D5A3] bg-[#fff8f0] p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="font-display text-xs font-bold uppercase tracking-[0.18em] text-[#8a7124]">
-                    Total
-                  </p>
-                  <p className="mt-1 font-display text-3xl font-bold text-[#241a00]">
-                    {price.current}
-                  </p>
+          {brief && price && (
+            <>
+              <div className="mt-8 rounded-2xl border border-line bg-ivory p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-label text-xs font-bold uppercase tracking-[0.16em] text-ink-muted">
+                      Total
+                    </p>
+                    <p className="mt-1 font-headline text-4xl font-semibold text-ink">
+                      {price.current}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-mustard px-3 py-1 font-label text-[10px] font-bold uppercase tracking-[0.12em] text-ink">
+                    Discounted
+                  </span>
                 </div>
-                <span className="rounded-full bg-[#D4AF37] px-3 py-1 font-display text-xs font-bold uppercase tracking-wider text-[#241a00]">
-                  Discounted
-                </span>
-              </div>
-              <p className="mt-3 text-sm text-[#5C4A2F]">
-                Delivery in {brief.fastDelivery ? '24 hours' : '3 days'} via {providerLabel}.
-              </p>
-            </div>
-
-            <dl className="mt-6 space-y-4 text-sm">
-              {[
-                ['For', brief.recipientType],
-                ['From', brief.senderName],
-                ['Style', brief.genre],
-                ['Voice', brief.voiceGender],
-                ['Occasion', brief.occasionDetail || formatOccasion(brief.occasion)],
-                ['Email', brief.customerEmail],
-              ].map(([label, value]) => (
-                <div key={label} className="flex items-start justify-between gap-4 border-b border-[#E8D5A3]/50 pb-3">
-                  <dt className="font-display text-xs font-bold uppercase tracking-[0.18em] text-[#8a7124]">
-                    {label}
-                  </dt>
-                  <dd className="max-w-[190px] text-right font-body font-semibold text-[#241a00]">
-                    {value || '-'}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-
-            <Link
-              to="/create"
-              className="mt-6 inline-flex items-center gap-2 rounded-xl px-3 py-2 font-display text-sm font-bold text-[#5C4A2F] transition-colors hover:bg-[#241a00]/5 hover:text-[#241a00]"
-            >
-              <span className="material-symbols-outlined text-lg" aria-hidden="true">
-                edit
-              </span>
-              Return to edit your brief
-            </Link>
-          </>
-        )}
-      </aside>
-
-      <section className="rounded-2xl border border-[#E8D5A3]/60 bg-[#FFFDF5] p-5 shadow-[0_8px_28px_rgba(36,26,0,0.06)] sm:p-8">
-        <div className="mb-6 flex flex-col gap-3 border-b border-[#E8D5A3]/60 pb-5 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="font-display text-xs font-bold uppercase tracking-[0.2em] text-[#8a7124]">
-              {providerLabel} payment
-            </p>
-            <h2 className="mt-2 font-serif text-3xl font-bold italic text-[#241a00]">
-              Complete payment
-            </h2>
-          </div>
-          <div className="inline-flex items-center gap-2 self-start rounded-full border border-[#E8D5A3] bg-[#fff8f0] px-4 py-2 text-sm font-semibold text-[#5C4A2F]">
-            <span className="material-symbols-outlined text-lg text-[#8a7124]" aria-hidden="true">
-              lock
-            </span>
-            Provider-secured
-          </div>
-        </div>
-
-        <div role="status" className="mb-5 rounded-xl border border-[#E8D5A3]/70 bg-[#fff8f0] px-4 py-3 text-sm text-[#5C4A2F]">
-          {message}
-        </div>
-
-        {status === 'success' ? (
-          <div className="flex min-h-[420px] flex-col items-center justify-center text-center">
-            <span className="material-symbols-outlined text-7xl text-green-600" aria-hidden="true">
-              check_circle
-            </span>
-            <h3 className="mt-5 font-serif text-4xl font-bold italic text-[#241a00]">
-              Payment confirmed
-            </h3>
-            <p className="mt-3 max-w-md text-[#5C4A2F]">
-              Your order is ready. We are opening your tracker now.
-            </p>
-            {orderId && (
-              <Link to={`/track?id=${orderId}`} className="mt-6 rounded-xl bg-[#241a00] px-6 py-3 font-display font-bold text-[#D4AF37]">
-                Open tracker
-              </Link>
-            )}
-          </div>
-        ) : (
-          <>
-            {brief?.paymentProvider === 'stripe' ? (
-              <div
-                ref={stripeMountRef}
-                className="min-h-[520px] overflow-hidden rounded-2xl border border-[#E8D5A3] bg-white p-2"
-                aria-label="Stripe embedded checkout"
-              />
-            ) : (
-              <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-[#E8D5A3] bg-[#fff8f0] px-6 text-center">
-                <span className="material-symbols-outlined text-6xl text-[#D4AF37]" aria-hidden="true">
-                  payments
-                </span>
-                <h3 className="mt-4 font-serif text-3xl font-bold italic text-[#241a00]">
-                  Paystack checkout is ready
-                </h3>
-                <p className="mt-3 max-w-md text-[#5C4A2F]">
-                  Paystack may open a secure payment layer for card, bank transfer, USSD, or mobile authentication.
+                <p className="mt-3 text-sm text-ink-soft">
+                  {brief.fastDelivery
+                    ? `Built and delivered in 24 hours via ${providerLabel}.`
+                    : `Built and delivered in 48 hours via ${providerLabel}.`}
                 </p>
-                <button
-                  type="button"
-                  onClick={launchPaystackCheckout}
-                  disabled={status === 'processing'}
-                  className="mt-6 rounded-xl bg-[#D4AF37] px-8 py-4 font-display text-lg font-bold uppercase tracking-wider text-[#241a00] transition-colors hover:bg-[#e2c15a] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {status === 'processing' ? 'Processing...' : `Pay ${price?.current || ''}`}
-                </button>
               </div>
-            )}
 
-            {status === 'error' && (
-              <div role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
-                {message}
-              </div>
-            )}
+              <dl className="mt-6 space-y-4 text-sm">
+                {[
+                  ['For', brief.recipientType],
+                  ['From', brief.senderName],
+                  ['Style', brief.genre],
+                  ['Voice', brief.voiceGender],
+                  ['Occasion', brief.occasionDetail || formatOccasion(brief.occasion)],
+                  ['Email', brief.customerEmail],
+                ].map(([label, value]) => (
+                  <div key={label} className="flex items-start justify-between gap-4 border-b border-line pb-3">
+                    <dt className="font-label text-[10px] font-bold uppercase tracking-[0.16em] text-ink-muted">
+                      {label}
+                    </dt>
+                    <dd className="max-w-[190px] text-right font-body font-semibold text-ink">
+                      {value || '-'}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
 
-            {hostedFallbackUrl && (
-              <a
-                href={hostedFallbackUrl}
-                className="mt-5 inline-flex items-center gap-2 rounded-xl px-3 py-2 font-display text-sm font-bold text-[#5C4A2F] transition-colors hover:bg-[#241a00]/5 hover:text-[#241a00]"
+              <Link
+                to="/create"
+                className="mt-6 inline-flex items-center gap-2 rounded-full px-3 py-2 font-label text-sm font-bold text-ink-soft transition-colors hover:bg-ivory hover:text-terracotta"
               >
-                Open secure hosted checkout instead
                 <span className="material-symbols-outlined text-lg" aria-hidden="true">
-                  open_in_new
+                  edit
                 </span>
-              </a>
-            )}
-          </>
-        )}
-      </section>
+                Return to edit your brief
+              </Link>
+            </>
+          )}
+        </aside>
+
+        <section className="rounded-2xl border border-line bg-cream p-5 sm:p-8">
+          <div className="mb-6 flex flex-col gap-3 border-b border-line pb-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="editorial-kicker">{providerLabel} payment</p>
+              <h2 className="mt-3 font-headline text-4xl font-medium leading-none text-ink">
+                Complete payment
+              </h2>
+            </div>
+            <div className="inline-flex items-center gap-2 self-start rounded-full border border-line bg-ivory px-4 py-2 text-sm font-semibold text-ink-soft">
+              <span className="material-symbols-outlined text-lg text-terracotta" aria-hidden="true">
+                lock
+              </span>
+              Provider-secured
+            </div>
+          </div>
+
+          <div role="status" className="mb-5 rounded-xl border border-line bg-ivory px-4 py-3 text-sm text-ink-soft">
+            {message}
+          </div>
+
+          {status === 'success' ? (
+            <div className="flex min-h-[420px] flex-col items-center justify-center text-center">
+              <span className="material-symbols-outlined text-7xl text-sage" aria-hidden="true">
+                check_circle
+              </span>
+              <h3 className="mt-5 font-headline text-5xl font-medium leading-none text-ink">
+                Payment confirmed
+              </h3>
+              <p className="mt-3 max-w-md text-ink-soft">
+                Your order is ready. We are opening your tracker now.
+              </p>
+              {orderId && (
+                <Link to={`/track?id=${orderId}`} className="mt-6 rounded-full bg-ink px-6 py-3 font-label text-sm font-bold uppercase tracking-[0.12em] text-cream">
+                  Open tracker
+                </Link>
+              )}
+            </div>
+          ) : (
+            <>
+              {brief?.paymentProvider === 'stripe' ? (
+                <div
+                  ref={stripeMountRef}
+                  className="min-h-[520px] overflow-hidden rounded-2xl border border-line bg-white p-2"
+                  aria-label="Stripe embedded checkout"
+                />
+              ) : (
+                <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-line bg-ivory px-6 text-center">
+                  <span className="material-symbols-outlined text-6xl text-terracotta" aria-hidden="true">
+                    payments
+                  </span>
+                  <h3 className="mt-4 font-headline text-4xl font-medium leading-none text-ink">
+                    Paystack checkout is ready
+                  </h3>
+                  <p className="mt-3 max-w-md text-ink-soft">
+                    Paystack may open a secure payment layer for card, bank transfer, USSD, or mobile authentication.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={launchPaystackCheckout}
+                    disabled={status === 'processing'}
+                    className="mt-6 rounded-full bg-terracotta px-8 py-4 font-label text-sm font-bold uppercase tracking-[0.12em] text-cream transition-colors hover:bg-terracotta-dark disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {status === 'processing' ? 'Processing...' : `Pay ${price?.current || ''}`}
+                  </button>
+                </div>
+              )}
+
+              {status === 'error' && (
+                <div role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
+                  {message}
+                </div>
+              )}
+
+              {hostedFallbackUrl && (
+                <a
+                  href={hostedFallbackUrl}
+                  className="mt-5 inline-flex items-center gap-2 rounded-full px-3 py-2 font-label text-sm font-bold text-ink-soft transition-colors hover:bg-ivory hover:text-terracotta"
+                >
+                  Open secure hosted checkout instead
+                  <span className="material-symbols-outlined text-lg" aria-hidden="true">
+                    open_in_new
+                  </span>
+                </a>
+              )}
+            </>
+          )}
+        </section>
+      </div>
     </div>
   );
 };

@@ -30,3 +30,4 @@ server/*.db-wal
 
 # Project-specific ignores
 design Prompt/
+Design improv/

@@ -45,38 +45,38 @@ const Verify: React.FC = () => {
 
   if (status === 'verifying') {
     return (
-      <div className="min-h-[80vh] flex flex-col items-center justify-center px-6 gap-6 bg-obsidian text-primary">
-        <span className="material-symbols-outlined text-6xl text-primary animate-spin">
+      <div className="flex min-h-[80vh] flex-col items-center justify-center gap-6 bg-ivory px-6 text-center">
+        <span className="material-symbols-outlined text-6xl text-terracotta animate-spin" aria-hidden="true">
           progress_activity
         </span>
-        <h2 className="text-3xl md:text-4xl font-serif italic tracking-tight">Signing you in…</h2>
-        <p className="text-[#e2c15a] font-body opacity-80">Verifying your magic link.</p>
+        <h1 className="font-headline text-5xl font-medium leading-none text-ink">Signing you in</h1>
+        <p className="font-body text-ink-soft">Verifying your magic link.</p>
       </div>
     );
   }
 
   if (status === 'success') {
     return (
-      <div className="min-h-[80vh] flex flex-col items-center justify-center px-6 gap-6 bg-obsidian text-primary">
-        <div className="size-20 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
-          <span className="material-symbols-outlined text-4xl text-primary font-light">task_alt</span>
+      <div className="flex min-h-[80vh] flex-col items-center justify-center gap-6 bg-ivory px-6 text-center">
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-sage-pale text-sage-dark">
+          <span className="material-symbols-outlined text-4xl" aria-hidden="true">task_alt</span>
         </div>
-        <h2 className="text-3xl md:text-4xl font-serif italic tracking-tight">Signed in!</h2>
-        <p className="text-[#e2c15a] font-body opacity-80">Redirecting to your orders…</p>
+        <h1 className="font-headline text-5xl font-medium leading-none text-ink">Signed in</h1>
+        <p className="font-body text-ink-soft">Redirecting to your orders...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-[80vh] flex flex-col items-center justify-center px-6 gap-6 bg-obsidian text-primary">
-      <span className="material-symbols-outlined text-7xl text-red-500 font-light">
+    <div className="flex min-h-[80vh] flex-col items-center justify-center gap-6 bg-ivory px-6 text-center">
+      <span className="material-symbols-outlined text-7xl text-red-600" aria-hidden="true">
         link_off
       </span>
-      <h2 className="text-3xl md:text-4xl font-serif italic tracking-tight">Link Invalid</h2>
-      <p className="text-[#e2c15a] font-body text-center max-w-md opacity-80">{errorMessage}</p>
+      <h1 className="font-headline text-5xl font-medium leading-none text-ink">Link invalid</h1>
+      <p className="max-w-md font-body text-ink-soft">{errorMessage}</p>
       <Link
         to="/track"
-        className="mt-4 flex items-center gap-2 px-8 h-12 rounded-full bg-primary text-obsidian hover:bg-[#e2c15a] transition-all font-display text-sm font-bold uppercase tracking-widest"
+        className="mt-4 flex h-12 items-center gap-2 rounded-full bg-ink px-8 font-label text-sm font-bold uppercase tracking-[0.14em] text-cream transition-colors hover:bg-terracotta"
       >
         Request a New Link
       </Link>
