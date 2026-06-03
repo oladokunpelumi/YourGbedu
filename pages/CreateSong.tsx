@@ -1,8 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { OCCASION_ACCENTS, PaymentProvider, getDiscountedPrice } from '../constants';
 
 const RECIPIENTS = [
+  'Parents',
+  'Partner',
+  'Friends & Loved Ones',
+  'Yourself',
   'Husband',
   'Wife',
   'Boyfriend',
@@ -12,20 +16,26 @@ const RECIPIENTS = [
   'Mother',
   'Sibling',
   'Friend',
-  'Myself',
   'Other',
 ];
+
+const RECIPIENT_QUERY_MAP: Record<string, string> = {
+  parents: 'Parents',
+  partner: 'Partner',
+  'friends-loved-ones': 'Friends & Loved Ones',
+  yourself: 'Yourself',
+};
 
 const OCCASIONS = [
   { value: 'birthday', label: 'Birthday' },
   { value: 'anniversary', label: 'Anniversary' },
+  { value: 'proposal', label: 'Proposal' },
   { value: 'wedding', label: 'Wedding' },
   { value: 'valentine', label: 'Valentine' },
   { value: 'appreciation', label: 'Appreciation' },
   { value: 'apology', label: 'Apology' },
   { value: 'memorial', label: 'Memorial' },
   { value: 'graduation', label: 'Graduation' },
-  { value: 'proposal', label: 'Proposal' },
   { value: 'welcome_baby', label: 'Welcome Baby' },
   { value: 'just_because', label: 'Just Because' },
   { value: 'other', label: 'Other' },
@@ -62,8 +72,8 @@ const FORM_STEPS = [
   {
     id: 3,
     title: 'Story',
-    heading: 'Share the emotional center',
-    desc: 'Tell us what makes them special and which memories matter.',
+    heading: 'The Heart of the Story',
+    desc: 'Share the qualities and memories that matter.',
   },
   {
     id: 4,
@@ -84,6 +94,7 @@ const fieldClass =
 
 const CreateSong: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [step, setStep] = useState(1);
 
   const [recipientType, setRecipientType] = useState('');
@@ -102,6 +113,8 @@ const CreateSong: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [paymentProvider, setPaymentProvider] = useState<PaymentProvider | null>(null);
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+  const selectedPersona =
+    RECIPIENT_QUERY_MAP[(searchParams.get('recipient') || '').toLowerCase()] || '';
 
   useEffect(() => {
     const checkoutError = sessionStorage.getItem('yourgbedu_checkout_error');
@@ -109,6 +122,12 @@ const CreateSong: React.FC = () => {
     setError(checkoutError);
     sessionStorage.removeItem('yourgbedu_checkout_error');
   }, []);
+
+  useEffect(() => {
+    if (!selectedPersona) return;
+    setRecipientType(selectedPersona);
+    setStep(1);
+  }, [selectedPersona]);
 
   useEffect(() => {
     if (step !== 5 || paymentProvider !== null) return;
@@ -291,6 +310,18 @@ const CreateSong: React.FC = () => {
           <div className="mx-auto max-w-3xl">
             {step === 1 && (
               <div className="space-y-8">
+                {selectedPersona && (
+                  <div className="rounded-2xl border border-terracotta/30 bg-terracotta-pale p-4 text-terracotta-dark">
+                    <p className="font-label text-[10px] font-bold uppercase tracking-[0.16em]">
+                      Selected path
+                    </p>
+                    <p className="mt-1 text-sm leading-6">
+                      You started with <span className="font-bold">{selectedPersona}</span>. You
+                      can change this below.
+                    </p>
+                  </div>
+                )}
+
                 <div>
                   <p className="mb-3 font-headline text-2xl font-semibold text-ink">
                     Who is this for?
@@ -444,7 +475,7 @@ const CreateSong: React.FC = () => {
                     What makes them special?
                   </label>
                   <p className="mb-3 text-sm leading-6 text-ink-muted">
-                    Describe their character, the details you notice, and the qualities you love.
+                    Describe their character and the qualities you love most.
                   </p>
                   <textarea
                     id="special-qualities"
@@ -456,10 +487,10 @@ const CreateSong: React.FC = () => {
                 </div>
                 <div>
                   <label htmlFor="favorite-memories" className="mb-2 block font-headline text-2xl font-semibold text-ink">
-                    Which memories should shape the song?
+                    Share your favorite memories
                   </label>
                   <p className="mb-3 text-sm leading-6 text-ink-muted">
-                    Share scenes, places, jokes, private moments, or milestones.
+                    What moments with them do you treasure most?
                   </p>
                   <textarea
                     id="favorite-memories"

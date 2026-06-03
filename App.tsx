@@ -56,6 +56,10 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [volume, setVolumeState] = useState(0.7);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [location.pathname, location.search]);
+
   const loadSongs = useCallback(async () => {
     setIsSongsLoading(true);
     setSongsError(null);

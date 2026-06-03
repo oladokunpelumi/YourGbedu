@@ -24,6 +24,7 @@ const PROCESS_STEPS = [
 const RELATIONSHIPS = [
   {
     label: 'Parents',
+    slug: 'parents',
     visual: 'parents',
     tone: 'bg-sage-pale text-sage-dark',
     eyebrow: 'For the ones who raised you',
@@ -31,6 +32,7 @@ const RELATIONSHIPS = [
   },
   {
     label: 'Friends & Loved Ones',
+    slug: 'friends-loved-ones',
     visual: 'loved_ones',
     tone: 'bg-mustard-pale text-[#6F521F]',
     eyebrow: 'For your chosen circle',
@@ -38,6 +40,7 @@ const RELATIONSHIPS = [
   },
   {
     label: 'Partner',
+    slug: 'partner',
     visual: 'partner',
     tone: 'bg-terracotta-pale text-terracotta-dark',
     eyebrow: 'For romantic stories',
@@ -45,6 +48,7 @@ const RELATIONSHIPS = [
   },
   {
     label: 'Yourself',
+    slug: 'yourself',
     visual: 'yourself',
     tone: 'bg-[#F4EADB] text-ink-soft',
     eyebrow: 'For your own chapter',
@@ -257,18 +261,18 @@ const Home: React.FC = () => {
 
   return (
     <div className="editorial-shell flex flex-col">
-      <section className="px-5 pb-16 pt-28 sm:px-8 lg:px-12 lg:pb-24 lg:pt-32">
-        <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] lg:items-end">
+      <section className="flex min-h-[100svh] items-center px-5 pb-10 pt-20 sm:px-8 sm:pb-12 sm:pt-24 lg:px-12 lg:py-20">
+        <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] lg:items-center lg:gap-10">
           <div>
-            <p className="editorial-kicker mb-5">Custom songs across every occasion</p>
+            <p className="editorial-kicker mb-4">Custom songs across every occasion</p>
             <h1 className="font-headline text-6xl font-medium leading-[0.92] text-ink sm:text-7xl lg:text-8xl">
               Hear what your heart <em className="text-terracotta">meant to say.</em>
             </h1>
-            <p className="mt-7 max-w-2xl font-body text-lg leading-8 text-ink-soft sm:text-xl">
+            <p className="mt-6 max-w-2xl font-body text-lg leading-8 text-ink-soft sm:text-xl">
               Tell us the story, the person, and the moment. YourGbedu turns it into a finished song
               with lyrics, vocals, production, and a delivery flow that still feels personal.
             </p>
-            <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
               <Link
                 to="/create"
                 className="inline-flex min-h-12 items-center justify-center rounded-full bg-ink px-8 py-3 font-label text-sm font-bold uppercase tracking-[0.14em] text-cream transition-colors hover:bg-terracotta"
@@ -283,7 +287,7 @@ const Home: React.FC = () => {
               </Link>
             </div>
 
-            <div className="mt-12 grid max-w-2xl grid-cols-3 gap-3 border-y border-line py-5">
+            <div className="mt-9 grid max-w-2xl grid-cols-3 gap-3 border-y border-line py-4">
               {[
                 ['48h', 'built & delivered'],
                 ['12+', 'occasion arcs'],
@@ -306,7 +310,7 @@ const Home: React.FC = () => {
               <img
                 src="/images/Homepage.jpg"
                 alt="A YourGbedu artist listening through a finished custom song"
-                className="aspect-[4/5] w-full rounded-2xl object-cover sepia-[0.12]"
+                className="aspect-[4/5] w-full rounded-2xl object-cover sepia-[0.12] lg:aspect-auto lg:h-[52svh] lg:max-h-[620px] lg:min-h-[420px]"
               />
               <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-4 border-t border-line px-2 py-5">
                 <div className="flex h-14 w-14 items-center justify-center rounded-full bg-mustard-pale text-mustard">
@@ -527,7 +531,7 @@ const Home: React.FC = () => {
             {RELATIONSHIPS.map((item) => (
               <Link
                 key={item.label}
-                to="/create"
+                to={`/create?recipient=${item.slug}`}
                 className="group flex min-h-[360px] flex-col rounded-2xl border border-cream/15 bg-cream/10 p-4 transition-colors hover:bg-cream hover:text-ink"
               >
                 <div className={`flex aspect-[4/3] items-center justify-center overflow-hidden rounded-xl ${item.tone}`}>
