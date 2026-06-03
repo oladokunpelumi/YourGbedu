@@ -25,32 +25,56 @@ const RELATIONSHIPS = [
   {
     label: 'Parents',
     slug: 'parents',
-    visual: 'parents',
-    tone: 'bg-sage-pale text-sage-dark',
+    cover: '/images/relationship-covers/parents.jpg',
+    coverAlt: 'Warm portrait representing a custom song for parents',
+    coverPosition: 'object-center',
+    accentLine: 'bg-sage-soft',
+    borderClass: 'border-sage-soft/30 hover:border-sage-soft focus-visible:border-sage-soft',
+    washClass: 'bg-sage/20',
+    eyebrowClass: 'text-sage-soft group-hover:text-sage-dark group-focus-visible:text-sage-dark',
+    ctaClass: 'text-sage-soft group-hover:text-sage-dark group-focus-visible:text-sage-dark',
     eyebrow: 'For the ones who raised you',
     caption: 'Gratitude, birthdays, legacy, prayers, and the memories that shaped home.',
   },
   {
     label: 'Friends & Loved Ones',
     slug: 'friends-loved-ones',
-    visual: 'loved_ones',
-    tone: 'bg-mustard-pale text-[#6F521F]',
+    cover: '/images/relationship-covers/friends-loved-ones.jpg',
+    coverAlt: 'Warm portrait representing a custom song for friends and loved ones',
+    coverPosition: 'object-center',
+    accentLine: 'bg-mustard-soft',
+    borderClass: 'border-mustard-soft/35 hover:border-mustard-soft focus-visible:border-mustard-soft',
+    washClass: 'bg-mustard/20',
+    eyebrowClass: 'text-mustard-soft group-hover:text-[#6F521F] group-focus-visible:text-[#6F521F]',
+    ctaClass: 'text-mustard-soft group-hover:text-[#6F521F] group-focus-visible:text-[#6F521F]',
     eyebrow: 'For your chosen circle',
     caption: 'Inside jokes, loyalty, celebration, encouragement, and shared history.',
   },
   {
     label: 'Partner',
     slug: 'partner',
-    visual: 'partner',
-    tone: 'bg-terracotta-pale text-terracotta-dark',
+    cover: '/images/relationship-covers/partner.jpg',
+    coverAlt: 'Warm portrait representing a custom song for a partner',
+    coverPosition: 'object-center',
+    accentLine: 'bg-terracotta-soft',
+    borderClass: 'border-terracotta-soft/35 hover:border-terracotta-soft focus-visible:border-terracotta-soft',
+    washClass: 'bg-terracotta/20',
+    eyebrowClass: 'text-terracotta-soft group-hover:text-terracotta-dark group-focus-visible:text-terracotta-dark',
+    ctaClass: 'text-terracotta-soft group-hover:text-terracotta-dark group-focus-visible:text-terracotta-dark',
     eyebrow: 'For romantic stories',
     caption: 'Anniversaries, proposals, Valentine moments, apologies, and devotion.',
   },
   {
     label: 'Yourself',
     slug: 'yourself',
-    visual: 'yourself',
-    tone: 'bg-[#F4EADB] text-ink-soft',
+    cover: '/images/relationship-covers/yourself.jpg',
+    coverAlt: 'Warm portrait representing a custom song for yourself',
+    coverPosition: 'object-center',
+    accentLine: 'bg-line-strong',
+    borderClass: 'border-line-strong/45 hover:border-line-strong focus-visible:border-line-strong',
+    washClass: 'bg-cream/20',
+    eyebrowClass: 'text-cream/70 group-hover:text-ink-muted group-focus-visible:text-ink-muted',
+    ctaClass: 'text-cream/80 group-hover:text-ink group-focus-visible:text-ink',
     eyebrow: 'For your own chapter',
     caption: 'Healing, courage, self-belief, new seasons, and words you need to hear.',
   },
@@ -86,143 +110,6 @@ const SoundToggleVideo: React.FC = () => {
       </span>
       {muted ? 'Sound' : 'Mute'}
     </button>
-  );
-};
-
-const PeoplePortrait: React.FC<{ variant: string }> = ({ variant }) => {
-  const head = (cx: number, cy: number, r = 16, opacity = 0.9) => (
-    <circle cx={cx} cy={cy} r={r} fill="currentColor" opacity={opacity} />
-  );
-  const body = (d: string, opacity = 0.18) => (
-    <path d={d} fill="currentColor" opacity={opacity} />
-  );
-  const line = (d: string, opacity = 0.28) => (
-    <path d={d} fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" opacity={opacity} />
-  );
-
-  let portrait: React.ReactNode;
-  switch (variant) {
-    case 'parents':
-      portrait = (
-        <>
-          {head(72, 62, 17, 0.82)}
-          {head(126, 62, 17)}
-          {head(100, 90, 12, 0.72)}
-          {body('M38 132c8-33 27-50 56-50s48 17 56 50H38Z')}
-          {body('M75 132c5-24 17-37 34-37s29 13 34 37H75Z', 0.14)}
-          {line('M62 43c10-14 28-14 39 0M111 43c10-14 28-14 39 0', 0.26)}
-          {line('M78 103c15 12 29 12 44 0', 0.34)}
-        </>
-      );
-      break;
-    case 'loved_ones':
-      portrait = (
-        <>
-          {head(62, 72, 13, 0.7)}
-          {head(92, 58, 16)}
-          {head(122, 68, 14, 0.78)}
-          {head(145, 82, 11, 0.62)}
-          {body('M35 134c9-34 31-52 65-52s56 18 65 52H35Z')}
-          {line('M58 102c27 20 58 20 84 0', 0.32)}
-          <path d="M100 112c-7-8-20-8-20 4 0 12 20 22 20 22s20-10 20-22c0-12-13-12-20-4Z" fill="currentColor" opacity="0.17" />
-        </>
-      );
-      break;
-    case 'partner':
-      portrait = (
-        <>
-          {head(80, 64, 16)}
-          {head(120, 64, 16, 0.78)}
-          {body('M50 128c10-28 30-42 58-42s48 14 58 42H50Z')}
-          {line('M94 94c8 8 20 8 28 0', 0.45)}
-          <path d="M100 112c-7-8-20-8-20 4 0 12 20 22 20 22s20-10 20-22c0-12-13-12-20-4Z" fill="currentColor" opacity="0.2" />
-        </>
-      );
-      break;
-    case 'mother':
-      portrait = (
-        <>
-          {head(96, 58, 18)}
-          {body('M52 132c7-36 26-55 50-55s43 19 50 55H52Z')}
-          {head(126, 94, 12, 0.62)}
-          {body('M106 132c4-22 16-32 30-32s26 10 30 32h-60Z', 0.16)}
-          {line('M72 44c16-18 48-18 64 0', 0.3)}
-        </>
-      );
-      break;
-    case 'father':
-      portrait = (
-        <>
-          {head(100, 58, 18)}
-          {body('M42 132c11-33 32-50 58-50s47 17 58 50H42Z')}
-          {line('M78 84h44', 0.35)}
-          {line('M72 108c18 10 38 10 56 0', 0.24)}
-        </>
-      );
-      break;
-    case 'children':
-      portrait = (
-        <>
-          {head(78, 70, 13)}
-          {head(104, 58, 15, 0.78)}
-          {head(130, 72, 13, 0.7)}
-          {body('M48 132c6-26 20-40 38-40s32 14 38 40H48Z')}
-          {body('M84 132c6-31 21-46 42-46s36 15 42 46H84Z', 0.14)}
-          {line('M70 48l-8-10M136 50l9-10M104 36v-13', 0.28)}
-        </>
-      );
-      break;
-    case 'friend':
-      portrait = (
-        <>
-          {head(76, 62, 16)}
-          {head(124, 62, 16, 0.78)}
-          {body('M42 132c10-30 29-45 56-45s46 15 56 45H42Z')}
-          {line('M82 94c12 12 24 12 36 0', 0.4)}
-          {line('M62 96c16 14 60 14 76 0', 0.18)}
-        </>
-      );
-      break;
-    case 'sibling':
-      portrait = (
-        <>
-          {head(86, 62, 16)}
-          {head(118, 78, 14, 0.76)}
-          {body('M54 132c8-31 25-48 52-48s44 17 52 48H54Z')}
-          {line('M72 98c20 14 38 14 58 0', 0.32)}
-          {line('M82 40c13-10 31-10 44 0', 0.22)}
-        </>
-      );
-      break;
-    case 'yourself':
-      portrait = (
-        <>
-          {head(100, 70, 20)}
-          {body('M54 134c9-34 26-51 46-51s37 17 46 51H54Z')}
-          {line('M100 34V20M74 44 64 32M126 44l10-12M66 82H50M134 82h16', 0.3)}
-          <circle cx="100" cy="72" r="44" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.16" />
-        </>
-      );
-      break;
-    default:
-      portrait = (
-        <>
-          {head(75, 70, 13)}
-          {head(103, 58, 16, 0.84)}
-          {head(131, 72, 13, 0.68)}
-          {body('M42 134c8-33 28-50 58-50s50 17 58 50H42Z')}
-          {line('M60 104c24 18 56 18 80 0', 0.28)}
-          <circle cx="151" cy="43" r="7" fill="currentColor" opacity="0.2" />
-        </>
-      );
-  }
-
-  return (
-    <svg viewBox="0 0 200 160" className="h-full w-full" role="img" aria-hidden="true">
-      <rect x="18" y="18" width="164" height="124" rx="28" fill="currentColor" opacity="0.07" />
-      <circle cx="100" cy="76" r="58" fill="currentColor" opacity="0.06" />
-      {portrait}
-    </svg>
   );
 };
 
@@ -532,20 +419,37 @@ const Home: React.FC = () => {
               <Link
                 key={item.label}
                 to={`/create?recipient=${item.slug}`}
-                className="group flex min-h-[360px] flex-col rounded-2xl border border-cream/15 bg-cream/10 p-4 transition-colors hover:bg-cream hover:text-ink"
+                className={`group relative flex min-h-[430px] flex-col overflow-hidden rounded-2xl border bg-cream/[0.08] p-3 text-cream transition-colors duration-300 hover:bg-cream hover:text-ink focus-visible:bg-cream focus-visible:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-mustard-soft motion-reduce:transition-none ${item.borderClass}`}
               >
-                <div className={`flex aspect-[4/3] items-center justify-center overflow-hidden rounded-xl ${item.tone}`}>
-                  <PeoplePortrait variant={item.visual} />
+                <span className={`absolute inset-x-5 top-0 h-1 rounded-b-full ${item.accentLine}`} aria-hidden="true" />
+                <div className="relative aspect-[4/5] overflow-hidden rounded-xl bg-ink/20">
+                  <img
+                    src={item.cover}
+                    alt={item.coverAlt}
+                    className={`h-full w-full object-cover saturate-[0.72] contrast-[0.92] brightness-[0.9] transition-[filter,transform] duration-500 ease-out group-hover:scale-[1.035] group-hover:saturate-100 group-hover:contrast-100 group-hover:brightness-100 group-focus-visible:scale-[1.035] group-focus-visible:saturate-100 group-focus-visible:contrast-100 group-focus-visible:brightness-100 group-active:saturate-100 group-active:contrast-100 group-active:brightness-100 motion-reduce:transform-none motion-reduce:transition-none ${item.coverPosition}`}
+                    loading="lazy"
+                  />
+                  <div
+                    className={`absolute inset-0 opacity-80 transition-opacity duration-500 group-hover:opacity-0 group-focus-visible:opacity-0 group-active:opacity-0 motion-reduce:transition-none ${item.washClass}`}
+                    aria-hidden="true"
+                  />
+                  <div
+                    className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-ink/55 to-transparent"
+                    aria-hidden="true"
+                  />
                 </div>
-                <p className="mt-5 font-label text-[10px] font-bold uppercase tracking-[0.16em] text-cream/55 group-hover:text-ink-muted">
+                <p className={`mt-5 font-label text-[10px] font-bold uppercase tracking-[0.16em] transition-colors ${item.eyebrowClass}`}>
                   {item.eyebrow}
                 </p>
                 <h3 className="mt-1 font-headline text-3xl italic leading-none">{item.label}</h3>
-                <p className="mt-3 text-sm leading-6 text-cream/70 group-hover:text-ink-soft">
+                <p className="mt-3 text-sm leading-6 text-cream/70 transition-colors group-hover:text-ink-soft group-focus-visible:text-ink-soft">
                   {item.caption}
                 </p>
-                <span className="mt-auto pt-6 font-label text-[10px] font-bold uppercase tracking-[0.16em] text-sage-soft group-hover:text-terracotta">
+                <span className={`mt-auto inline-flex items-center gap-2 pt-6 font-label text-[10px] font-bold uppercase tracking-[0.16em] transition-colors ${item.ctaClass}`}>
                   Start this brief
+                  <span className="material-symbols-outlined text-base transition-transform group-hover:translate-x-1 group-focus-visible:translate-x-1 motion-reduce:transition-none" aria-hidden="true">
+                    arrow_forward
+                  </span>
                 </span>
               </Link>
             ))}

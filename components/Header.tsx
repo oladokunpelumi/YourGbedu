@@ -89,9 +89,9 @@ const Header: React.FC = () => {
           <div className="flex items-center gap-2 md:hidden">
             <Link
               to="/create"
-              className="inline-flex min-h-11 items-center rounded-full bg-ink px-5 font-label text-[10px] font-bold uppercase tracking-[0.14em] text-cream transition-colors hover:bg-terracotta"
+              className="inline-flex min-h-11 items-center rounded-full bg-ink px-4 font-label text-[9px] font-bold uppercase tracking-[0.1em] text-cream transition-colors hover:bg-terracotta sm:px-5 sm:text-[10px] sm:tracking-[0.14em]"
             >
-              Create
+              Create Your Song
             </Link>
             <button
               type="button"
