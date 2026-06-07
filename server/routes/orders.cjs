@@ -4,6 +4,7 @@ const { randomUUID: uuidv4 } = require('crypto');
 const { z } = require('zod');
 const { requireAuth } = require('../middleware/auth.cjs');
 const { PRICING, isFastDelivery } = require('../pricing.cjs');
+const { quoteCheckout, parsePromoMetadata } = require('../promos.cjs');
 
 const PAYSTACK_BASE_URL = 'https://api.paystack.co';
 
@@ -18,6 +19,7 @@ async function verifyPaystackPayment(reference) {
     return {
         paid: !!(data.status && data.data?.status === 'success'),
         amount: data.data?.amount ?? null,
+        metadata: data.data?.metadata ?? {},
     };
 }
 
@@ -29,6 +31,7 @@ async function verifyStripePayment(sessionId) {
     return {
         paid: session.payment_status === 'paid',
         amount: session.amount_total ?? null,
+        metadata: session.metadata ?? {},
     };
 }
 
@@ -81,6 +84,14 @@ const CreateOrderSchema = z.object({
     fastDelivery: z.union([z.boolean(), z.string()]).optional(),
 });
 
+const FreeOrderSchema = CreateOrderSchema.omit({
+    stripeSessionId: true,
+    paystackReference: true,
+}).extend({
+    promoCode: z.string().min(1).max(100),
+    paymentProvider: z.enum(['paystack', 'stripe']).optional(),
+});
+
 function computeOrderProgress(order) {
     const createdAt = new Date(order.created_at);
     const deliveryDate = new Date(order.delivery_date);
@@ -131,6 +142,10 @@ function computeOrderProgress(order) {
         specialQualities: order.special_qualities || null,
         favoriteMemories: order.favorite_memories || null,
         specialMessage: order.special_message || null,
+        promoCodePreview: order.promo_code_preview || null,
+        promoDiscountPercent: order.promo_discount_percent || null,
+        originalAmount: order.original_amount || null,
+        discountedAmount: order.discounted_amount || null,
     };
 }
 
@@ -153,6 +168,95 @@ router.get('/track', requireAuth, (req, res) => {
     } catch (err) {
         console.error('Error fetching orders by email:', err);
         res.status(500).json({ error: 'Failed to fetch orders' });
+    }
+});
+
+// POST /api/orders/free — create an order with a one-time 100% promo code.
+router.post('/free', (req, res) => {
+    const parsed = FreeOrderSchema.safeParse(req.body);
+    if (!parsed.success) {
+        return res.status(400).json({ error: 'Invalid request data.', details: parsed.error.flatten() });
+    }
+
+    try {
+        const dbConn = getDb();
+        const data = parsed.data;
+
+        const createFreeOrder = dbConn.transaction((input) => {
+            const quote = quoteCheckout({
+                db: dbConn,
+                provider: input.paymentProvider || 'paystack',
+                fastDelivery: input.fastDelivery,
+                promoCode: input.promoCode,
+            });
+
+            if (!quote.promo || quote.promo.discountPercent !== 100 || quote.finalAmount !== 0 || !quote.promo.id) {
+                const err = new Error('This code is not eligible for free checkout.');
+                err.statusCode = 400;
+                throw err;
+            }
+
+            const id = uuidv4();
+            const now = new Date().toISOString();
+            const deliveryHours = isFastDelivery(input.fastDelivery) ? FAST_DELIVERY_HOURS : STANDARD_DELIVERY_HOURS;
+            const deliveryDate = new Date(Date.now() + deliveryHours * 60 * 60 * 1000).toISOString();
+
+            const redeemed = dbConn.prepare(`
+                UPDATE promo_codes
+                SET used_count = used_count + 1, used_at = ?, used_order_id = ?
+                WHERE id = ?
+                  AND disabled = 0
+                  AND (max_uses IS NULL OR used_count < max_uses)
+            `).run(now, id, quote.promo.id);
+
+            if (redeemed.changes === 0) {
+                const err = new Error('Promo code has already been used.');
+                err.statusCode = 409;
+                throw err;
+            }
+
+            dbConn.prepare(`
+                INSERT INTO orders (
+                    id, song_title, genre, mood, tempo, occasion, occasion_detail, story,
+                    status, created_at, delivery_date,
+                    stripe_session_id, paystack_reference, amount, customer_email,
+                    recipient_type, sender_name, voice_gender,
+                    special_qualities, favorite_memories, special_message,
+                    promo_code_id, promo_code_preview, promo_discount_percent,
+                    original_amount, discounted_amount
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'in_production', ?, ?, NULL, NULL, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+                id, input.songTitle || 'Custom Song', input.genre || '', input.mood || '', input.tempo || 100,
+                input.occasion || '', input.occasionDetail || '', input.story || '', now, deliveryDate,
+                input.customerEmail || null, input.recipientType || '', input.senderName || '',
+                input.voiceGender || '', input.specialQualities || '', input.favoriteMemories || '',
+                input.specialMessage || '', quote.promo.id, quote.promo.codePreview,
+                quote.promo.discountPercent, quote.originalAmount, quote.finalAmount
+            );
+
+            return dbConn.prepare('SELECT * FROM orders WHERE id = ?').get(id);
+        });
+
+        const order = createFreeOrder(data);
+        if (data.customerEmail) {
+            void getEmailModule().sendConfirmationEmail({
+                to: data.customerEmail,
+                orderId: order.id.slice(0, 8).toUpperCase(),
+                genre: data.genre,
+                mood: data.mood,
+                deliveryDate: order.delivery_date,
+                reference: order.promo_code_preview,
+                amountLabel: formatPaidAmount(0, data.paymentProvider === 'stripe' ? 'stripe' : 'paystack'),
+            });
+        }
+
+        res.status(201).json(computeOrderProgress(order));
+    } catch (err) {
+        if (!err.statusCode || err.statusCode >= 500) {
+            console.error('Error creating free order:', err);
+        }
+        res.status(err.statusCode || 500).json({ error: err.message || 'Failed to create free order' });
     }
 });
 
@@ -191,6 +295,8 @@ router.post('/', async (req, res) => {
     try {
         const dbConn = getDb();
         let verifiedAmount = null;
+        let paymentMetadata = {};
+        let paymentProvider = 'paystack';
 
         if (paystackReference) {
             const existing = dbConn.prepare('SELECT * FROM orders WHERE paystack_reference = ?').get(paystackReference);
@@ -201,6 +307,8 @@ router.post('/', async (req, res) => {
                 return res.status(402).json({ error: 'Payment not confirmed. Please wait a moment and try again.' });
             }
             verifiedAmount = payment.amount;
+            paymentMetadata = payment.metadata || {};
+            paymentProvider = 'paystack';
         }
 
         if (stripeSessionId) {
@@ -212,12 +320,15 @@ router.post('/', async (req, res) => {
                 return res.status(402).json({ error: 'Payment not confirmed. Please wait a moment and try again.' });
             }
             verifiedAmount = payment.amount;
+            paymentMetadata = payment.metadata || {};
+            paymentProvider = 'stripe';
         }
 
         const id = uuidv4();
         const createdAt = new Date().toISOString();
         const deliveryHours = isFastDelivery(fastDelivery) ? FAST_DELIVERY_HOURS : STANDARD_DELIVERY_HOURS;
         const deliveryDate = new Date(Date.now() + deliveryHours * 60 * 60 * 1000).toISOString();
+        const promo = parsePromoMetadata(paymentMetadata);
 
         dbConn.prepare(`
             INSERT INTO orders (
@@ -225,16 +336,20 @@ router.post('/', async (req, res) => {
                 status, created_at, delivery_date,
                 stripe_session_id, paystack_reference, amount, customer_email,
                 recipient_type, sender_name, voice_gender,
-                special_qualities, favorite_memories, special_message
+                special_qualities, favorite_memories, special_message,
+                promo_code_id, promo_code_preview, promo_discount_percent,
+                original_amount, discounted_amount
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'in_production', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
             id, songTitle || 'Custom Song', genre || '', mood || '', tempo || 100,
-            occasion || '', occasionDetail || '', story || '', createdAt, deliveryDate,
+            occasion || '', occasionDetail || '', story || '', 'in_production', createdAt, deliveryDate,
             stripeSessionId || null, paystackReference || null,
             verifiedAmount || PRICING.ngn.standardKobo,
             customerEmail || null, recipientType || '', senderName || '',
-            voiceGender || '', specialQualities || '', favoriteMemories || '', specialMessage || ''
+            voiceGender || '', specialQualities || '', favoriteMemories || '', specialMessage || '',
+            promo.promoCodeId, promo.promoCodePreview, promo.promoDiscountPercent,
+            promo.originalAmount, promo.discountedAmount
         );
 
         const order = dbConn.prepare('SELECT * FROM orders WHERE id = ?').get(id);
@@ -246,7 +361,7 @@ router.post('/', async (req, res) => {
                 mood,
                 deliveryDate,
                 reference: paystackReference || stripeSessionId,
-                amountLabel: formatPaidAmount(verifiedAmount, stripeSessionId ? 'stripe' : 'paystack'),
+                amountLabel: formatPaidAmount(verifiedAmount, paymentProvider),
             });
         }
         res.status(201).json(computeOrderProgress(order));

@@ -23,11 +23,13 @@ const TEST_JWT_SECRET = 'test-secret-for-testing-only-32chars!!';
 
 const require = createRequire(import.meta.url);
 const db = require('../db.cjs');
+const { createOneTimeFreeCode } = require('../promos.cjs');
 const emailModule = require('../email.cjs');
 const sendConfirmationEmailMock = vi.spyOn(emailModule, 'sendConfirmationEmail').mockResolvedValue(undefined);
 
 beforeEach(() => {
   db.prepare('DELETE FROM orders').run();
+  db.prepare('DELETE FROM promo_codes').run();
   db.prepare('DELETE FROM revoked_tokens').run();
   sendConfirmationEmailMock.mockClear();
   vi.stubGlobal('fetch', vi.fn(async () => ({
@@ -112,6 +114,67 @@ describe('POST /api/orders', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBeTruthy();
+  });
+});
+
+describe('POST /api/orders/free', () => {
+  it('creates an order with a one-time 100% promo code and marks it used', async () => {
+    const { default: supertest } = await import('supertest');
+    const promo = createOneTimeFreeCode(db);
+
+    const res = await supertest(app)
+      .post('/api/orders/free')
+      .send({
+        genre: 'Afro-R&B',
+        occasion: 'birthday',
+        customerEmail: 'free@example.com',
+        recipientType: 'Friend',
+        senderName: 'Sade',
+        paymentProvider: 'paystack',
+        promoCode: promo.code,
+      })
+      .set('Content-Type', 'application/json');
+
+    expect(res.status).toBe(201);
+    expect(res.body.amount).toBe(0);
+    expect(res.body.promoDiscountPercent).toBe(100);
+    expect(res.body.promoCodePreview).toBe(promo.codePreview);
+
+    const codeRow = db.prepare('SELECT used_count, used_order_id FROM promo_codes WHERE id = ?').get(promo.id);
+    expect(codeRow.used_count).toBe(1);
+    expect(codeRow.used_order_id).toBe(res.body.id);
+
+    const order = db.prepare('SELECT amount, promo_code_id, original_amount, discounted_amount FROM orders WHERE id = ?').get(res.body.id);
+    expect(order.amount).toBe(0);
+    expect(order.promo_code_id).toBe(promo.id);
+    expect(order.original_amount).toBe(6000000);
+    expect(order.discounted_amount).toBe(0);
+  });
+
+  it('does not allow a one-time free code to be reused', async () => {
+    const { default: supertest } = await import('supertest');
+    const promo = createOneTimeFreeCode(db);
+
+    const payload = {
+      genre: 'Gospel',
+      customerEmail: 'reuse@example.com',
+      paymentProvider: 'paystack',
+      promoCode: promo.code,
+    };
+
+    const first = await supertest(app)
+      .post('/api/orders/free')
+      .send(payload)
+      .set('Content-Type', 'application/json');
+    const second = await supertest(app)
+      .post('/api/orders/free')
+      .send(payload)
+      .set('Content-Type', 'application/json');
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(404);
+    const rows = db.prepare('SELECT id FROM orders WHERE promo_code_id = ?').all(promo.id);
+    expect(rows).toHaveLength(1);
   });
 });
 

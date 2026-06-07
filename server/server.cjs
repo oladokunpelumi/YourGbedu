@@ -41,6 +41,7 @@ const adminRouter = require('./routes/admin.cjs');
 const authRouter = require('./routes/auth.cjs');
 const geoRouter = require('./routes/geo.cjs');
 const brainstormRouter = require('./routes/brainstorm.cjs');
+const promosRouter = require('./routes/promos.cjs');
 
 const app = express();
 const PORT = process.env.PORT || process.env.SERVER_PORT || 3001;
@@ -160,6 +161,7 @@ app.use('/api/admin', adminRouter);
 app.use('/api/auth', authLimiter, authRouter);
 app.use('/api/geo', geoRouter);
 app.use('/api/brainstorm', brainstormRouter);
+app.use('/api/promos', promosRouter);
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {

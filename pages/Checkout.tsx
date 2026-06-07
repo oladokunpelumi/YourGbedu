@@ -20,6 +20,21 @@ interface CheckoutBrief {
   paymentProvider: PaymentProvider;
 }
 
+interface PromoQuote {
+  provider: PaymentProvider;
+  currency: 'NGN' | 'USD';
+  unit: 'kobo' | 'cents';
+  originalAmount: number;
+  currentAmount: number;
+  finalAmount: number;
+  promo: {
+    id: string | null;
+    type: 'standard' | 'one_time_free' | 'stored';
+    codePreview: string;
+    discountPercent: number;
+  } | null;
+}
+
 declare global {
   interface Window {
     PaystackPop?: new () => {
@@ -104,12 +119,27 @@ function formatOccasion(value: string) {
   return value.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function formatCheckoutAmount(provider: PaymentProvider, amount: number) {
+  if (provider === 'stripe') {
+    const value = amount / 100;
+    return `$${value.toLocaleString('en-US', {
+      minimumFractionDigits: amount % 100 === 0 ? 0 : 2,
+      maximumFractionDigits: 2,
+    })}`;
+  }
+  return `₦${(amount / 100).toLocaleString('en-NG', { maximumFractionDigits: 0 })}`;
+}
+
 const Checkout: React.FC = () => {
   const [brief] = useState<CheckoutBrief | null>(() => readBrief());
   const [status, setStatus] = useState<CheckoutStatus>('loading');
   const [message, setMessage] = useState('Preparing secure checkout...');
   const [orderId, setOrderId] = useState<string | null>(null);
-  const [hostedFallbackUrl, setHostedFallbackUrl] = useState<string | null>(null);
+  const [promoCode, setPromoCode] = useState('');
+  const [activePromoCode, setActivePromoCode] = useState('');
+  const [promoQuote, setPromoQuote] = useState<PromoQuote | null>(null);
+  const [promoMessage, setPromoMessage] = useState('');
+  const [isApplyingPromo, setIsApplyingPromo] = useState(false);
   const [paystackInline, setPaystackInline] = useState<{
     accessCode: string;
     reference: string;
@@ -124,6 +154,12 @@ const Checkout: React.FC = () => {
   const returnedStripeSessionId = query.get('session_id');
   const providerLabel = brief?.paymentProvider === 'stripe' ? 'Stripe' : 'Paystack';
   const price = brief ? getDiscountedPrice(brief.paymentProvider, brief.fastDelivery) : null;
+  const displayTotal = brief && promoQuote
+    ? formatCheckoutAmount(brief.paymentProvider, promoQuote.finalAmount)
+    : price?.current;
+  const displayOriginal = brief && promoQuote
+    ? formatCheckoutAmount(brief.paymentProvider, promoQuote.originalAmount)
+    : price?.original;
 
   const finalizeOrder = useCallback(
     (id: string) => {
@@ -220,30 +256,67 @@ const Checkout: React.FC = () => {
     [createOrderFromPayment]
   );
 
-  const startPaystackCheckout = useCallback(async () => {
+  const createFreeOrder = useCallback(
+    async (code: string) => {
+      if (!brief) return;
+
+      stripeCheckoutRef.current?.destroy();
+      stripeCheckoutRef.current = null;
+      setPaystackInline(null);
+      setStatus('processing');
+      setMessage('Promo accepted. Creating your order...');
+
+      const orderRes = await fetch('/api/orders/free', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          songTitle: 'Custom Song',
+          genre: brief.genre,
+          occasion: brief.occasion,
+          occasionDetail: brief.occasionDetail,
+          customerEmail: brief.customerEmail,
+          recipientType: brief.recipientType,
+          senderName: brief.senderName,
+          voiceGender: brief.voiceGender,
+          specialQualities: brief.specialQualities,
+          favoriteMemories: brief.favoriteMemories,
+          specialMessage: brief.specialMessage,
+          fastDelivery: brief.fastDelivery,
+          paymentProvider: brief.paymentProvider,
+          promoCode: code,
+        }),
+      });
+
+      const orderData = await orderRes.json().catch(() => null);
+      if (!orderRes.ok) {
+        throw new Error(getApiError(orderData, 'Could not complete free checkout.'));
+      }
+
+      finalizeOrder(orderData.id);
+    },
+    [brief, finalizeOrder]
+  );
+
+  const startPaystackCheckout = useCallback(async (code = '') => {
     if (!brief) return;
 
     setMessage('Preparing Paystack checkout...');
+    setPaystackInline(null);
     const response = await fetch('/api/paystack/initialize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: brief.customerEmail, metadata: brief }),
+      body: JSON.stringify({ email: brief.customerEmail, metadata: brief, promoCode: code || undefined }),
     });
     const data = await response.json().catch(() => null);
     if (!response.ok) throw new Error(getApiError(data, 'Could not initialize Paystack checkout.'));
 
-    if (data.authorization_url) setHostedFallbackUrl(data.authorization_url);
     if (!data.access_code) {
-      if (data.authorization_url) {
-        window.location.href = data.authorization_url;
-        return;
-      }
-      throw new Error('Paystack did not return an inline checkout access code.');
+      throw new Error('Paystack did not return an inline checkout access code. Please refresh and try again.');
     }
 
     await loadScript('https://js.paystack.co/v2/inline.js', 'paystack-inline-js');
     if (!window.PaystackPop) {
-      throw new Error('Paystack checkout could not be loaded.');
+      throw new Error('Paystack checkout could not be loaded. Please refresh and try again.');
     }
 
     setPaystackInline({
@@ -251,7 +324,7 @@ const Checkout: React.FC = () => {
       reference: data.reference,
     });
     setStatus('ready');
-    setMessage('Pay securely without leaving YourGbedu.');
+    setMessage('Your payment is encrypted and processed by Paystack. YourGbedu never stores card details.');
   }, [brief]);
 
   const launchPaystackCheckout = useCallback(() => {
@@ -307,41 +380,27 @@ const Checkout: React.FC = () => {
     }
   }, [paystackInline, verifyPaystack]);
 
-  const startStripeCheckout = useCallback(async () => {
+  const startStripeCheckout = useCallback(async (code = '') => {
     if (!brief) return;
 
-    const loadHostedFallback = async () => {
-      const fallbackRes = await fetch('/api/create-checkout-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...brief, embedded: false }),
-      });
-      const fallbackData = await fallbackRes.json().catch(() => null);
-      if (fallbackRes.ok && fallbackData?.url) setHostedFallbackUrl(fallbackData.url);
-    };
-
     setMessage('Preparing Stripe checkout...');
+    stripeCheckoutRef.current?.destroy();
+    stripeCheckoutRef.current = null;
     const response = await fetch('/api/create-checkout-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...brief, embedded: true }),
+      body: JSON.stringify({ ...brief, embedded: true, promoCode: code || undefined }),
     });
     const data = await response.json().catch(() => null);
     if (!response.ok) throw new Error(getApiError(data, 'Could not initialize Stripe checkout.'));
 
-    if (data.url) setHostedFallbackUrl(data.url);
     if (!data.clientSecret || !data.sessionId) {
-      if (data.url) {
-        window.location.href = data.url;
-        return;
-      }
-      throw new Error('Stripe did not return an embedded checkout session.');
+      throw new Error('Stripe did not return an embedded checkout session. Please refresh and try again.');
     }
 
     const stripe = await stripePromise;
     if (!stripe) {
-      await loadHostedFallback();
-      throw new Error('Stripe publishable key is not configured.');
+      throw new Error('Stripe is not configured. Please refresh and try again.');
     }
 
     let embeddedCheckout: StripeEmbeddedCheckout;
@@ -356,7 +415,6 @@ const Checkout: React.FC = () => {
         },
       });
     } catch (err) {
-      await loadHostedFallback();
       throw err;
     }
 
@@ -364,9 +422,74 @@ const Checkout: React.FC = () => {
     if (stripeMountRef.current) {
       embeddedCheckout.mount(stripeMountRef.current);
       setStatus('ready');
-      setMessage('Complete payment securely through Stripe.');
+      setMessage('Your payment is encrypted and processed by Stripe. YourGbedu never stores card details.');
     }
   }, [brief, verifyStripe]);
+
+  const restartCheckout = useCallback(
+    async (code = '') => {
+      if (!brief) return;
+      setStatus('loading');
+      const start = brief.paymentProvider === 'stripe' ? startStripeCheckout : startPaystackCheckout;
+      await start(code);
+    },
+    [brief, startPaystackCheckout, startStripeCheckout]
+  );
+
+  const applyPromoCode = useCallback(async () => {
+    if (!brief) return;
+    const code = promoCode.trim();
+    if (!code) {
+      setPromoMessage('Enter a promo code first.');
+      return;
+    }
+
+    setIsApplyingPromo(true);
+    setPromoMessage('');
+    try {
+      const response = await fetch('/api/promos/quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          promoCode: code,
+          paymentProvider: brief.paymentProvider,
+          fastDelivery: brief.fastDelivery,
+        }),
+      });
+      const quote = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(getApiError(quote, 'Could not apply promo code.'));
+
+      setPromoQuote(quote);
+      setActivePromoCode(code);
+      setPromoMessage(
+        quote.finalAmount === 0
+          ? '100% promo applied. Completing your order now.'
+          : `${quote.promo?.discountPercent || 0}% promo applied. Total updated to ${formatCheckoutAmount(brief.paymentProvider, quote.finalAmount)}.`
+      );
+
+      if (quote.finalAmount === 0) {
+        await createFreeOrder(code);
+      } else {
+        await restartCheckout(code);
+      }
+    } catch (err) {
+      setPromoQuote(null);
+      setActivePromoCode('');
+      setStatus('error');
+      setMessage(err instanceof Error ? err.message : 'Could not apply promo code.');
+      setPromoMessage(err instanceof Error ? err.message : 'Could not apply promo code.');
+    } finally {
+      setIsApplyingPromo(false);
+    }
+  }, [brief, createFreeOrder, promoCode, restartCheckout]);
+
+  const removePromoCode = useCallback(async () => {
+    setPromoCode('');
+    setActivePromoCode('');
+    setPromoQuote(null);
+    setPromoMessage('Promo removed. Checkout total restored.');
+    await restartCheckout('');
+  }, [restartCheckout]);
 
   useEffect(() => {
     if (initializedRef.current) return;
@@ -418,7 +541,7 @@ const Checkout: React.FC = () => {
             Finish your <em className="text-terracotta">song order</em>
           </h1>
           <p className="mt-4 text-sm leading-6 text-ink-soft">
-            Your payment is handled by {providerLabel}. YourGbedu never stores card details.
+            Your payment is encrypted and processed by {providerLabel}. YourGbedu never stores card details.
           </p>
 
           {brief && price && (
@@ -430,11 +553,14 @@ const Checkout: React.FC = () => {
                       Total
                     </p>
                     <p className="mt-1 font-headline text-4xl font-semibold text-ink">
-                      {price.current}
+                      {displayTotal}
                     </p>
+                    {displayOriginal && (
+                      <p className="mt-1 text-sm text-ink-muted line-through">{displayOriginal}</p>
+                    )}
                   </div>
                   <span className="rounded-full bg-mustard px-3 py-1 font-label text-[10px] font-bold uppercase tracking-[0.12em] text-ink">
-                    Discounted
+                    {promoQuote?.promo ? `${promoQuote.promo.discountPercent}% off` : 'Discounted'}
                   </span>
                 </div>
                 <p className="mt-3 text-sm text-ink-soft">
@@ -443,6 +569,55 @@ const Checkout: React.FC = () => {
                     : `Built and delivered in 48 hours via ${providerLabel}.`}
                 </p>
               </div>
+
+              <form
+                className="mt-4 rounded-2xl border border-line bg-ivory p-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void applyPromoCode();
+                }}
+              >
+                <label htmlFor="promo-code" className="font-label text-xs font-bold uppercase tracking-[0.16em] text-ink-muted">
+                  Promo code
+                </label>
+                <div className="mt-3 flex gap-2">
+                  <input
+                    id="promo-code"
+                    type="text"
+                    value={promoCode}
+                    onChange={(event) => setPromoCode(event.target.value)}
+                    disabled={status === 'success' || isApplyingPromo}
+                    className="min-w-0 flex-1 rounded-xl border border-line bg-cream px-3 py-2.5 font-body text-sm font-semibold uppercase text-ink placeholder:normal-case placeholder:text-ink-muted focus:border-terracotta focus:outline-none focus:ring-4 focus:ring-terracotta/10 disabled:opacity-60"
+                    placeholder="Enter code"
+                    autoComplete="off"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isApplyingPromo || status === 'success'}
+                    className="inline-flex min-h-11 items-center justify-center rounded-xl bg-ink px-4 font-label text-xs font-bold uppercase tracking-[0.12em] text-cream transition-colors hover:bg-terracotta disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isApplyingPromo ? 'Applying' : 'Apply'}
+                  </button>
+                </div>
+                {activePromoCode && promoQuote?.promo && (
+                  <button
+                    type="button"
+                    onClick={() => void removePromoCode()}
+                    disabled={isApplyingPromo || status === 'success'}
+                    className="mt-3 inline-flex items-center gap-1 rounded-full px-2 py-1 font-label text-xs font-bold text-ink-soft transition-colors hover:bg-cream hover:text-terracotta disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-sm" aria-hidden="true">
+                      close
+                    </span>
+                    Remove {promoQuote.promo.codePreview}
+                  </button>
+                )}
+                {promoMessage && (
+                  <p className={`mt-3 text-sm font-medium ${promoQuote?.promo ? 'text-sage-dark' : 'text-terracotta'}`}>
+                    {promoMessage}
+                  </p>
+                )}
+              </form>
 
               <dl className="mt-6 space-y-4 text-sm">
                 {[
@@ -482,7 +657,7 @@ const Checkout: React.FC = () => {
             <div>
               <p className="editorial-kicker">{providerLabel} payment</p>
               <h2 className="mt-3 font-headline text-4xl font-medium leading-none text-ink">
-                Complete payment
+                {promoQuote?.finalAmount === 0 ? 'Completing order' : 'Complete payment'}
               </h2>
             </div>
             <div className="inline-flex items-center gap-2 self-start rounded-full border border-line bg-ivory px-4 py-2 text-sm font-semibold text-ink-soft">
@@ -539,27 +714,23 @@ const Checkout: React.FC = () => {
                     disabled={status === 'processing'}
                     className="mt-6 rounded-full bg-terracotta px-8 py-4 font-label text-sm font-bold uppercase tracking-[0.12em] text-cream transition-colors hover:bg-terracotta-dark disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {status === 'processing' ? 'Processing...' : `Pay ${price?.current || ''}`}
+                    {status === 'processing' ? 'Processing...' : `Pay ${displayTotal || ''}`}
                   </button>
                 </div>
               )}
 
               {status === 'error' && (
                 <div role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
-                  {message}
+                  <p className="mb-3">{message}</p>
+                  <button
+                    type="button"
+                    onClick={() => void restartCheckout(activePromoCode)}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-4 py-2 font-label text-xs font-bold uppercase tracking-[0.12em] text-red-700 transition-colors hover:bg-red-200"
+                  >
+                    <span className="material-symbols-outlined text-sm" aria-hidden="true">refresh</span>
+                    Try again
+                  </button>
                 </div>
-              )}
-
-              {hostedFallbackUrl && (
-                <a
-                  href={hostedFallbackUrl}
-                  className="mt-5 inline-flex items-center gap-2 rounded-full px-3 py-2 font-label text-sm font-bold text-ink-soft transition-colors hover:bg-ivory hover:text-terracotta"
-                >
-                  Open secure hosted checkout instead
-                  <span className="material-symbols-outlined text-lg" aria-hidden="true">
-                    open_in_new
-                  </span>
-                </a>
               )}
             </>
           )}

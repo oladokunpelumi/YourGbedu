@@ -52,6 +52,19 @@ db.exec(`
     paystack_reference TEXT,
     amount INTEGER DEFAULT 30000
   );
+
+  CREATE TABLE IF NOT EXISTS promo_codes (
+    id TEXT PRIMARY KEY,
+    code_hash TEXT UNIQUE NOT NULL,
+    code_preview TEXT NOT NULL,
+    discount_percent INTEGER NOT NULL,
+    max_uses INTEGER,
+    used_count INTEGER DEFAULT 0,
+    disabled INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL,
+    used_at TEXT,
+    used_order_id TEXT
+  );
 `);
 
 // Safe migrations for new columns
@@ -64,6 +77,11 @@ try { db.exec("ALTER TABLE orders ADD COLUMN favorite_memories TEXT"); } catch {
 try { db.exec("ALTER TABLE orders ADD COLUMN special_message TEXT"); } catch { /* already migrated */ }
 try { db.exec("ALTER TABLE orders ADD COLUMN customer_email TEXT"); } catch { /* already migrated */ }
 try { db.exec("ALTER TABLE orders ADD COLUMN ai_brief TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE orders ADD COLUMN promo_code_id TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE orders ADD COLUMN promo_code_preview TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE orders ADD COLUMN promo_discount_percent INTEGER"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE orders ADD COLUMN original_amount INTEGER"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE orders ADD COLUMN discounted_amount INTEGER"); } catch { /* already migrated */ }
 try { db.exec("ALTER TABLE songs ADD COLUMN sort_order INTEGER DEFAULT 99"); } catch { /* already migrated */ }
 
 // Seed songs if table is empty
@@ -227,6 +245,8 @@ try {
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_orders_customer_email ON orders(customer_email)'); } catch { /* best effort index */ }
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_orders_paystack_reference ON orders(paystack_reference)'); } catch { /* best effort index */ }
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_orders_stripe_session_id ON orders(stripe_session_id)'); } catch { /* best effort index */ }
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_promo_codes_code_hash ON promo_codes(code_hash)'); } catch { /* best effort index */ }
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_promo_codes_used_order_id ON promo_codes(used_order_id)'); } catch { /* best effort index */ }
 
 // ── JWT revocation table ──────────────────────────────────────────────────────
 db.exec(`

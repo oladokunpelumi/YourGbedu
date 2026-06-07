@@ -3,12 +3,14 @@ const PRICING = {
         standardKobo: 3_000_000, // ₦30,000 discounted from ₦60,000
         standardOriginalKobo: 6_000_000,
         fastDeliveryKobo: 5_000_000, // ₦50,000 discounted priority price
+        fastDeliveryOriginalKobo: 8_000_000,
         fastDeliveryUpgradeKobo: 2_000_000,
     },
     usd: {
         standardCents: 2_500, // $25 discounted from $50
         standardOriginalCents: 5_000,
         fastDeliveryCents: 4_000, // $40 discounted priority price
+        fastDeliveryOriginalCents: 6_500,
         fastDeliveryUpgradeCents: 1_500,
     },
 };
@@ -23,15 +25,29 @@ function getPaystackAmountKobo(metadata = {}) {
         : PRICING.ngn.standardKobo;
 }
 
+function getPaystackOriginalAmountKobo(metadata = {}) {
+    return isFastDelivery(metadata.fastDelivery)
+        ? PRICING.ngn.fastDeliveryOriginalKobo
+        : PRICING.ngn.standardOriginalKobo;
+}
+
 function getStripeAmountCents(fastDelivery) {
     return isFastDelivery(fastDelivery)
         ? PRICING.usd.fastDeliveryCents
         : PRICING.usd.standardCents;
 }
 
+function getStripeOriginalAmountCents(fastDelivery) {
+    return isFastDelivery(fastDelivery)
+        ? PRICING.usd.fastDeliveryOriginalCents
+        : PRICING.usd.standardOriginalCents;
+}
+
 module.exports = {
     PRICING,
     isFastDelivery,
     getPaystackAmountKobo,
+    getPaystackOriginalAmountKobo,
     getStripeAmountCents,
+    getStripeOriginalAmountCents,
 };

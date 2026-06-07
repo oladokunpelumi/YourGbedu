@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const { generateToken, requireAdmin, revokeToken, COOKIE_OPTS } = require('../middleware/auth.cjs');
+const { createOneTimeFreeCode, listOneTimeCodes, disablePromoCode } = require('../promos.cjs');
 
 // Strict limiter for admin login — same as authLimiter (10 attempts per hour)
 const loginLimiter = rateLimit({
@@ -59,6 +60,12 @@ function toProductionJson(order) {
         status: order.status,
         paymentReference: order.paystack_reference || order.stripe_session_id || null,
         amount: order.amount,
+        promo: {
+            codePreview: order.promo_code_preview || null,
+            discountPercent: order.promo_discount_percent || null,
+            originalAmount: order.original_amount || null,
+            discountedAmount: order.discounted_amount || null,
+        },
         deliveryDate: order.delivery_date,
         customerEmail: order.customer_email || null,
         form: {
@@ -215,6 +222,39 @@ router.get('/stats', requireAdmin, (req, res) => {
     } catch (err) {
         console.error('Admin: Error fetching stats:', err);
         res.status(500).json({ error: 'Failed to fetch stats' });
+    }
+});
+
+// GET /api/admin/promo-codes — list one-time promo codes without raw code values
+router.get('/promo-codes', requireAdmin, (req, res) => {
+    try {
+        res.json({ data: listOneTimeCodes(getDb()) });
+    } catch (err) {
+        console.error('Admin: Error listing promo codes:', err);
+        res.status(500).json({ error: 'Failed to list promo codes' });
+    }
+});
+
+// POST /api/admin/promo-codes — generate a one-time 100% off code
+router.post('/promo-codes', requireAdmin, (req, res) => {
+    try {
+        const code = createOneTimeFreeCode(getDb());
+        res.status(201).json(code);
+    } catch (err) {
+        console.error('Admin: Error generating promo code:', err);
+        res.status(500).json({ error: 'Failed to generate promo code' });
+    }
+});
+
+// PATCH /api/admin/promo-codes/:id/disable — disable an unused one-time code
+router.patch('/promo-codes/:id/disable', requireAdmin, (req, res) => {
+    try {
+        const disabled = disablePromoCode(getDb(), req.params.id);
+        if (!disabled) return res.status(404).json({ error: 'Promo code not found or already used.' });
+        res.json({ disabled: true });
+    } catch (err) {
+        console.error('Admin: Error disabling promo code:', err);
+        res.status(500).json({ error: 'Failed to disable promo code' });
     }
 });
 

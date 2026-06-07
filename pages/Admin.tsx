@@ -24,6 +24,23 @@ interface Order {
   special_message: string;
   customer_email: string;
   ai_brief: string;
+  promo_code_preview: string | null;
+  promo_discount_percent: number | null;
+  original_amount: number | null;
+  discounted_amount: number | null;
+}
+
+interface PromoCode {
+  id: string;
+  code?: string;
+  codePreview: string;
+  discountPercent: number;
+  maxUses: number | null;
+  usedCount: number;
+  disabled: number;
+  createdAt: string;
+  usedAt: string | null;
+  usedOrderId: string | null;
 }
 
 interface Pagination {
@@ -82,6 +99,12 @@ function buildOrderExport(order: Order) {
     status: order.status,
     paymentReference: order.paystack_reference || order.stripe_session_id || null,
     amount: order.amount,
+    promo: {
+      codePreview: order.promo_code_preview || null,
+      discountPercent: order.promo_discount_percent || null,
+      originalAmount: order.original_amount || null,
+      discountedAmount: order.discounted_amount || null,
+    },
     deliveryDate: order.delivery_date,
     customerEmail: order.customer_email || null,
     form: {
@@ -129,6 +152,10 @@ const Admin: React.FC = () => {
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [adminMessage, setAdminMessage] = useState('');
+  const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
+  const [generatedPromoCode, setGeneratedPromoCode] = useState<string | null>(null);
+  const [isGeneratingPromo, setIsGeneratingPromo] = useState(false);
+  const [disablingPromoId, setDisablingPromoId] = useState<string | null>(null);
 
   const currentPendingBriefs = useMemo(
     () => orders.filter((order) => !order.ai_brief?.trim()).length,
@@ -161,20 +188,26 @@ const Admin: React.FC = () => {
         if (statusFilter) params.set('status', statusFilter);
         if (search) params.set('search', search);
 
-        const [ordersRes, statsRes] = await Promise.all([
+        const [ordersRes, statsRes, promoRes] = await Promise.all([
           adminFetch(`/api/admin/orders?${params}`),
           adminFetch('/api/admin/stats'),
+          adminFetch('/api/admin/promo-codes'),
         ]);
 
-        if (ordersRes.status === 401 || ordersRes.status === 403) {
+        if (ordersRes.status === 401 || ordersRes.status === 403 || promoRes.status === 401 || promoRes.status === 403) {
           logout();
           return;
         }
 
-        const [ordersPayload, statsData] = await Promise.all([ordersRes.json(), statsRes.json()]);
+        const [ordersPayload, statsData, promoPayload] = await Promise.all([
+          ordersRes.json(),
+          statsRes.json(),
+          promoRes.json(),
+        ]);
         setOrders(ordersPayload.data ?? ordersPayload);
         setPagination(ordersPayload.pagination ?? null);
         setStats(statsData);
+        setPromoCodes(promoPayload.data ?? []);
       } catch (err) {
         console.error('Failed to fetch admin data:', err);
         setAdminMessage('Could not load the order queue.');
@@ -273,6 +306,55 @@ const Admin: React.FC = () => {
     } catch (err) {
       console.error('Failed to export queue:', err);
       setAdminMessage(err instanceof Error ? err.message : 'Could not export the order queue.');
+    }
+  };
+
+  const handleGeneratePromoCode = async () => {
+    setIsGeneratingPromo(true);
+    setGeneratedPromoCode(null);
+    setAdminMessage('');
+    try {
+      const res = await adminFetch('/api/admin/promo-codes', { method: 'POST' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'Promo code generation failed');
+
+      setGeneratedPromoCode(data.code);
+      setPromoCodes((current) => [data, ...current]);
+      setAdminMessage('Free order code generated. Copy it now; it will only be shown once.');
+    } catch (err) {
+      console.error('Failed to generate promo code:', err);
+      setAdminMessage(err instanceof Error ? err.message : 'Could not generate a promo code.');
+    } finally {
+      setIsGeneratingPromo(false);
+    }
+  };
+
+  const handleCopyPromoCode = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setAdminMessage('Promo code copied.');
+    } catch {
+      setAdminMessage('Could not copy automatically. Select the code and copy it manually.');
+    }
+  };
+
+  const handleDisablePromoCode = async (id: string) => {
+    setDisablingPromoId(id);
+    setAdminMessage('');
+    try {
+      const res = await adminFetch(`/api/admin/promo-codes/${id}/disable`, { method: 'PATCH' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'Promo code disable failed');
+
+      setPromoCodes((current) =>
+        current.map((code) => (code.id === id ? { ...code, disabled: 1 } : code))
+      );
+      setAdminMessage('Promo code disabled.');
+    } catch (err) {
+      console.error('Failed to disable promo code:', err);
+      setAdminMessage(err instanceof Error ? err.message : 'Could not disable the promo code.');
+    } finally {
+      setDisablingPromoId(null);
     }
   };
 
@@ -418,6 +500,94 @@ const Admin: React.FC = () => {
         <section className="overflow-hidden rounded-2xl border border-line bg-cream">
           <div className="flex flex-col gap-4 border-b border-line px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
+              <h2 className="font-headline text-3xl font-medium leading-none text-ink">Promo Codes</h2>
+              <p className="mt-1 text-sm text-ink-soft">
+                Generate one-time 100% off codes for free orders.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleGeneratePromoCode}
+              disabled={isGeneratingPromo}
+              className={adminActionClass}
+            >
+              <span className={`material-symbols-outlined text-base ${isGeneratingPromo ? 'animate-spin' : ''}`}>
+                {isGeneratingPromo ? 'progress_activity' : 'add'}
+              </span>
+              Generate Free Code
+            </button>
+          </div>
+
+          {generatedPromoCode && (
+            <div className="border-b border-line bg-sage-pale px-5 py-4">
+              <p className="font-label text-[10px] font-bold uppercase tracking-[0.16em] text-sage-dark">
+                Newly generated
+              </p>
+              <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
+                <code className="rounded-xl border border-sage-soft bg-cream px-4 py-3 font-mono text-sm font-bold text-ink">
+                  {generatedPromoCode}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => handleCopyPromoCode(generatedPromoCode)}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-ink px-4 font-label text-xs font-bold uppercase tracking-[0.12em] text-cream transition-colors hover:bg-terracotta"
+                >
+                  <span className="material-symbols-outlined text-base">content_copy</span>
+                  Copy Code
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="divide-y divide-line">
+            {promoCodes.length === 0 ? (
+              <div className="px-5 py-8 text-sm text-ink-muted">No one-time codes yet.</div>
+            ) : (
+              promoCodes.slice(0, 8).map((code) => {
+                const isUsed = code.usedCount > 0;
+                const isDisabled = Boolean(code.disabled);
+                return (
+                  <div key={code.id} className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-center md:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-sm font-bold text-ink">{code.codePreview}</span>
+                        <span className={`rounded-full border px-2 py-0.5 text-xs font-bold ${
+                          isUsed
+                            ? 'border-sage-soft bg-sage-pale text-sage-dark'
+                            : isDisabled
+                              ? 'border-red-200 bg-red-50 text-red-700'
+                              : 'border-mustard-soft bg-mustard-pale text-[#6F521F]'
+                        }`}>
+                          {isUsed ? 'used' : isDisabled ? 'disabled' : 'unused'}
+                        </span>
+                        <span className="rounded-full bg-ivory px-2 py-0.5 text-xs font-bold text-ink-soft">
+                          {code.discountPercent}% off
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-ink-muted">
+                        Created {formatDate(code.createdAt)}
+                        {code.usedAt ? ` · Used ${formatDate(code.usedAt)}` : ''}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDisablePromoCode(code.id)}
+                      disabled={isUsed || isDisabled || disablingPromoId === code.id}
+                      className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-line-strong px-4 font-label text-xs font-bold uppercase tracking-[0.12em] text-ink-soft transition-colors hover:border-terracotta hover:text-terracotta disabled:cursor-not-allowed disabled:opacity-45"
+                    >
+                      <span className="material-symbols-outlined text-base">block</span>
+                      Disable
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border border-line bg-cream">
+          <div className="flex flex-col gap-4 border-b border-line px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
               <h2 className="font-headline text-3xl font-medium leading-none text-ink">Order Queue</h2>
               <p className="mt-1 text-sm text-ink-soft">
                 Expand an order to review the brief, export JSON, or generate the production brief.
@@ -511,6 +681,11 @@ const Admin: React.FC = () => {
                             <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${hasBrief ? 'bg-sage-pale text-sage-dark' : 'bg-mustard-pale text-[#6F521F]'}`}>
                               {hasBrief ? 'AI brief ready' : 'AI brief pending'}
                             </span>
+                            {order.promo_code_preview && (
+                              <span className="rounded-full bg-ivory px-2 py-0.5 text-xs font-bold text-terracotta">
+                                promo {order.promo_discount_percent || 0}% off
+                              </span>
+                            )}
                           </div>
                           <p className="mt-1 truncate text-sm text-ink-soft">
                             {orderSummary.join(' · ')}
@@ -576,6 +751,9 @@ const Admin: React.FC = () => {
                             ['Delivery', formatDate(order.delivery_date)],
                             ['Email', order.customer_email],
                             ['Payment Ref', order.paystack_reference || order.stripe_session_id],
+                            ['Promo', order.promo_code_preview ? `${order.promo_code_preview} (${order.promo_discount_percent || 0}% off)` : ''],
+                            ['Original Amount', order.original_amount ? formatAmount(order.original_amount) : ''],
+                            ['Discounted Amount', order.discounted_amount !== null && order.discounted_amount !== undefined ? formatAmount(order.discounted_amount) : ''],
                             ['Created', formatDate(order.created_at)],
                           ].map(([label, value]) => (
                             <div key={label}>

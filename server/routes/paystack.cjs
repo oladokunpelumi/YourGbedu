@@ -3,13 +3,15 @@ const router = express.Router();
 const crypto = require('crypto');
 const uuidv4 = () => crypto.randomUUID();
 const { z } = require('zod');
-const { getPaystackAmountKobo, isFastDelivery } = require('../pricing.cjs');
+const { isFastDelivery } = require('../pricing.cjs');
 const { getClientUrlFromRequest } = require('../client-url.cjs');
+const { quoteCheckout, quoteMetadata, parsePromoMetadata } = require('../promos.cjs');
 
 const InitializeSchema = z.object({
     email: z.string().email().optional().or(z.literal('')),
     // amount is intentionally absent — price is always SONG_PRICE_KOBO, never client-controlled
     metadata: z.record(z.string(), z.unknown()).optional(),
+    promoCode: z.string().max(100).optional(),
 });
 
 const PAYSTACK_BASE_URL = 'https://api.paystack.co';
@@ -32,6 +34,27 @@ function getPaystackSecretKey() {
     return process.env.PAYSTACK_SECRET_KEY;
 }
 
+function safeMetadataValue(value) {
+    return String(value || '').substring(0, 500);
+}
+
+function buildCheckoutMetadata(metadata, customerEmail, quote) {
+    return {
+        customerEmail,
+        recipientType: safeMetadataValue(metadata.recipientType),
+        senderName: safeMetadataValue(metadata.senderName),
+        genre: safeMetadataValue(metadata.genre),
+        occasion: safeMetadataValue(metadata.occasion),
+        occasionDetail: safeMetadataValue(metadata.occasionDetail),
+        voiceGender: safeMetadataValue(metadata.voiceGender),
+        specialQualities: safeMetadataValue(metadata.specialQualities),
+        favoriteMemories: safeMetadataValue(metadata.favoriteMemories),
+        specialMessage: safeMetadataValue(metadata.specialMessage),
+        fastDelivery: isFastDelivery(metadata.fastDelivery) ? 'true' : 'false',
+        ...quoteMetadata(quote),
+    };
+}
+
 // ── Initialize a Paystack transaction ─────────────────────────────────────────
 router.post('/initialize', async (req, res) => {
     const parsed = InitializeSchema.safeParse(req.body);
@@ -40,10 +63,19 @@ router.post('/initialize', async (req, res) => {
     }
 
     try {
-        const { email, metadata } = parsed.data;
+        const { email, metadata, promoCode } = parsed.data;
         const customerEmail = email || 'guest@yourgbedu.com';
         const resolvedMetadata = metadata || {};
-        const amount = getPaystackAmountKobo(resolvedMetadata);
+        const quote = quoteCheckout({
+            db: getDb(),
+            provider: 'paystack',
+            fastDelivery: resolvedMetadata.fastDelivery,
+            promoCode,
+        });
+        if (quote.finalAmount <= 0) {
+            return res.status(400).json({ error: 'This promo code should be completed through free checkout.' });
+        }
+        const amount = quote.finalAmount;
         const paystackSecret = getPaystackSecretKey();
 
         if (!paystackSecret) {
@@ -61,7 +93,7 @@ router.post('/initialize', async (req, res) => {
                 amount,
                 currency: 'NGN',
                 callback_url: `${getClientUrlFromRequest(req)}/#/payment-success`,
-                metadata: { ...resolvedMetadata, customerEmail },
+                metadata: buildCheckoutMetadata(resolvedMetadata, customerEmail, quote),
             }),
         });
 
@@ -77,9 +109,9 @@ router.post('/initialize', async (req, res) => {
             console.error('Paystack Initialization Error:', data.message);
             res.status(400).json({ error: data.message });
         }
-    } catch {
-        console.error('Error initializing Paystack transaction');
-        res.status(500).json({ error: 'Failed to initialize transaction' });
+    } catch (err) {
+        console.error('Error initializing Paystack transaction', err);
+        res.status(err.statusCode || 500).json({ error: err.message || 'Failed to initialize transaction' });
     }
 });
 
@@ -156,6 +188,7 @@ router.post('/webhook', (req, res) => {
     if (event.event === 'charge.success') {
         const dbConn = getDb();
         const { reference, metadata, customer, amount } = event.data;
+        const promo = parsePromoMetadata(metadata || {});
 
         const existing = dbConn.prepare('SELECT id FROM orders WHERE paystack_reference = ?').get(reference);
         if (existing) {
@@ -178,9 +211,11 @@ router.post('/webhook', (req, res) => {
                     id, song_title, genre, mood, tempo, occasion, occasion_detail, story, status,
                     created_at, delivery_date, paystack_reference, amount,
                     recipient_type, sender_name, voice_gender,
-                    special_qualities, favorite_memories, special_message, customer_email
+                    special_qualities, favorite_memories, special_message, customer_email,
+                    promo_code_id, promo_code_preview, promo_discount_percent,
+                    original_amount, discounted_amount
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'in_production', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'in_production', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).run(
                 id,
                 'Custom Song',
@@ -199,7 +234,12 @@ router.post('/webhook', (req, res) => {
                 metadata?.specialQualities || '',
                 metadata?.favoriteMemories || '',
                 metadata?.specialMessage || '',
-                metadata?.customerEmail || customer?.email || null
+                metadata?.customerEmail || customer?.email || null,
+                promo.promoCodeId,
+                promo.promoCodePreview,
+                promo.promoDiscountPercent,
+                promo.originalAmount,
+                promo.discountedAmount
             );
 
             console.log(`[Webhook] Order created`);
