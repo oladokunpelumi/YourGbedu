@@ -47,7 +47,12 @@ const inMemoryDb = await (async () => {
       voice_gender TEXT,
       special_qualities TEXT,
       favorite_memories TEXT,
-      special_message TEXT
+      special_message TEXT,
+      promo_code_id TEXT,
+      promo_code_preview TEXT,
+      promo_discount_percent INTEGER,
+      original_amount INTEGER,
+      discounted_amount INTEGER
     );
     CREATE TABLE IF NOT EXISTS songs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,6 +70,18 @@ const inMemoryDb = await (async () => {
     CREATE TABLE IF NOT EXISTS revoked_tokens (
       jti TEXT PRIMARY KEY,
       expires_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS promo_codes (
+      id TEXT PRIMARY KEY,
+      code_hash TEXT UNIQUE NOT NULL,
+      code_preview TEXT NOT NULL,
+      discount_percent INTEGER NOT NULL,
+      max_uses INTEGER,
+      used_count INTEGER DEFAULT 0,
+      disabled INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL,
+      used_at TEXT,
+      used_order_id TEXT
     );
   `);
   return db;
@@ -181,6 +198,45 @@ describe('GET /api/admin/orders (protected)', () => {
     expect(res.status).toBe(200);
     expect(res.body.data).toBeDefined();
     expect(Array.isArray(res.body.data)).toBe(true);
+  });
+});
+
+describe('Admin promo code management', () => {
+  it('generates, lists, and disables one-time free codes', async () => {
+    const { default: supertest } = await import('supertest');
+    routeDb.prepare('DELETE FROM promo_codes').run();
+
+    const loginRes = await supertest(app)
+      .post('/api/admin/login')
+      .send({ username: 'testadmin', password: 'supersecret_test_password_123!' })
+      .set('Content-Type', 'application/json');
+    const cookie = loginRes.headers['set-cookie'];
+
+    const created = await supertest(app)
+      .post('/api/admin/promo-codes')
+      .set('Cookie', cookie);
+
+    expect(created.status).toBe(201);
+    expect(created.body.code).toMatch(/^FREE-[A-F0-9]{12}$/);
+    expect(created.body.codePreview).toBeTruthy();
+    expect(created.body.discountPercent).toBe(100);
+
+    const listed = await supertest(app)
+      .get('/api/admin/promo-codes')
+      .set('Cookie', cookie);
+
+    expect(listed.status).toBe(200);
+    expect(listed.body.data).toHaveLength(1);
+    expect(listed.body.data[0].codePreview).toBe(created.body.codePreview);
+    expect(listed.body.data[0].code).toBeUndefined();
+
+    const disabled = await supertest(app)
+      .patch(`/api/admin/promo-codes/${created.body.id}/disable`)
+      .set('Cookie', cookie);
+
+    expect(disabled.status).toBe(200);
+    const row = routeDb.prepare('SELECT disabled FROM promo_codes WHERE id = ?').get(created.body.id);
+    expect(row.disabled).toBe(1);
   });
 });
 

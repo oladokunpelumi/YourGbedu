@@ -92,6 +92,40 @@ describe('POST /api/paystack/initialize', () => {
       reference: 'ref_inline_123',
     });
   });
+
+  it('uses server-calculated promo pricing and ignores client amount', async () => {
+    const { default: supertest } = await import('supertest');
+    const fetchMock = vi.fn(async () => ({
+      json: async () => ({
+        status: true,
+        data: {
+          authorization_url: 'https://checkout.paystack.com/mock',
+          access_code: 'access_mock_promo',
+          reference: 'ref_inline_promo',
+        },
+      }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await supertest(app)
+      .post('/api/paystack/initialize')
+      .send({
+        email: 'promo@test.com',
+        amount: 1,
+        promoCode: 'yourgbedu50',
+        metadata: { genre: 'Afro-Beats', fastDelivery: true, promoDiscountPercent: '100' },
+      })
+      .set('Content-Type', 'application/json');
+
+    expect(res.status).toBe(200);
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.amount).toBe(4000000);
+    expect(body.metadata).toMatchObject({
+      promoDiscountPercent: '50',
+      originalAmount: '8000000',
+      discountedAmount: '4000000',
+    });
+  });
 });
 
 describe('POST /api/paystack/webhook — signature verification', () => {

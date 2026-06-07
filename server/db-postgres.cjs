@@ -100,7 +100,25 @@ async function initSchema() {
             favorite_memories TEXT,
             special_message TEXT,
             customer_email TEXT,
-            ai_brief TEXT
+            ai_brief TEXT,
+            promo_code_id TEXT,
+            promo_code_preview TEXT,
+            promo_discount_percent INTEGER,
+            original_amount INTEGER,
+            discounted_amount INTEGER
+        );
+
+        CREATE TABLE IF NOT EXISTS promo_codes (
+            id TEXT PRIMARY KEY,
+            code_hash TEXT UNIQUE NOT NULL,
+            code_preview TEXT NOT NULL,
+            discount_percent INTEGER NOT NULL,
+            max_uses INTEGER,
+            used_count INTEGER DEFAULT 0,
+            disabled INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            used_at TEXT,
+            used_order_id TEXT
         );
 
         CREATE TABLE IF NOT EXISTS magic_links (
@@ -118,6 +136,13 @@ async function initSchema() {
     `);
 
     await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS occasion_detail TEXT');
+    await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_code_id TEXT');
+    await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_code_preview TEXT');
+    await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_discount_percent INTEGER');
+    await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS original_amount INTEGER');
+    await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS discounted_amount INTEGER');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_promo_codes_code_hash ON promo_codes(code_hash)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_promo_codes_used_order_id ON promo_codes(used_order_id)');
     console.log('[PostgreSQL] Schema initialized');
 
     // Seed sample songs if the table is empty

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { getStripeAmountCents } = require('../pricing.cjs');
 const { getClientUrlFromRequest } = require('../client-url.cjs');
+const { quoteCheckout, quoteMetadata } = require('../promos.cjs');
 
 let stripeClient;
 function getStripeClient() {
@@ -9,6 +9,12 @@ function getStripeClient() {
         stripeClient = require('stripe')(process.env.STRIPE_SECRET_KEY);
     }
     return stripeClient;
+}
+
+let db;
+function getDb() {
+    if (!db) db = require('../db.cjs');
+    return db;
 }
 
 // POST /api/create-checkout-session
@@ -28,11 +34,21 @@ router.post('/create-checkout-session', async (req, res) => {
             specialMessage,
             fastDelivery,
             embedded,
-            // amount is intentionally not destructured — price is always SONG_PRICE_CENTS
+            promoCode,
+            // amount is intentionally not destructured — price is always server-calculated
         } = req.body;
 
         const resolvedEmail = email || customerEmail || 'guest@yourgbedu.com';
-        const unitAmount = getStripeAmountCents(fastDelivery);
+        const quote = quoteCheckout({
+            db: getDb(),
+            provider: 'stripe',
+            fastDelivery,
+            promoCode,
+        });
+        if (quote.finalAmount <= 0) {
+            return res.status(400).json({ error: 'This promo code should be completed through free checkout.' });
+        }
+        const unitAmount = quote.finalAmount;
         const clientUrl = getClientUrlFromRequest(req);
 
         const metadata = {
@@ -47,6 +63,7 @@ router.post('/create-checkout-session', async (req, res) => {
             favoriteMemories: (favoriteMemories || '').substring(0, 500),
             specialMessage: (specialMessage || '').substring(0, 500),
             fastDelivery: fastDelivery ? 'true' : 'false',
+            ...quoteMetadata(quote),
         };
 
         const sessionOptions = {
@@ -85,7 +102,7 @@ router.post('/create-checkout-session', async (req, res) => {
         res.json({ url: session.url, sessionId: session.id, clientSecret: session.client_secret });
     } catch (err) {
         console.error('[Stripe] Checkout session error:', err);
-        res.status(500).json({ error: 'Failed to create checkout session' });
+        res.status(err.statusCode || 500).json({ error: err.message || 'Failed to create checkout session' });
     }
 });
 
