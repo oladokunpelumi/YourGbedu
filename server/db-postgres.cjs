@@ -163,6 +163,9 @@ async function initSchema() {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_promo_codes_code_hash ON promo_codes(code_hash)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_promo_codes_used_order_id ON promo_codes(used_order_id)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_subscribers_email ON subscribers(email)');
+    // Normalize historical customer_email casing so case-insensitive lookups always match.
+    await pool.query("UPDATE orders SET customer_email = LOWER(TRIM(customer_email)) WHERE customer_email IS NOT NULL AND customer_email != LOWER(TRIM(customer_email))");
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_orders_customer_email_lower ON orders(LOWER(TRIM(customer_email)))');
     console.log('[PostgreSQL] Schema initialized');
 
     // Seed sample songs if the table is empty

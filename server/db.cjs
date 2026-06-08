@@ -186,6 +186,14 @@ if (songCount.count === 0) {
 
 // ── Live data migrations (run on every startup to fix existing databases) ──
 
+// Normalize customer_email so case-insensitive lookups (auth magic links,
+// subscriber → order linking) match consistently across mixed-case historical data.
+try {
+    db.prepare("UPDATE orders SET customer_email = LOWER(TRIM(customer_email)) WHERE customer_email IS NOT NULL AND customer_email != LOWER(TRIM(customer_email))").run();
+} catch { /* best effort cleanup */ }
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_orders_customer_email_lower ON orders(LOWER(TRIM(customer_email)))'); } catch { /* best effort */ }
+
+
 // Remove Baby Steps placeholder
 try { db.prepare("DELETE FROM songs WHERE title = 'Baby Steps'").run(); } catch { /* best effort cleanup */ }
 

@@ -63,8 +63,11 @@ app.use(helmet({
             ],
             styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
             fontSrc: ["'self'", 'https://fonts.gstatic.com', 'https://fonts.googleapis.com'],
-            imgSrc: ["'self'", 'data:', 'blob:'],
-            mediaSrc: ["'self'", 'blob:'],
+            imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+            // Finished songs are hosted off-domain (Suno, S3, Dropbox, mp3tourl, etc.) —
+            // admins paste the URL into the dashboard and the browser streams it inline.
+            // Allowing `https:` here keeps that flow working without an explicit allowlist.
+            mediaSrc: ["'self'", 'blob:', 'data:', 'https:'],
             connectSrc: [
                 "'self'",
                 'https://api.paystack.co',

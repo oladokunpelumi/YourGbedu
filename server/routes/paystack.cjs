@@ -236,7 +236,9 @@ router.post('/webhook', (req, res) => {
                 metadata?.specialQualities || '',
                 metadata?.favoriteMemories || '',
                 metadata?.specialMessage || '',
-                metadata?.customerEmail || customer?.email || null,
+                (metadata?.customerEmail || customer?.email)
+                    ? String(metadata?.customerEmail || customer?.email).trim().toLowerCase()
+                    : null,
                 promo.promoCodeId,
                 promo.promoCodePreview,
                 promo.promoDiscountPercent,
