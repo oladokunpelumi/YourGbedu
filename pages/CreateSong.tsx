@@ -98,6 +98,7 @@ const CreateSong: React.FC = () => {
   const [step, setStep] = useState(1);
 
   const [recipientType, setRecipientType] = useState('');
+  const [recipientName, setRecipientName] = useState('');
   const [occasion, setOccasion] = useState('');
   const [occasionDetail, setOccasionDetail] = useState('');
   const [senderName, setSenderName] = useState('');
@@ -159,6 +160,10 @@ const CreateSong: React.FC = () => {
       setError('Please select who this is for, choose an occasion, and enter your name.');
       return;
     }
+    if (step === 1 && recipientType && recipientType !== 'Yourself' && !recipientName.trim()) {
+      setError("Please add the recipient's name so we can write the song for them.");
+      return;
+    }
     if (step === 2 && (!genre || !voiceGender)) {
       setError('Please select both a genre and voice preference.');
       return;
@@ -195,6 +200,7 @@ const CreateSong: React.FC = () => {
 
     const briefData = {
       recipientType,
+      recipientName: recipientType && recipientType !== 'Yourself' ? recipientName.trim() : '',
       occasion,
       occasionDetail,
       senderName,
@@ -209,7 +215,8 @@ const CreateSong: React.FC = () => {
     };
     sessionStorage.setItem('yourgbedu_brief', JSON.stringify(briefData));
     sessionStorage.removeItem('yourgbedu_checkout_error');
-    navigate('/checkout');
+    const promo = searchParams.get('promo');
+    navigate(promo ? `/checkout?promo=${encodeURIComponent(promo)}` : '/checkout');
   };
 
   const currentStep = FORM_STEPS[step - 1];
@@ -331,7 +338,10 @@ const CreateSong: React.FC = () => {
                       <button
                         type="button"
                         key={r}
-                        onClick={() => setRecipientType(r)}
+                        onClick={() => {
+                          setRecipientType(r);
+                          if (r === 'Yourself') setRecipientName('');
+                        }}
                         aria-pressed={recipientType === r}
                         className={`rounded-full border px-4 py-2.5 font-label text-sm font-bold transition-colors ${
                           recipientType === r
@@ -343,6 +353,24 @@ const CreateSong: React.FC = () => {
                       </button>
                     ))}
                   </div>
+                  {recipientType && recipientType !== 'Yourself' && (
+                    <div className="mt-5">
+                      <label htmlFor="recipient-name" className="mb-2 block font-label text-sm font-bold text-ink">
+                        What is their name?
+                      </label>
+                      <input
+                        id="recipient-name"
+                        type="text"
+                        value={recipientName}
+                        onChange={(e) => setRecipientName(e.target.value)}
+                        placeholder={`Their first name`}
+                        className={fieldClass}
+                      />
+                      <p className="mt-2 text-xs leading-5 text-ink-muted">
+                        We will weave this into the lyrics so the song feels written for them.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -529,7 +557,12 @@ const CreateSong: React.FC = () => {
                   </h3>
                   <div className="mt-6 grid gap-3 sm:grid-cols-2">
                     {[
-                      { label: 'To', value: recipientType },
+                      {
+                        label: 'To',
+                        value: recipientName && recipientType !== 'Yourself'
+                          ? `${recipientName} (${recipientType})`
+                          : recipientType,
+                      },
                       {
                         label: 'Occasion',
                         value: `${occasionLabel}${occasion === 'other' && occasionDetail ? ` - ${occasionDetail}` : ''}`,

@@ -35,6 +35,7 @@ router.post('/create-checkout-session', async (req, res) => {
             fastDelivery,
             embedded,
             promoCode,
+            fullPrice,
             // amount is intentionally not destructured — price is always server-calculated
         } = req.body;
 
@@ -44,6 +45,7 @@ router.post('/create-checkout-session', async (req, res) => {
             provider: 'stripe',
             fastDelivery,
             promoCode,
+            fullPrice,
         });
         if (quote.finalAmount <= 0) {
             return res.status(400).json({ error: 'This promo code should be completed through free checkout.' });

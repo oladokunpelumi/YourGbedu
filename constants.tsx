@@ -38,12 +38,12 @@ export const MOODS: { name: Mood; icon: string; img: string }[] = [
 
 export const DISCOUNTED_PRICING = {
   paystack: {
-    standard: { current: '₦30,000', original: '₦60,000', amountKobo: 3_000_000 },
-    fast: { current: '₦50,000', original: '₦80,000', upgrade: '+₦20,000', amountKobo: 5_000_000 },
+    standard: { current: '₦30,000', original: '₦60,000', amountKobo: 3_000_000, originalAmountKobo: 6_000_000 },
+    fast: { current: '₦50,000', original: '₦80,000', upgrade: '+₦20,000', amountKobo: 5_000_000, originalAmountKobo: 8_000_000 },
   },
   stripe: {
-    standard: { current: '$25', original: '$50', amountCents: 2_500 },
-    fast: { current: '$40', original: '$65', upgrade: '+$15.00', amountCents: 4_000 },
+    standard: { current: '$25', original: '$50', amountCents: 2_500, originalAmountCents: 5_000 },
+    fast: { current: '$40', original: '$65', upgrade: '+$15.00', amountCents: 4_000, originalAmountCents: 6_500 },
   },
 } as const;
 

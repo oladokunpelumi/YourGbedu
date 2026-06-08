@@ -94,4 +94,35 @@ describe('POST /api/create-checkout-session', () => {
       discountedAmount: '3250',
     });
   });
+
+  it('uses server-calculated full original pricing when fullPrice is requested without a promo', async () => {
+    const { default: supertest } = await import('supertest');
+    createSessionMock.mockResolvedValue({
+      id: 'cs_test_full_price',
+      client_secret: 'cs_secret_full_price',
+      url: null,
+    });
+
+    const res = await supertest(app)
+      .post('/api/create-checkout-session')
+      .send({
+        embedded: true,
+        customerEmail: 'fullprice@test.com',
+        recipientType: 'Friend',
+        genre: 'Soul',
+        fastDelivery: true,
+        amount: 1,
+        fullPrice: true,
+      })
+      .set('Content-Type', 'application/json');
+
+    expect(res.status).toBe(200);
+    const options = createSessionMock.mock.calls[0][0];
+    expect(options.line_items[0].price_data.unit_amount).toBe(6500);
+    expect(options.metadata).toMatchObject({
+      originalAmount: '6500',
+      discountedAmount: '6500',
+    });
+    expect(options.metadata.promoDiscountPercent).toBe('');
+  });
 });

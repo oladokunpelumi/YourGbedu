@@ -12,6 +12,7 @@ const InitializeSchema = z.object({
     // amount is intentionally absent — price is always SONG_PRICE_KOBO, never client-controlled
     metadata: z.record(z.string(), z.unknown()).optional(),
     promoCode: z.string().max(100).optional(),
+    fullPrice: z.union([z.boolean(), z.string()]).optional(),
 });
 
 const PAYSTACK_BASE_URL = 'https://api.paystack.co';
@@ -63,7 +64,7 @@ router.post('/initialize', async (req, res) => {
     }
 
     try {
-        const { email, metadata, promoCode } = parsed.data;
+        const { email, metadata, promoCode, fullPrice } = parsed.data;
         const customerEmail = email || 'guest@yourgbedu.com';
         const resolvedMetadata = metadata || {};
         const quote = quoteCheckout({
@@ -71,6 +72,7 @@ router.post('/initialize', async (req, res) => {
             provider: 'paystack',
             fastDelivery: resolvedMetadata.fastDelivery,
             promoCode,
+            fullPrice,
         });
         if (quote.finalAmount <= 0) {
             return res.status(400).json({ error: 'This promo code should be completed through free checkout.' });

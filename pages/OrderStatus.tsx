@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { OrderData } from '../types';
+import SongReady from '../components/SongReady';
 
 type AuthState = 'checking' | 'authenticated' | 'unauthenticated';
 type SignInState = 'idle' | 'sending' | 'sent' | 'error';
@@ -192,6 +193,34 @@ const OrderStatus: React.FC = () => {
 
   const order = orders[0];
   const tl = timeLefts[order.id] || order.timeLeft;
+  const isDelivered = order.status === 'completed' && !!order.finalSongUrl;
+
+  if (isDelivered) {
+    return (
+      <div className="bg-ivory px-5 py-8 sm:px-8 lg:px-12">
+        <div className="mx-auto max-w-3xl">
+          <div className="mb-6 flex items-center justify-between gap-3">
+            <span className="rounded-full border border-line bg-cream px-3 py-1 font-label text-[10px] font-bold uppercase tracking-[0.14em] text-ink-muted">
+              Order #{order.id.slice(0, 8)}
+            </span>
+            <span className="rounded-full bg-sage-pale px-3 py-1 font-label text-[10px] font-bold uppercase tracking-[0.14em] text-sage-dark">
+              Song ready
+            </span>
+          </div>
+          <h1 className="text-center font-headline text-5xl font-medium leading-tight text-ink sm:text-6xl">
+            Your song is ready
+          </h1>
+          <p className="mt-3 text-center text-base leading-7 text-ink-soft">
+            Press play and let it land. Share it, rate it, send a reaction — it&apos;s yours.
+          </p>
+          <SongReady
+            order={order}
+            onRatingSaved={(value) => setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, rating: value } : o)))}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-ivory px-5 py-8 sm:px-8 lg:px-12">
@@ -215,7 +244,7 @@ const OrderStatus: React.FC = () => {
                 {order.songTitle}
               </h1>
               <p className="mt-4 font-label text-xs font-bold uppercase tracking-[0.14em] text-ink-muted">
-                {order.genre} - {order.mood || 'Mood not specified'}
+                {order.genre}
               </p>
               <p className="mt-6 max-w-2xl text-base leading-7 text-ink-soft">
                 Your production timeline updates as the song moves through writing, recording, review,
@@ -261,7 +290,7 @@ const OrderStatus: React.FC = () => {
                 Production timeline
               </h2>
               <span className="rounded-full border border-line bg-ivory px-3 py-1 font-label text-[10px] font-bold uppercase tracking-[0.14em] text-ink-muted">
-                Step {order.currentStep} of 5
+                Step {order.currentStep} of {order.steps.length}
               </span>
             </div>
 
@@ -298,7 +327,9 @@ const OrderStatus: React.FC = () => {
                           {item.status}
                         </span>
                       </div>
-                      <p className="mt-3 text-sm leading-6 text-ink-soft">{item.desc}</p>
+                      <p className="mt-3 text-sm leading-6 text-ink-soft">
+                        {item.status === 'In Progress' && item.descActive ? item.descActive : item.desc}
+                      </p>
                       {item.active && (
                         <div className="mt-5">
                           <div className="mb-2 flex justify-between font-label text-[10px] font-bold uppercase tracking-[0.12em] text-ink-muted">
@@ -324,15 +355,14 @@ const OrderStatus: React.FC = () => {
               </h2>
               <div className="mt-5 space-y-3">
                 {[
-                  { label: 'Mood', value: order.mood || 'Not specified' },
                   { label: 'Genre', value: order.genre },
                   ...(order.occasion
                     ? [{ label: 'Occasion', value: order.occasionDetail ? `${order.occasion} - ${order.occasionDetail}` : order.occasion }]
                     : []),
-                  { label: 'Tempo', value: order.tempo ? `${order.tempo} BPM` : 'Not specified' },
-                  ...(order.recipientType ? [{ label: 'For', value: order.recipientType }] : []),
+                  ...(order.recipientType
+                    ? [{ label: 'For', value: order.recipientName ? `${order.recipientName} · ${order.recipientType}` : order.recipientType }]
+                    : []),
                   ...(order.senderName ? [{ label: 'From', value: order.senderName }] : []),
-                  ...(order.voiceGender ? [{ label: 'Voice', value: order.voiceGender }] : []),
                 ].map((item) => (
                   <div key={item.label} className="rounded-xl border border-line bg-ivory p-4">
                     <p className="font-label text-[10px] font-bold uppercase tracking-[0.16em] text-ink-muted">

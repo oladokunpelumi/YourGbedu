@@ -58,4 +58,35 @@ describe('promo checkout quotes', () => {
     expect(quote.promo.id).toBe(code.id);
     expect(quote.promo.discountPercent).toBe(100);
   });
+
+  it('quotes full-price checkout at the original site price when no promo is applied', () => {
+    const quote = quoteCheckout({
+      db,
+      provider: 'stripe',
+      fastDelivery: true,
+      fullPrice: true,
+    });
+
+    expect(quote.originalAmount).toBe(6500);
+    expect(quote.currentAmount).toBe(4000);
+    expect(quote.finalAmount).toBe(6500);
+    expect(quote.fullPrice).toBe(true);
+    expect(quote.promo).toBeNull();
+  });
+
+  it('lets a real promo override full-price checkout mode', () => {
+    const quote = quoteCheckout({
+      db,
+      provider: 'paystack',
+      fastDelivery: true,
+      fullPrice: true,
+      promoCode: 'YOURGBEDU50',
+    });
+
+    expect(quote.originalAmount).toBe(8000000);
+    expect(quote.currentAmount).toBe(5000000);
+    expect(quote.finalAmount).toBe(4000000);
+    expect(quote.fullPrice).toBe(false);
+    expect(quote.promo.discountPercent).toBe(50);
+  });
 });

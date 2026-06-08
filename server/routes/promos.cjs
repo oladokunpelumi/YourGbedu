@@ -14,6 +14,7 @@ const QuoteSchema = z.object({
     promoCode: z.string().max(100).optional(),
     paymentProvider: z.enum(['paystack', 'stripe']).optional(),
     fastDelivery: z.union([z.boolean(), z.string()]).optional(),
+    fullPrice: z.union([z.boolean(), z.string()]).optional(),
 });
 
 router.post('/quote', (req, res) => {
@@ -28,6 +29,7 @@ router.post('/quote', (req, res) => {
             provider: parsed.data.paymentProvider || 'paystack',
             fastDelivery: parsed.data.fastDelivery,
             promoCode: parsed.data.promoCode || '',
+            fullPrice: parsed.data.fullPrice,
         });
         res.json(quote);
     } catch (err) {

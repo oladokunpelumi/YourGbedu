@@ -94,6 +94,7 @@ async function initSchema() {
             paystack_reference TEXT,
             amount INTEGER DEFAULT 30000,
             recipient_type TEXT,
+            recipient_name TEXT,
             sender_name TEXT,
             voice_gender TEXT,
             special_qualities TEXT,
@@ -105,7 +106,20 @@ async function initSchema() {
             promo_code_preview TEXT,
             promo_discount_percent INTEGER,
             original_amount INTEGER,
-            discounted_amount INTEGER
+            discounted_amount INTEGER,
+            final_song_url TEXT,
+            final_song_title TEXT,
+            delivered_at TEXT,
+            rating INTEGER
+        );
+
+        CREATE TABLE IF NOT EXISTS subscribers (
+            id TEXT PRIMARY KEY,
+            email TEXT UNIQUE NOT NULL,
+            created_at TEXT NOT NULL,
+            source TEXT,
+            converted_order_id TEXT,
+            last_emailed_at TEXT
         );
 
         CREATE TABLE IF NOT EXISTS promo_codes (
@@ -141,8 +155,14 @@ async function initSchema() {
     await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_discount_percent INTEGER');
     await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS original_amount INTEGER');
     await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS discounted_amount INTEGER');
+    await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS recipient_name TEXT');
+    await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS final_song_url TEXT');
+    await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS final_song_title TEXT');
+    await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivered_at TEXT');
+    await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS rating INTEGER');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_promo_codes_code_hash ON promo_codes(code_hash)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_promo_codes_used_order_id ON promo_codes(used_order_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_subscribers_email ON subscribers(email)');
     console.log('[PostgreSQL] Schema initialized');
 
     // Seed sample songs if the table is empty

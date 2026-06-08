@@ -27,6 +27,7 @@ export interface Song {
 export interface ProductionStep {
   title: string;
   desc: string;
+  descActive?: string;
   icon: string;
   status: 'Completed' | 'In Progress' | 'Upcoming';
   active: boolean;
@@ -57,9 +58,14 @@ export interface OrderData {
   };
   amount: number;
   recipientType?: string | null;
+  recipientName?: string | null;
   senderName?: string | null;
   voiceGender?: string | null;
   specialQualities?: string | null;
   favoriteMemories?: string | null;
   specialMessage?: string | null;
+  finalSongUrl?: string | null;
+  finalSongTitle?: string | null;
+  deliveredAt?: string | null;
+  rating?: number | null;
 }

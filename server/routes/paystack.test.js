@@ -126,6 +126,40 @@ describe('POST /api/paystack/initialize', () => {
       discountedAmount: '4000000',
     });
   });
+
+  it('uses server-calculated full original pricing when fullPrice is requested without a promo', async () => {
+    const { default: supertest } = await import('supertest');
+    const fetchMock = vi.fn(async () => ({
+      json: async () => ({
+        status: true,
+        data: {
+          authorization_url: 'https://checkout.paystack.com/mock',
+          access_code: 'access_mock_full_price',
+          reference: 'ref_inline_full_price',
+        },
+      }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await supertest(app)
+      .post('/api/paystack/initialize')
+      .send({
+        email: 'fullprice@test.com',
+        amount: 1,
+        fullPrice: true,
+        metadata: { genre: 'Highlife', fastDelivery: true },
+      })
+      .set('Content-Type', 'application/json');
+
+    expect(res.status).toBe(200);
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.amount).toBe(8000000);
+    expect(body.metadata).toMatchObject({
+      originalAmount: '8000000',
+      discountedAmount: '8000000',
+    });
+    expect(body.metadata.promoDiscountPercent).toBe('');
+  });
 });
 
 describe('POST /api/paystack/webhook — signature verification', () => {

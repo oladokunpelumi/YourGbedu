@@ -93,12 +93,11 @@ function sentEmailResult(type, to, result) {
  * @param {string} params.to - Customer email
  * @param {string} params.orderId - Short order reference
  * @param {string} params.genre - Song genre
- * @param {string} params.mood - Song mood
  * @param {string} params.deliveryDate - ISO date string
  * @param {string} params.reference - Payment reference
  * @param {string} [params.amountLabel] - Human-readable paid amount
  */
-async function sendConfirmationEmail({ to, orderId, genre, mood, deliveryDate, reference, amountLabel }) {
+async function sendConfirmationEmail({ to, orderId, genre, deliveryDate, reference, amountLabel }) {
   const { client: resend, reason } = getResendClientStatus();
   if (!resend) {
     return skippedEmailResult('confirmation', to, reason);
@@ -113,7 +112,6 @@ async function sendConfirmationEmail({ to, orderId, genre, mood, deliveryDate, r
 
   const safeOrderId   = escapeHtml(orderId);
   const safeGenre     = escapeHtml(genre || 'Custom');
-  const safeMood      = escapeHtml(mood || 'Custom');
   const safeReference = escapeHtml(reference);
   const safeAmount    = escapeHtml(amountLabel || 'Paid');
   const trackUrl      = getTrackUrl(orderId);
@@ -151,7 +149,6 @@ async function sendConfirmationEmail({ to, orderId, genre, mood, deliveryDate, r
       <div class="panel">
         <div class="row"><span class="label">Order ID</span><span class="value">#${safeOrderId}</span></div>
         <div class="row"><span class="label">Genre</span><span class="value">${safeGenre}</span></div>
-        <div class="row"><span class="label">Mood</span><span class="value">${safeMood}</span></div>
         <div class="row"><span class="label">Amount Paid</span><span class="value">${safeAmount}</span></div>
         <div class="row"><span class="label">Estimated Delivery</span><span class="value">${delivery}</span></div>
         <div class="row"><span class="label">Payment Ref</span><span class="value" style="font-size:11px; font-family:monospace;">${safeReference}</span></div>

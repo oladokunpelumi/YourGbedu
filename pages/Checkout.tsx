@@ -5,8 +5,11 @@ import { PaymentProvider, getDiscountedPrice } from '../constants';
 
 type CheckoutStatus = 'loading' | 'ready' | 'processing' | 'success' | 'error';
 
+const FULL_PRICE_STORAGE_KEY = 'yourgbedu_pay_full_price';
+
 interface CheckoutBrief {
   recipientType: string;
+  recipientName: string;
   occasion: string;
   occasionDetail?: string;
   senderName: string;
@@ -24,6 +27,7 @@ interface PromoQuote {
   provider: PaymentProvider;
   currency: 'NGN' | 'USD';
   unit: 'kobo' | 'cents';
+  fullPrice?: boolean;
   originalAmount: number;
   currentAmount: number;
   finalAmount: number;
@@ -33,6 +37,22 @@ interface PromoQuote {
     codePreview: string;
     discountPercent: number;
   } | null;
+}
+
+function readPayFullPriceFlag() {
+  try {
+    return window.localStorage.getItem(FULL_PRICE_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function clearPayFullPriceFlag() {
+  try {
+    window.localStorage.removeItem(FULL_PRICE_STORAGE_KEY);
+  } catch {
+    // localStorage may be unavailable; not fatal.
+  }
 }
 
 declare global {
@@ -80,6 +100,7 @@ function readBrief(): CheckoutBrief | null {
     if (!parsed.customerEmail || !parsed.paymentProvider) return null;
     return {
       recipientType: parsed.recipientType || '',
+      recipientName: parsed.recipientName || '',
       occasion: parsed.occasion || '',
       occasionDetail: parsed.occasionDetail || '',
       senderName: parsed.senderName || '',
@@ -140,6 +161,7 @@ const Checkout: React.FC = () => {
   const [promoQuote, setPromoQuote] = useState<PromoQuote | null>(null);
   const [promoMessage, setPromoMessage] = useState('');
   const [isApplyingPromo, setIsApplyingPromo] = useState(false);
+  const [payFullPrice, setPayFullPrice] = useState(readPayFullPriceFlag);
   const [paystackInline, setPaystackInline] = useState<{
     accessCode: string;
     reference: string;
@@ -154,12 +176,17 @@ const Checkout: React.FC = () => {
   const returnedStripeSessionId = query.get('session_id');
   const providerLabel = brief?.paymentProvider === 'stripe' ? 'Stripe' : 'Paystack';
   const price = brief ? getDiscountedPrice(brief.paymentProvider, brief.fastDelivery) : null;
+  const isFullPriceCheckout = payFullPrice && !promoQuote?.promo;
   const displayTotal = brief && promoQuote
     ? formatCheckoutAmount(brief.paymentProvider, promoQuote.finalAmount)
-    : price?.current;
+    : isFullPriceCheckout
+      ? price?.original
+      : price?.current;
   const displayOriginal = brief && promoQuote
     ? formatCheckoutAmount(brief.paymentProvider, promoQuote.originalAmount)
-    : price?.original;
+    : isFullPriceCheckout
+      ? undefined
+      : price?.original;
 
   const finalizeOrder = useCallback(
     (id: string) => {
@@ -168,6 +195,7 @@ const Checkout: React.FC = () => {
       setMessage('Payment confirmed. Your production order is ready.');
       sessionStorage.setItem('yourgbedu_track_id', id);
       sessionStorage.removeItem('yourgbedu_brief');
+      clearPayFullPriceFlag();
       setTimeout(() => navigate(`/track?id=${id}`, { replace: false }), 3500);
     },
     [navigate]
@@ -186,6 +214,7 @@ const Checkout: React.FC = () => {
       const meta = verifyData.metadata || {};
       const source = brief || {
         recipientType: String(meta.recipientType || ''),
+        recipientName: String(meta.recipientName || ''),
         occasion: String(meta.occasion || ''),
         occasionDetail: String(meta.occasionDetail || ''),
         senderName: String(meta.senderName || ''),
@@ -211,6 +240,7 @@ const Checkout: React.FC = () => {
           paystackReference: provider === 'paystack' ? reference : undefined,
           customerEmail: source.customerEmail || verifyData.customerEmail || meta.customerEmail || '',
           recipientType: source.recipientType || meta.recipientType || '',
+          recipientName: source.recipientName || meta.recipientName || '',
           senderName: source.senderName || meta.senderName || '',
           voiceGender: source.voiceGender || meta.voiceGender || '',
           specialQualities: source.specialQualities || meta.specialQualities || '',
@@ -276,6 +306,7 @@ const Checkout: React.FC = () => {
           occasionDetail: brief.occasionDetail,
           customerEmail: brief.customerEmail,
           recipientType: brief.recipientType,
+          recipientName: brief.recipientName,
           senderName: brief.senderName,
           voiceGender: brief.voiceGender,
           specialQualities: brief.specialQualities,
@@ -305,7 +336,12 @@ const Checkout: React.FC = () => {
     const response = await fetch('/api/paystack/initialize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: brief.customerEmail, metadata: brief, promoCode: code || undefined }),
+      body: JSON.stringify({
+        email: brief.customerEmail,
+        metadata: brief,
+        promoCode: code || undefined,
+        fullPrice: !code && payFullPrice,
+      }),
     });
     const data = await response.json().catch(() => null);
     if (!response.ok) throw new Error(getApiError(data, 'Could not initialize Paystack checkout.'));
@@ -325,7 +361,7 @@ const Checkout: React.FC = () => {
     });
     setStatus('ready');
     setMessage('Your payment is encrypted and processed by Paystack. YourGbedu never stores card details.');
-  }, [brief]);
+  }, [brief, payFullPrice]);
 
   const launchPaystackCheckout = useCallback(() => {
     if (!paystackInline) return;
@@ -389,7 +425,12 @@ const Checkout: React.FC = () => {
     const response = await fetch('/api/create-checkout-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...brief, embedded: true, promoCode: code || undefined }),
+      body: JSON.stringify({
+        ...brief,
+        embedded: true,
+        promoCode: code || undefined,
+        fullPrice: !code && payFullPrice,
+      }),
     });
     const data = await response.json().catch(() => null);
     if (!response.ok) throw new Error(getApiError(data, 'Could not initialize Stripe checkout.'));
@@ -403,20 +444,15 @@ const Checkout: React.FC = () => {
       throw new Error('Stripe is not configured. Please refresh and try again.');
     }
 
-    let embeddedCheckout: StripeEmbeddedCheckout;
-    try {
-      embeddedCheckout = await stripe.initEmbeddedCheckout({
-        clientSecret: data.clientSecret,
-        onComplete: () => {
-          void verifyStripe(data.sessionId).catch((err) => {
-            setStatus('error');
-            setMessage(err instanceof Error ? err.message : 'Could not verify payment.');
-          });
-        },
-      });
-    } catch (err) {
-      throw err;
-    }
+    const embeddedCheckout = await stripe.initEmbeddedCheckout({
+      clientSecret: data.clientSecret,
+      onComplete: () => {
+        void verifyStripe(data.sessionId).catch((err) => {
+          setStatus('error');
+          setMessage(err instanceof Error ? err.message : 'Could not verify payment.');
+        });
+      },
+    });
 
     stripeCheckoutRef.current = embeddedCheckout;
     if (stripeMountRef.current) {
@@ -424,7 +460,7 @@ const Checkout: React.FC = () => {
       setStatus('ready');
       setMessage('Your payment is encrypted and processed by Stripe. YourGbedu never stores card details.');
     }
-  }, [brief, verifyStripe]);
+  }, [brief, payFullPrice, verifyStripe]);
 
   const restartCheckout = useCallback(
     async (code = '') => {
@@ -454,6 +490,7 @@ const Checkout: React.FC = () => {
           promoCode: code,
           paymentProvider: brief.paymentProvider,
           fastDelivery: brief.fastDelivery,
+          fullPrice: false,
         }),
       });
       const quote = await response.json().catch(() => null);
@@ -461,6 +498,8 @@ const Checkout: React.FC = () => {
 
       setPromoQuote(quote);
       setActivePromoCode(code);
+      setPayFullPrice(false);
+      clearPayFullPriceFlag();
       setPromoMessage(
         quote.finalAmount === 0
           ? '100% promo applied. Completing your order now.'
@@ -487,7 +526,9 @@ const Checkout: React.FC = () => {
     setPromoCode('');
     setActivePromoCode('');
     setPromoQuote(null);
-    setPromoMessage('Promo removed. Checkout total restored.');
+    const restoredFullPrice = readPayFullPriceFlag();
+    setPayFullPrice(restoredFullPrice);
+    setPromoMessage(restoredFullPrice ? 'Promo removed. Full price restored.' : 'Promo removed. Checkout total restored.');
     await restartCheckout('');
   }, [restartCheckout]);
 
@@ -528,6 +569,30 @@ const Checkout: React.FC = () => {
     };
   }, []);
 
+  // Auto-apply promo when arriving from the email-capture popup with ?promo=CODE.
+  // Step 1: seed the input. Step 2: fire the existing apply flow once state has settled.
+  const autoPromoSeededRef = useRef(false);
+  const autoPromoAppliedRef = useRef(false);
+  useEffect(() => {
+    if (autoPromoSeededRef.current) return;
+    const urlPromo = query.get('promo');
+    if (!urlPromo || !brief) return;
+    clearPayFullPriceFlag();
+    setPayFullPrice(false);
+    autoPromoSeededRef.current = true;
+    setPromoCode(urlPromo);
+  }, [query, brief]);
+
+  useEffect(() => {
+    if (autoPromoAppliedRef.current) return;
+    if (!autoPromoSeededRef.current) return;
+    if (!brief || activePromoCode || isApplyingPromo || !promoCode) return;
+    const urlPromo = query.get('promo');
+    if (!urlPromo || urlPromo !== promoCode) return;
+    autoPromoAppliedRef.current = true;
+    void applyPromoCode();
+  }, [query, brief, promoCode, activePromoCode, isApplyingPromo, applyPromoCode]);
+
   if (!brief && !returnedStripeSessionId) {
     return null;
   }
@@ -560,7 +625,7 @@ const Checkout: React.FC = () => {
                     )}
                   </div>
                   <span className="rounded-full bg-mustard px-3 py-1 font-label text-[10px] font-bold uppercase tracking-[0.12em] text-ink">
-                    {promoQuote?.promo ? `${promoQuote.promo.discountPercent}% off` : 'Discounted'}
+                    {promoQuote?.promo ? `${promoQuote.promo.discountPercent}% off` : isFullPriceCheckout ? 'Full price' : 'Discounted'}
                   </span>
                 </div>
                 <p className="mt-3 text-sm text-ink-soft">
@@ -621,10 +686,14 @@ const Checkout: React.FC = () => {
 
               <dl className="mt-6 space-y-4 text-sm">
                 {[
-                  ['For', brief.recipientType],
+                  [
+                    'For',
+                    brief.recipientName && brief.recipientType !== 'Yourself'
+                      ? `${brief.recipientName} (${brief.recipientType})`
+                      : brief.recipientType,
+                  ],
                   ['From', brief.senderName],
                   ['Style', brief.genre],
-                  ['Voice', brief.voiceGender],
                   ['Occasion', brief.occasionDetail || formatOccasion(brief.occasion)],
                   ['Email', brief.customerEmail],
                 ].map(([label, value]) => (
