@@ -196,6 +196,13 @@ describe('GET /api/orders/:id', () => {
     const fetched = await supertest(app).get(`/api/orders/${created.body.id}`);
     expect(fetched.status).toBe(200);
     expect(fetched.body.id).toBe(created.body.id);
+    expect(fetched.body.currentStep).toBe(1);
+    expect(fetched.body.steps).toHaveLength(3);
+    expect(fetched.body.steps.map((step) => step.title)).toEqual([
+      'Order Received',
+      'Song Composing',
+      'Final Mastering',
+    ]);
   });
 });
 

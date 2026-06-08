@@ -17,6 +17,7 @@ interface Order {
   paystack_reference: string | null;
   amount: number;
   recipient_type: string;
+  recipient_name: string | null;
   sender_name: string;
   voice_gender: string;
   special_qualities: string;
@@ -28,6 +29,10 @@ interface Order {
   promo_discount_percent: number | null;
   original_amount: number | null;
   discounted_amount: number | null;
+  final_song_url: string | null;
+  final_song_title: string | null;
+  delivered_at: string | null;
+  rating: number | null;
 }
 
 interface PromoCode {
@@ -156,6 +161,8 @@ const Admin: React.FC = () => {
   const [generatedPromoCode, setGeneratedPromoCode] = useState<string | null>(null);
   const [isGeneratingPromo, setIsGeneratingPromo] = useState(false);
   const [disablingPromoId, setDisablingPromoId] = useState<string | null>(null);
+  const [songInputs, setSongInputs] = useState<Record<string, { url: string; title: string }>>({});
+  const [attachingSongId, setAttachingSongId] = useState<string | null>(null);
 
   const currentPendingBriefs = useMemo(
     () => orders.filter((order) => !order.ai_brief?.trim()).length,
@@ -284,6 +291,36 @@ const Admin: React.FC = () => {
       setAdminMessage(err instanceof Error ? err.message : 'Could not generate the AI brief.');
     } finally {
       setGeneratingId(null);
+    }
+  };
+
+  const handleAttachSong = async (orderId: string) => {
+    const input = songInputs[orderId];
+    if (!input?.url?.trim()) {
+      setAdminMessage('Paste a finished song URL before attaching.');
+      return;
+    }
+    setAttachingSongId(orderId);
+    setAdminMessage('');
+    try {
+      const res = await adminFetch(`/api/admin/orders/${orderId}/song`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: input.url.trim(), title: input.title?.trim() || '' }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'Song attach failed');
+
+      setOrders((current) =>
+        current.map((order) => (order.id === orderId ? { ...order, ...data } : order))
+      );
+      setSongInputs((current) => ({ ...current, [orderId]: { url: '', title: '' } }));
+      setAdminMessage('Song attached and customer email queued.');
+    } catch (err) {
+      console.error('Failed to attach song:', err);
+      setAdminMessage(err instanceof Error ? err.message : 'Could not attach song.');
+    } finally {
+      setAttachingSongId(null);
     }
   };
 
@@ -803,6 +840,65 @@ const Admin: React.FC = () => {
                           </div>
                           <p className="whitespace-pre-wrap rounded-lg border border-terracotta/20 bg-terracotta-pale/60 p-4 leading-relaxed text-ink-soft">
                             {order.ai_brief || 'AI brief pending generation. Use Generate Brief when this order is ready for production review.'}
+                          </p>
+                        </div>
+
+                        <div className="mt-4 border-t border-line pt-4">
+                          <div className="mb-2 flex items-center gap-2">
+                            <span className="material-symbols-outlined text-base text-sage">album</span>
+                            <span className="font-label text-xs font-bold uppercase tracking-[0.14em] text-sage-dark">
+                              Final song
+                            </span>
+                            {order.final_song_url && (
+                              <span className="rounded-full bg-sage-pale px-2 py-0.5 font-label text-[10px] font-bold uppercase tracking-[0.14em] text-sage-dark">
+                                Delivered
+                              </span>
+                            )}
+                          </div>
+                          {order.final_song_url && (
+                            <p className="mb-2 break-all rounded-lg border border-sage-soft bg-sage-pale/60 p-3 font-mono text-xs text-ink-soft">
+                              {order.final_song_title ? `${order.final_song_title} — ` : ''}
+                              <a href={order.final_song_url} target="_blank" rel="noopener noreferrer" className="underline">
+                                {order.final_song_url}
+                              </a>
+                            </p>
+                          )}
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <input
+                              type="url"
+                              placeholder="Paste finished song URL (mp3/wav)"
+                              value={songInputs[order.id]?.url || ''}
+                              onChange={(e) =>
+                                setSongInputs((current) => ({
+                                  ...current,
+                                  [order.id]: { url: e.target.value, title: current[order.id]?.title || '' },
+                                }))
+                              }
+                              className={`flex-1 ${adminInputClass}`}
+                            />
+                            <input
+                              type="text"
+                              placeholder="Final title (optional)"
+                              value={songInputs[order.id]?.title || ''}
+                              onChange={(e) =>
+                                setSongInputs((current) => ({
+                                  ...current,
+                                  [order.id]: { url: current[order.id]?.url || '', title: e.target.value },
+                                }))
+                              }
+                              className={`sm:w-56 ${adminInputClass}`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleAttachSong(order.id)}
+                              disabled={attachingSongId === order.id}
+                              className={adminActionClass}
+                            >
+                              {attachingSongId === order.id ? 'Sending...' : order.final_song_url ? 'Replace' : 'Attach & complete'}
+                            </button>
+                          </div>
+                          <p className="mt-2 text-xs text-ink-muted">
+                            Attaching a URL flips the order to <span className="font-bold">completed</span>, emails the customer, and shows them the vinyl player.
                           </p>
                         </div>
                       </div>

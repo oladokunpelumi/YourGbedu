@@ -81,7 +81,7 @@ function findPromoByCode(db, code) {
     return getStandardPromo(normalizedCode) || getStoredPromo(db, normalizedCode);
 }
 
-function quoteCheckout({ db, provider = 'paystack', fastDelivery = false, promoCode = '' }) {
+function quoteCheckout({ db, provider = 'paystack', fastDelivery = false, promoCode = '', fullPrice = false }) {
     const resolvedProvider = provider === 'stripe' ? 'stripe' : 'paystack';
     const fast = isFastDelivery(fastDelivery);
     const amounts = getBaseAmounts(resolvedProvider, fast);
@@ -98,6 +98,8 @@ function quoteCheckout({ db, provider = 'paystack', fastDelivery = false, promoC
         finalAmount = Math.round(amounts.originalAmount * 0.5);
     } else if (promo?.discountPercent === 100) {
         finalAmount = 0;
+    } else if (fullPrice) {
+        finalAmount = amounts.originalAmount;
     }
 
     return {
@@ -105,6 +107,7 @@ function quoteCheckout({ db, provider = 'paystack', fastDelivery = false, promoC
         currency: amounts.currency,
         unit: amounts.unit,
         fastDelivery: fast,
+        fullPrice: !!fullPrice && !promo,
         originalAmount: amounts.originalAmount,
         currentAmount: amounts.currentAmount,
         finalAmount,

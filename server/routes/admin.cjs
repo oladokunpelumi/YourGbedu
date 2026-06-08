@@ -70,6 +70,7 @@ function toProductionJson(order) {
         customerEmail: order.customer_email || null,
         form: {
             recipientType: order.recipient_type || '',
+            recipientName: order.recipient_name || '',
             senderName: order.sender_name || '',
             genre: order.genre || '',
             voiceGender: order.voice_gender || '',
@@ -87,6 +88,7 @@ function toProductionJson(order) {
 function orderToBriefInput(order) {
     return {
         recipientType: order.recipient_type || '',
+        recipientName: order.recipient_name || '',
         senderName: order.sender_name || '',
         genre: order.genre || '',
         voiceGender: order.voice_gender || '',
@@ -311,6 +313,62 @@ router.patch('/orders/:id/status', requireAdmin, (req, res) => {
     } catch (err) {
         console.error('Admin: Error updating order status:', err);
         res.status(500).json({ error: 'Failed to update order' });
+    }
+});
+
+// POST /api/admin/orders/:id/song — attach a finished song URL and mark completed
+router.post('/orders/:id/song', requireAdmin, (req, res) => {
+    const url = typeof req.body?.url === 'string' ? req.body.url.trim() : '';
+    const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
+
+    if (!url || !/^https?:\/\//i.test(url)) {
+        return res.status(400).json({ error: 'A valid http(s) URL is required.' });
+    }
+
+    try {
+        const dbConn = getDb();
+        const deliveredAt = new Date().toISOString();
+        const result = dbConn
+            .prepare(`
+                UPDATE orders
+                SET final_song_url = ?, final_song_title = ?, delivered_at = ?, status = 'completed'
+                WHERE id = ?
+            `)
+            .run(url, title || null, deliveredAt, req.params.id);
+
+        if (result.changes === 0) {
+            return res.status(404).json({ error: 'Order not found' });
+        }
+
+        const order = dbConn.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+
+        if (order?.customer_email) {
+            void getEmailModule().sendCompletionEmail({
+                to: order.customer_email,
+                orderId: order.id.slice(0, 8).toUpperCase(),
+                genre: order.genre,
+                senderName: order.sender_name,
+                recipientType: order.recipient_type,
+            });
+        }
+
+        res.json(order);
+    } catch (err) {
+        console.error('Admin: Error attaching song URL:', err);
+        res.status(500).json({ error: 'Failed to attach song URL' });
+    }
+});
+
+// GET /api/admin/subscribers — list captured emails for follow-up
+router.get('/subscribers', requireAdmin, (req, res) => {
+    try {
+        const rows = getDb()
+            .prepare('SELECT id, email, created_at, source, converted_order_id, last_emailed_at FROM subscribers ORDER BY created_at DESC')
+            .all();
+        res.json({ data: rows, total: rows.length });
+    } catch (err) {
+        console.error('Admin: Error listing subscribers:', err);
+        res.status(500).json({ error: 'Failed to load subscribers' });
     }
 });
 

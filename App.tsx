@@ -3,6 +3,7 @@ import { HashRouter as Router, Routes, Route, useLocation } from 'react-router-d
 import Header from './components/Header';
 import Footer from './components/Footer';
 import PersistentPlayer from './components/PersistentPlayer';
+import EmailCapturePopup from './components/EmailCapturePopup';
 import Home from './pages/Home';
 import CreateSong from './pages/CreateSong';
 import OrderStatus from './pages/OrderStatus';
@@ -245,6 +246,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         <main className={`${isAdminRoute ? '' : 'pt-16'} flex-grow`}>{children}</main>
         {!isAdminRoute && <Footer />}
         {!isAdminRoute && !isCheckoutRoute && <PersistentPlayer />}
+        {!isAdminRoute && <EmailCapturePopup />}
 
         {/* Background Texture Overlay */}
         <div

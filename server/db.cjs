@@ -82,7 +82,25 @@ try { db.exec("ALTER TABLE orders ADD COLUMN promo_code_preview TEXT"); } catch 
 try { db.exec("ALTER TABLE orders ADD COLUMN promo_discount_percent INTEGER"); } catch { /* already migrated */ }
 try { db.exec("ALTER TABLE orders ADD COLUMN original_amount INTEGER"); } catch { /* already migrated */ }
 try { db.exec("ALTER TABLE orders ADD COLUMN discounted_amount INTEGER"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE orders ADD COLUMN recipient_name TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE orders ADD COLUMN final_song_url TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE orders ADD COLUMN final_song_title TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE orders ADD COLUMN delivered_at TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE orders ADD COLUMN rating INTEGER"); } catch { /* already migrated */ }
 try { db.exec("ALTER TABLE songs ADD COLUMN sort_order INTEGER DEFAULT 99"); } catch { /* already migrated */ }
+
+// Subscribers — email-capture popup list
+db.exec(`
+  CREATE TABLE IF NOT EXISTS subscribers (
+    id TEXT PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    created_at TEXT NOT NULL,
+    source TEXT,
+    converted_order_id TEXT,
+    last_emailed_at TEXT
+  );
+`);
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_subscribers_email ON subscribers(email)'); } catch { /* best effort index */ }
 
 // Seed songs if table is empty
 const songCount = db.prepare('SELECT COUNT(*) as count FROM songs').get();

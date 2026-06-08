@@ -51,11 +51,24 @@ const STANDARD_DELIVERY_HOURS = 48;
 const FAST_DELIVERY_HOURS = 24;
 
 const PRODUCTION_STEPS = [
-    { title: 'Brief Received', desc: 'Your story and preferences have been analyzed.', icon: 'check' },
-    { title: 'Composing', desc: 'Lyrics drafted and melody structure finalized.', icon: 'music_note' },
-    { title: 'Studio Recording', desc: 'Our vocalists are currently laying down tracks.', icon: 'mic' },
-    { title: 'Mixing', desc: 'Balancing levels and adding effects.', icon: 'tune' },
-    { title: 'Final Mastering', desc: 'Preparing the track for distribution.', icon: 'album' },
+    {
+        title: 'Order Received',
+        desc: 'Your order and story preferences have been received.',
+        descActive: 'Your order and story preferences are being reviewed.',
+        icon: 'check',
+    },
+    {
+        title: 'Song Composing',
+        desc: 'Lyrics drafted and melody finalized.',
+        descActive: 'Lyrics are being drafted and the melody is being shaped.',
+        icon: 'music_note',
+    },
+    {
+        title: 'Final Mastering',
+        desc: 'Song is ready.',
+        descActive: 'Final review and mastering in progress.',
+        icon: 'album',
+    },
 ];
 
 function formatPaidAmount(amount, provider) {
@@ -76,6 +89,7 @@ const CreateOrderSchema = z.object({
     paystackReference: z.string().max(200).optional(),
     customerEmail: z.string().email().optional().or(z.literal('')),
     recipientType: z.string().max(100).optional(),
+    recipientName: z.string().max(200).optional(),
     senderName: z.string().max(200).optional(),
     voiceGender: z.string().max(100).optional(),
     specialQualities: z.string().max(5000).optional(),
@@ -101,8 +115,9 @@ function computeOrderProgress(order) {
     const elapsedMs = now.getTime() - createdAt.getTime();
     const overallProgress = Math.max(0, Math.min(1, elapsedMs / totalMs));
 
-    const currentStepIndex = Math.min(4, Math.floor(overallProgress * 5));
-    const stepProgress = Math.round(((overallProgress * 5) - currentStepIndex) * 100);
+    const stepCount = PRODUCTION_STEPS.length;
+    const currentStepIndex = Math.min(stepCount - 1, Math.floor(overallProgress * stepCount));
+    const stepProgress = Math.round(((overallProgress * stepCount) - currentStepIndex) * 100);
 
     const remainingMs = Math.max(0, deliveryDate.getTime() - now.getTime());
     const days = Math.floor(remainingMs / (1000 * 60 * 60 * 24));
@@ -137,6 +152,7 @@ function computeOrderProgress(order) {
         amount: order.amount,
         aiBrief: order.ai_brief || null,
         recipientType: order.recipient_type || null,
+        recipientName: order.recipient_name || null,
         senderName: order.sender_name || null,
         voiceGender: order.voice_gender || null,
         specialQualities: order.special_qualities || null,
@@ -146,6 +162,10 @@ function computeOrderProgress(order) {
         promoDiscountPercent: order.promo_discount_percent || null,
         originalAmount: order.original_amount || null,
         discountedAmount: order.discounted_amount || null,
+        finalSongUrl: order.final_song_url || null,
+        finalSongTitle: order.final_song_title || null,
+        deliveredAt: order.delivered_at || null,
+        rating: typeof order.rating === 'number' ? order.rating : null,
     };
 }
 
@@ -220,16 +240,16 @@ router.post('/free', (req, res) => {
                     id, song_title, genre, mood, tempo, occasion, occasion_detail, story,
                     status, created_at, delivery_date,
                     stripe_session_id, paystack_reference, amount, customer_email,
-                    recipient_type, sender_name, voice_gender,
+                    recipient_type, recipient_name, sender_name, voice_gender,
                     special_qualities, favorite_memories, special_message,
                     promo_code_id, promo_code_preview, promo_discount_percent,
                     original_amount, discounted_amount
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'in_production', ?, ?, NULL, NULL, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'in_production', ?, ?, NULL, NULL, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).run(
                 id, input.songTitle || 'Custom Song', input.genre || '', input.mood || '', input.tempo || 100,
                 input.occasion || '', input.occasionDetail || '', input.story || '', now, deliveryDate,
-                input.customerEmail || null, input.recipientType || '', input.senderName || '',
+                input.customerEmail || null, input.recipientType || '', input.recipientName || '', input.senderName || '',
                 input.voiceGender || '', input.specialQualities || '', input.favoriteMemories || '',
                 input.specialMessage || '', quote.promo.id, quote.promo.codePreview,
                 quote.promo.discountPercent, quote.originalAmount, quote.finalAmount
@@ -240,11 +260,19 @@ router.post('/free', (req, res) => {
 
         const order = createFreeOrder(data);
         if (data.customerEmail) {
+            const normalized = String(data.customerEmail).trim().toLowerCase();
+            try {
+                getDb()
+                    .prepare('UPDATE subscribers SET converted_order_id = ? WHERE email = ? AND converted_order_id IS NULL')
+                    .run(order.id, normalized);
+            } catch (subErr) {
+                console.warn('Order: subscriber link skipped:', subErr.message);
+            }
+
             void getEmailModule().sendConfirmationEmail({
                 to: data.customerEmail,
                 orderId: order.id.slice(0, 8).toUpperCase(),
                 genre: data.genre,
-                mood: data.mood,
                 deliveryDate: order.delivery_date,
                 reference: order.promo_code_preview,
                 amountLabel: formatPaidAmount(0, data.paymentProvider === 'stripe' ? 'stripe' : 'paystack'),
@@ -257,6 +285,31 @@ router.post('/free', (req, res) => {
             console.error('Error creating free order:', err);
         }
         res.status(err.statusCode || 500).json({ error: err.message || 'Failed to create free order' });
+    }
+});
+
+// PATCH /api/orders/:id/rating — customer submits a 1-5 rating for their completed song.
+// Public (gated by knowing the order id, same as the GET below) so the link in
+// the completion email works without forcing a magic-link login.
+router.patch('/:id/rating', (req, res) => {
+    const rating = Number(req.body?.rating);
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+        return res.status(400).json({ error: 'Rating must be an integer between 1 and 5.' });
+    }
+
+    try {
+        const dbConn = getDb();
+        const result = dbConn.prepare('UPDATE orders SET rating = ? WHERE id = ?').run(rating, req.params.id);
+        if (result.changes === 0) {
+            const fallback = dbConn.prepare(
+                "UPDATE orders SET rating = ? WHERE UPPER(SUBSTR(id, 1, 8)) = UPPER(?)"
+            ).run(rating, req.params.id.slice(0, 8));
+            if (fallback.changes === 0) return res.status(404).json({ error: 'Order not found' });
+        }
+        res.json({ rating });
+    } catch (err) {
+        console.error('Error saving rating:', err);
+        res.status(500).json({ error: 'Failed to save rating' });
     }
 });
 
@@ -286,7 +339,7 @@ router.post('/', async (req, res) => {
         return res.status(400).json({ error: 'Invalid request data.', details: parsed.error.flatten() });
     }
 
-    const { songTitle, genre, mood, tempo, occasion, occasionDetail, story, stripeSessionId, paystackReference, customerEmail, recipientType, senderName, voiceGender, specialQualities, favoriteMemories, specialMessage, fastDelivery } = parsed.data;
+    const { songTitle, genre, mood, tempo, occasion, occasionDetail, story, stripeSessionId, paystackReference, customerEmail, recipientType, recipientName, senderName, voiceGender, specialQualities, favoriteMemories, specialMessage, fastDelivery } = parsed.data;
 
     if (!paystackReference && !stripeSessionId) {
         return res.status(400).json({ error: 'A verified payment reference is required.' });
@@ -335,18 +388,18 @@ router.post('/', async (req, res) => {
                 id, song_title, genre, mood, tempo, occasion, occasion_detail, story,
                 status, created_at, delivery_date,
                 stripe_session_id, paystack_reference, amount, customer_email,
-                recipient_type, sender_name, voice_gender,
+                recipient_type, recipient_name, sender_name, voice_gender,
                 special_qualities, favorite_memories, special_message,
                 promo_code_id, promo_code_preview, promo_discount_percent,
                 original_amount, discounted_amount
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
             id, songTitle || 'Custom Song', genre || '', mood || '', tempo || 100,
             occasion || '', occasionDetail || '', story || '', 'in_production', createdAt, deliveryDate,
             stripeSessionId || null, paystackReference || null,
             verifiedAmount || PRICING.ngn.standardKobo,
-            customerEmail || null, recipientType || '', senderName || '',
+            customerEmail || null, recipientType || '', recipientName || '', senderName || '',
             voiceGender || '', specialQualities || '', favoriteMemories || '', specialMessage || '',
             promo.promoCodeId, promo.promoCodePreview, promo.promoDiscountPercent,
             promo.originalAmount, promo.discountedAmount
@@ -354,11 +407,20 @@ router.post('/', async (req, res) => {
 
         const order = dbConn.prepare('SELECT * FROM orders WHERE id = ?').get(id);
         if (customerEmail) {
+            const normalized = String(customerEmail).trim().toLowerCase();
+            try {
+                dbConn
+                    .prepare('UPDATE subscribers SET converted_order_id = ? WHERE email = ? AND converted_order_id IS NULL')
+                    .run(id, normalized);
+            } catch (subErr) {
+                // best effort — never block order creation on a subscriber update
+                console.warn('Order: subscriber link skipped:', subErr.message);
+            }
+
             void getEmailModule().sendConfirmationEmail({
                 to: customerEmail,
                 orderId: id.slice(0, 8).toUpperCase(),
                 genre,
-                mood,
                 deliveryDate,
                 reference: paystackReference || stripeSessionId,
                 amountLabel: formatPaidAmount(verifiedAmount, paymentProvider),
