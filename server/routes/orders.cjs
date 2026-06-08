@@ -181,8 +181,8 @@ router.get('/track', requireAuth, (req, res) => {
         }
 
         const orders = dbConn.prepare(
-            'SELECT * FROM orders WHERE customer_email = ? ORDER BY created_at DESC'
-        ).all(email);
+            'SELECT * FROM orders WHERE LOWER(TRIM(customer_email)) = ? ORDER BY created_at DESC'
+        ).all(String(email).trim().toLowerCase());
 
         res.json(orders.map(computeOrderProgress));
     } catch (err) {
@@ -249,7 +249,8 @@ router.post('/free', (req, res) => {
             `).run(
                 id, input.songTitle || 'Custom Song', input.genre || '', input.mood || '', input.tempo || 100,
                 input.occasion || '', input.occasionDetail || '', input.story || '', now, deliveryDate,
-                input.customerEmail || null, input.recipientType || '', input.recipientName || '', input.senderName || '',
+                input.customerEmail ? String(input.customerEmail).trim().toLowerCase() : null,
+                input.recipientType || '', input.recipientName || '', input.senderName || '',
                 input.voiceGender || '', input.specialQualities || '', input.favoriteMemories || '',
                 input.specialMessage || '', quote.promo.id, quote.promo.codePreview,
                 quote.promo.discountPercent, quote.originalAmount, quote.finalAmount
@@ -399,7 +400,8 @@ router.post('/', async (req, res) => {
             occasion || '', occasionDetail || '', story || '', 'in_production', createdAt, deliveryDate,
             stripeSessionId || null, paystackReference || null,
             verifiedAmount || PRICING.ngn.standardKobo,
-            customerEmail || null, recipientType || '', recipientName || '', senderName || '',
+            customerEmail ? String(customerEmail).trim().toLowerCase() : null,
+            recipientType || '', recipientName || '', senderName || '',
             voiceGender || '', specialQualities || '', favoriteMemories || '', specialMessage || '',
             promo.promoCodeId, promo.promoCodePreview, promo.promoDiscountPercent,
             promo.originalAmount, promo.discountedAmount

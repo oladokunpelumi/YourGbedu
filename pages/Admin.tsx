@@ -48,6 +48,15 @@ interface PromoCode {
   usedOrderId: string | null;
 }
 
+interface Subscriber {
+  id: string;
+  email: string;
+  created_at: string;
+  source: string | null;
+  converted_order_id: string | null;
+  last_emailed_at: string | null;
+}
+
 interface Pagination {
   page: number;
   limit: number;
@@ -163,6 +172,8 @@ const Admin: React.FC = () => {
   const [disablingPromoId, setDisablingPromoId] = useState<string | null>(null);
   const [songInputs, setSongInputs] = useState<Record<string, { url: string; title: string }>>({});
   const [attachingSongId, setAttachingSongId] = useState<string | null>(null);
+  const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
+  const [showAllSubscribers, setShowAllSubscribers] = useState(false);
 
   const currentPendingBriefs = useMemo(
     () => orders.filter((order) => !order.ai_brief?.trim()).length,
@@ -195,10 +206,11 @@ const Admin: React.FC = () => {
         if (statusFilter) params.set('status', statusFilter);
         if (search) params.set('search', search);
 
-        const [ordersRes, statsRes, promoRes] = await Promise.all([
+        const [ordersRes, statsRes, promoRes, subsRes] = await Promise.all([
           adminFetch(`/api/admin/orders?${params}`),
           adminFetch('/api/admin/stats'),
           adminFetch('/api/admin/promo-codes'),
+          adminFetch('/api/admin/subscribers'),
         ]);
 
         if (ordersRes.status === 401 || ordersRes.status === 403 || promoRes.status === 401 || promoRes.status === 403) {
@@ -206,15 +218,17 @@ const Admin: React.FC = () => {
           return;
         }
 
-        const [ordersPayload, statsData, promoPayload] = await Promise.all([
+        const [ordersPayload, statsData, promoPayload, subsPayload] = await Promise.all([
           ordersRes.json(),
           statsRes.json(),
           promoRes.json(),
+          subsRes.ok ? subsRes.json() : Promise.resolve({ data: [] }),
         ]);
         setOrders(ordersPayload.data ?? ordersPayload);
         setPagination(ordersPayload.pagination ?? null);
         setStats(statsData);
         setPromoCodes(promoPayload.data ?? []);
+        setSubscribers(subsPayload.data ?? []);
       } catch (err) {
         console.error('Failed to fetch admin data:', err);
         setAdminMessage('Could not load the order queue.');
@@ -322,6 +336,31 @@ const Admin: React.FC = () => {
     } finally {
       setAttachingSongId(null);
     }
+  };
+
+  const handleExportSubscribers = () => {
+    if (subscribers.length === 0) {
+      setAdminMessage('No subscribers to export yet.');
+      return;
+    }
+    const header = ['email', 'captured_at', 'source', 'converted_order_id', 'last_emailed_at'];
+    const csv = [
+      header.join(','),
+      ...subscribers.map((s) =>
+        [s.email, s.created_at, s.source || '', s.converted_order_id || '', s.last_emailed_at || '']
+          .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+          .join(',')
+      ),
+    ].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `yourgbedu-subscribers-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const handleExportOrder = (order: Order) => {
@@ -618,6 +657,87 @@ const Admin: React.FC = () => {
                   </div>
                 );
               })
+            )}
+          </div>
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border border-line bg-cream">
+          <div className="flex flex-col gap-4 border-b border-line px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="font-headline text-3xl font-medium leading-none text-ink">
+                Email subscribers
+              </h2>
+              <p className="mt-1 text-sm text-ink-soft">
+                Visitors who unlocked the promo code via the popup. Use this list to follow up with
+                anyone who did not check out.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full border border-line bg-ivory px-3 py-1 font-label text-xs font-bold uppercase tracking-[0.14em] text-ink-muted">
+                {subscribers.length} total
+                {subscribers.length > 0 && (
+                  <>
+                    {' · '}
+                    {subscribers.filter((s) => s.converted_order_id).length} converted
+                  </>
+                )}
+              </span>
+              <button
+                type="button"
+                onClick={handleExportSubscribers}
+                disabled={subscribers.length === 0}
+                className={adminActionClass}
+              >
+                <span className="material-symbols-outlined text-sm">download</span>
+                Export CSV
+              </button>
+            </div>
+          </div>
+          <div className="px-5 py-4">
+            {subscribers.length === 0 ? (
+              <p className="text-sm text-ink-muted">
+                No emails captured yet. Once a visitor submits the popup, they will appear here.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="text-left font-label text-[10px] font-bold uppercase tracking-[0.14em] text-ink-muted">
+                    <tr>
+                      <th className="py-2 pr-4">Email</th>
+                      <th className="py-2 pr-4">Captured</th>
+                      <th className="py-2 pr-4">Source</th>
+                      <th className="py-2 pr-4">Order</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(showAllSubscribers ? subscribers : subscribers.slice(0, 10)).map((s) => (
+                      <tr key={s.id} className="border-t border-line">
+                        <td className="py-2 pr-4 font-mono text-xs text-ink">{s.email}</td>
+                        <td className="py-2 pr-4 text-ink-soft">{formatDate(s.created_at)}</td>
+                        <td className="py-2 pr-4 text-ink-muted">{s.source || '-'}</td>
+                        <td className="py-2 pr-4">
+                          {s.converted_order_id ? (
+                            <span className="rounded-full bg-sage-pale px-2 py-0.5 font-label text-[10px] font-bold uppercase tracking-[0.14em] text-sage-dark">
+                              #{s.converted_order_id.slice(0, 8).toUpperCase()}
+                            </span>
+                          ) : (
+                            <span className="text-ink-muted">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {subscribers.length > 10 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllSubscribers((v) => !v)}
+                    className="mt-3 font-label text-xs font-bold uppercase tracking-[0.14em] text-terracotta hover:text-terracotta-dark"
+                  >
+                    {showAllSubscribers ? 'Show fewer' : `Show all ${subscribers.length}`}
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </section>

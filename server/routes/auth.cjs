@@ -70,7 +70,11 @@ router.post('/request', async (req, res) => {
     // Always return the same response regardless of whether the email has orders —
     // this prevents email enumeration. Only actually send if the address has at
     // least one order so the endpoint can't be used to spam arbitrary addresses.
-    const hasOrders = dbConn.prepare('SELECT 1 FROM orders WHERE customer_email = ? LIMIT 1').get(normalizedEmail);
+    // Case-insensitive on the column too — orders created before we started
+    // normalizing on insert may still have mixed-case addresses.
+    const hasOrders = dbConn
+        .prepare('SELECT 1 FROM orders WHERE LOWER(TRIM(customer_email)) = ? LIMIT 1')
+        .get(normalizedEmail);
 
     if (hasOrders) {
         const plainToken = crypto.randomBytes(32).toString('hex');
