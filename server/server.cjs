@@ -101,17 +101,73 @@ app.use(helmet({
     crossOriginEmbedderPolicy: false, // audio/media elements need this relaxed
 }));
 
-// CORS: explicit allowlist — never reflect arbitrary origins
+// CORS: in dev, allow the local dev origins. In production, the SPA is served
+// from the same Express app — so the *request's own origin* is always trusted
+// (same-host). We accept CLIENT_URL and its www/apex variant so a custom
+// domain like yourgbedu.com works whether the user types www or not. We also
+// accept the Railway default subdomain regardless of CLIENT_URL, so a
+// mis-set env var can't silently kill cookie auth on the platform domain.
 const DEV_ORIGINS = getDevClientOrigins();
+
+function hostVariants(url) {
+    if (!url) return new Set();
+    try {
+        const u = new URL(url);
+        const scheme = u.protocol;
+        const host = u.host;
+        const hostNoWww = host.startsWith('www.') ? host.slice(4) : host;
+        const hostWithWww = host.startsWith('www.') ? host : `www.${host}`;
+        return new Set([
+            `${scheme}//${hostNoWww}`,
+            `${scheme}//${hostWithWww}`,
+        ]);
+    } catch {
+        return new Set([url]);
+    }
+}
+
+const ALLOWED_PROD_ORIGINS = hostVariants(CLIENT_URL);
+
 app.use(
     cors({
-        origin: IS_PROD ? CLIENT_URL : DEV_ORIGINS,
+        origin: (origin, callback) => {
+            // Non-browser requests (curl, server-to-server) have no Origin header.
+            if (!origin) return callback(null, true);
+
+            if (IS_PROD) {
+                if (ALLOWED_PROD_ORIGINS.has(origin)) return callback(null, true);
+                // Allow same Railway domain even if CLIENT_URL drifted in env.
+                if (process.env.RAILWAY_PUBLIC_DOMAIN && origin.endsWith(process.env.RAILWAY_PUBLIC_DOMAIN)) {
+                    return callback(null, true);
+                }
+                console.warn(`[CORS] rejecting origin=${origin} (not in ${[...ALLOWED_PROD_ORIGINS].join(', ')} and not a Railway subdomain)`);
+                return callback(null, false);
+            }
+
+            if (DEV_ORIGINS.includes(origin)) return callback(null, true);
+            return callback(null, false);
+        },
         credentials: true, // required for cookie-based auth
     })
 );
 
 // ─── Cookie Parser ────────────────────────────────────────────────────────────
 app.use(cookieParser());
+
+// Lightweight diagnostic: log which admin requests arrive with/without the
+// session cookie so we can pinpoint a vanishing cookie in production. The
+// JWT itself is never logged.
+if (IS_PROD) {
+    app.use('/api/admin', (req, res, next) => {
+        const hasAdminToken = !!req.cookies?.admin_token;
+        const hasSonnetaryToken = !!req.cookies?.sonnetary_token;
+        const cookieNames = Object.keys(req.cookies || {});
+        console.info(
+            `[Admin] ${req.method} ${req.path} | origin=${req.headers.origin || 'none'} | host=${req.headers.host} | cookies=[${cookieNames.join(',')}] | admin_token=${hasAdminToken} | sonnetary_token=${hasSonnetaryToken}`
+        );
+        next();
+    });
+}
 
 // ─── Rate Limiters ────────────────────────────────────────────────────────────
 const paymentLimiter = rateLimit({
@@ -191,8 +247,13 @@ if (IS_PROD) {
 
 app.listen(PORT, () => {
     console.log(`🎵 YourGbedu server running on http://localhost:${PORT}`);
-    console.log(`🔐 CORS origin: ${IS_PROD ? CLIENT_URL : DEV_ORIGINS.join(', ')}`);
     if (IS_PROD) {
+        console.log(`🔐 CORS — CLIENT_URL: ${CLIENT_URL}`);
+        console.log(`🔐 CORS — allowed prod origins: ${[...ALLOWED_PROD_ORIGINS].join(', ')}`);
+        console.log(`🔐 CORS — RAILWAY_PUBLIC_DOMAIN: ${process.env.RAILWAY_PUBLIC_DOMAIN || '(not set)'}`);
+        console.log(`🍪 Cookie — secure: true, sameSite: lax, trust proxy: 1`);
         console.log(`🌐 Serving SPA from: ${path.join(__dirname, '..', 'dist')}`);
+    } else {
+        console.log(`🔐 CORS — dev origins: ${DEV_ORIGINS.join(', ')}`);
     }
 });
