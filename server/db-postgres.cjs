@@ -13,6 +13,7 @@
  * This adapter provides the interface; the actual async calls happen in the routes.
  */
 const { Pool } = require('pg');
+const crypto = require('crypto');
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
@@ -311,6 +312,28 @@ async function initSchema() {
         await pool.query("UPDATE songs SET sort_order = 5 WHERE title = 'Mimi (Give Me Wealth)'");
     } catch (err) {
         console.warn('[PostgreSQL] Song catalogue migration warning:', err.message);
+    }
+
+    // Seed the FREE-B90169EBE29F promo code if it doesn't already exist.
+    try {
+        const promoCodeValue = 'FREE-B90169EBE29F';
+        const promoCodeHash = crypto.createHash('sha256').update(promoCodeValue).digest('hex');
+        const existingPromo = await pool.query(
+            'SELECT COUNT(*) AS count FROM promo_codes WHERE code_hash = $1',
+            [promoCodeHash]
+        );
+        if (parseInt(existingPromo.rows[0].count, 10) === 0) {
+            await pool.query(
+                `INSERT INTO promo_codes (id, code_hash, code_preview, discount_percent, max_uses, used_count, disabled, created_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                [crypto.randomUUID(), promoCodeHash, 'FREE...9F', 100, 1, 0, 0, new Date().toISOString()]
+            );
+            console.log('[PostgreSQL] ✅ Seeded promo code FREE...9F');
+        } else {
+            console.log('[PostgreSQL] Promo code FREE...9F already exists, skipping seed');
+        }
+    } catch (err) {
+        console.warn('[PostgreSQL] Promo code seed warning:', err.message);
     }
 }
 
