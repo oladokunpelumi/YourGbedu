@@ -101,17 +101,53 @@ app.use(helmet({
     crossOriginEmbedderPolicy: false, // audio/media elements need this relaxed
 }));
 
-// CORS: explicit allowlist — never reflect arbitrary origins
+// CORS: in dev, allow the local dev origins. In production, the SPA is served
+// from the same Express app — so the *request's own origin* is always trusted
+// (same-host). We additionally allow an explicit CLIENT_URL when the SPA is
+// hosted on a separate domain. This makes the app robust to a mis-set
+// CLIENT_URL: cookie-based auth on the same Railway domain just works.
 const DEV_ORIGINS = getDevClientOrigins();
 app.use(
     cors({
-        origin: IS_PROD ? CLIENT_URL : DEV_ORIGINS,
+        origin: (origin, callback) => {
+            // Non-browser requests (curl, server-to-server) have no Origin header.
+            if (!origin) return callback(null, true);
+
+            if (IS_PROD) {
+                // Same-host requests are always allowed (SPA served by us).
+                // Cross-host requests require CLIENT_URL to match.
+                if (origin === CLIENT_URL) return callback(null, true);
+                // Allow same Railway domain even if CLIENT_URL drifted in env.
+                if (process.env.RAILWAY_PUBLIC_DOMAIN && origin.endsWith(process.env.RAILWAY_PUBLIC_DOMAIN)) {
+                    return callback(null, true);
+                }
+                return callback(null, false);
+            }
+
+            if (DEV_ORIGINS.includes(origin)) return callback(null, true);
+            return callback(null, false);
+        },
         credentials: true, // required for cookie-based auth
     })
 );
 
 // ─── Cookie Parser ────────────────────────────────────────────────────────────
 app.use(cookieParser());
+
+// Lightweight diagnostic: log which admin requests arrive with/without the
+// session cookie so we can pinpoint a vanishing cookie in production. The
+// JWT itself is never logged.
+if (IS_PROD) {
+    app.use('/api/admin', (req, res, next) => {
+        const hasAdminToken = !!req.cookies?.admin_token;
+        const hasSonnetaryToken = !!req.cookies?.sonnetary_token;
+        const cookieNames = Object.keys(req.cookies || {});
+        console.info(
+            `[Admin] ${req.method} ${req.path} | origin=${req.headers.origin || 'none'} | host=${req.headers.host} | cookies=[${cookieNames.join(',')}] | admin_token=${hasAdminToken} | sonnetary_token=${hasSonnetaryToken}`
+        );
+        next();
+    });
+}
 
 // ─── Rate Limiters ────────────────────────────────────────────────────────────
 const paymentLimiter = rateLimit({
@@ -191,8 +227,12 @@ if (IS_PROD) {
 
 app.listen(PORT, () => {
     console.log(`🎵 YourGbedu server running on http://localhost:${PORT}`);
-    console.log(`🔐 CORS origin: ${IS_PROD ? CLIENT_URL : DEV_ORIGINS.join(', ')}`);
     if (IS_PROD) {
+        console.log(`🔐 CORS — CLIENT_URL: ${CLIENT_URL}`);
+        console.log(`🔐 CORS — RAILWAY_PUBLIC_DOMAIN: ${process.env.RAILWAY_PUBLIC_DOMAIN || '(not set)'}`);
+        console.log(`🍪 Cookie — secure: true, sameSite: lax, trust proxy: 1`);
         console.log(`🌐 Serving SPA from: ${path.join(__dirname, '..', 'dist')}`);
+    } else {
+        console.log(`🔐 CORS — dev origins: ${DEV_ORIGINS.join(', ')}`);
     }
 });

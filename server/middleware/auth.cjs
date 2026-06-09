@@ -95,6 +95,7 @@ const COOKIE_OPTS = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
+    path: '/', // explicit so /api/* requests carry the cookie regardless of fetch URL prefix
 };
 
 module.exports = {
