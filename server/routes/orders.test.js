@@ -120,7 +120,7 @@ describe('POST /api/orders', () => {
 describe('POST /api/orders/free', () => {
   it('creates an order with a one-time 100% promo code and marks it used', async () => {
     const { default: supertest } = await import('supertest');
-    const promo = createOneTimeFreeCode(db);
+    const promo = await createOneTimeFreeCode();
 
     const res = await supertest(app)
       .post('/api/orders/free')
@@ -153,7 +153,7 @@ describe('POST /api/orders/free', () => {
 
   it('does not allow a one-time free code to be reused', async () => {
     const { default: supertest } = await import('supertest');
-    const promo = createOneTimeFreeCode(db);
+    const promo = await createOneTimeFreeCode();
 
     const payload = {
       genre: 'Gospel',

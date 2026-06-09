@@ -148,6 +148,11 @@ async function initSchema() {
             email TEXT UNIQUE NOT NULL,
             created_at TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS revoked_tokens (
+            jti TEXT PRIMARY KEY,
+            expires_at TEXT NOT NULL
+        );
     `);
 
     await pool.query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 99');

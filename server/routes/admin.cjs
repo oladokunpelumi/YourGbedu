@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const { generateToken, requireAdmin, revokeToken, COOKIE_OPTS } = require('../middleware/auth.cjs');
 const { createOneTimeFreeCode, listOneTimeCodes, disablePromoCode } = require('../promos.cjs');
+const { getOne, getAll, execSql } = require('../db-helpers.cjs');
 
 // Strict limiter for admin login — same as authLimiter (10 attempts per hour)
 const loginLimiter = rateLimit({
@@ -157,24 +158,27 @@ router.post('/login', loginLimiter, async (req, res) => {
 });
 
 // POST /api/admin/logout — revoke the active admin session
-router.post('/logout', requireAdmin, (req, res) => {
+router.post('/logout', requireAdmin, async (req, res) => {
     const token = req.cookies?.admin_token;
-    if (token) revokeToken(token);
+    if (token) await revokeToken(token);
     res.clearCookie('admin_token', COOKIE_OPTS);
     res.json({ message: 'Logged out.' });
 });
 
 // GET /api/admin/orders — paginated orders, most recent first
-router.get('/orders', requireAdmin, (req, res) => {
+router.get('/orders', requireAdmin, async (req, res) => {
     try {
-        const dbConn = getDb();
         const page = Math.max(1, parseInt(req.query.page) || 1);
         const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 25));
         const offset = (page - 1) * limit;
         const { where, params } = buildOrderFilters(req.query);
 
-        const total = dbConn.prepare(`SELECT COUNT(*) as count FROM orders WHERE 1=1${where}`).get(...params).count;
-        const orders = dbConn.prepare(`SELECT * FROM orders WHERE 1=1${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`).all(...params, limit, offset);
+        const totalRow = await getOne(`SELECT COUNT(*) as count FROM orders WHERE 1=1${where}`, ...params);
+        const total = Number(totalRow?.count ?? 0);
+        const orders = await getAll(
+            `SELECT * FROM orders WHERE 1=1${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+            ...params, limit, offset
+        );
 
         res.json({
             data: orders,
@@ -194,13 +198,13 @@ router.get('/orders', requireAdmin, (req, res) => {
 });
 
 // GET /api/admin/orders/export — production JSON for the current filtered queue
-router.get('/orders/export', requireAdmin, (req, res) => {
+router.get('/orders/export', requireAdmin, async (req, res) => {
     try {
-        const dbConn = getDb();
         const { where, params } = buildOrderFilters(req.query);
-        const orders = dbConn
-            .prepare(`SELECT * FROM orders WHERE 1=1${where} ORDER BY created_at DESC LIMIT 500`)
-            .all(...params);
+        const orders = await getAll(
+            `SELECT * FROM orders WHERE 1=1${where} ORDER BY created_at DESC LIMIT 500`,
+            ...params
+        );
 
         res.json({
             exportedAt: new Date().toISOString(),
@@ -214,13 +218,16 @@ router.get('/orders/export', requireAdmin, (req, res) => {
 });
 
 // GET /api/admin/stats
-router.get('/stats', requireAdmin, (req, res) => {
+router.get('/stats', requireAdmin, async (req, res) => {
     try {
-        const dbConn = getDb();
-        const totalOrders = dbConn.prepare('SELECT COUNT(*) as count FROM orders').get().count;
-        const totalRevenue = dbConn.prepare('SELECT SUM(amount) as total FROM orders').get().total || 0;
-        const songCount = dbConn.prepare('SELECT COUNT(*) as count FROM songs').get().count;
-        res.json({ totalOrders, totalRevenue, songCount });
+        const ordersRow = await getOne('SELECT COUNT(*) as count FROM orders');
+        const revenueRow = await getOne('SELECT SUM(amount) as total FROM orders');
+        const songsRow = await getOne('SELECT COUNT(*) as count FROM songs');
+        res.json({
+            totalOrders: Number(ordersRow?.count ?? 0),
+            totalRevenue: Number(revenueRow?.total ?? 0),
+            songCount: Number(songsRow?.count ?? 0),
+        });
     } catch (err) {
         console.error('Admin: Error fetching stats:', err);
         res.status(500).json({ error: 'Failed to fetch stats' });
@@ -228,9 +235,9 @@ router.get('/stats', requireAdmin, (req, res) => {
 });
 
 // GET /api/admin/promo-codes — list one-time promo codes without raw code values
-router.get('/promo-codes', requireAdmin, (req, res) => {
+router.get('/promo-codes', requireAdmin, async (req, res) => {
     try {
-        res.json({ data: listOneTimeCodes(getDb()) });
+        res.json({ data: await listOneTimeCodes() });
     } catch (err) {
         console.error('Admin: Error listing promo codes:', err);
         res.status(500).json({ error: 'Failed to list promo codes' });
@@ -238,9 +245,9 @@ router.get('/promo-codes', requireAdmin, (req, res) => {
 });
 
 // POST /api/admin/promo-codes — generate a one-time 100% off code
-router.post('/promo-codes', requireAdmin, (req, res) => {
+router.post('/promo-codes', requireAdmin, async (req, res) => {
     try {
-        const code = createOneTimeFreeCode(getDb());
+        const code = await createOneTimeFreeCode();
         res.status(201).json(code);
     } catch (err) {
         console.error('Admin: Error generating promo code:', err);
@@ -249,9 +256,9 @@ router.post('/promo-codes', requireAdmin, (req, res) => {
 });
 
 // PATCH /api/admin/promo-codes/:id/disable — disable an unused one-time code
-router.patch('/promo-codes/:id/disable', requireAdmin, (req, res) => {
+router.patch('/promo-codes/:id/disable', requireAdmin, async (req, res) => {
     try {
-        const disabled = disablePromoCode(getDb(), req.params.id);
+        const disabled = await disablePromoCode(req.params.id);
         if (!disabled) return res.status(404).json({ error: 'Promo code not found or already used.' });
         res.json({ disabled: true });
     } catch (err) {
@@ -263,14 +270,13 @@ router.patch('/promo-codes/:id/disable', requireAdmin, (req, res) => {
 // POST /api/admin/orders/:id/ai-brief — manually generate or regenerate a production brief
 router.post('/orders/:id/ai-brief', requireAdmin, async (req, res) => {
     try {
-        const dbConn = getDb();
-        const order = dbConn.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+        const order = await getOne('SELECT * FROM orders WHERE id = ?', req.params.id);
         if (!order) return res.status(404).json({ error: 'Order not found' });
 
         const aiBrief = await getAiService().generateProductionBrief(orderToBriefInput(order));
-        dbConn.prepare('UPDATE orders SET ai_brief = ? WHERE id = ?').run(aiBrief, req.params.id);
+        await execSql('UPDATE orders SET ai_brief = ? WHERE id = ?', aiBrief, req.params.id);
 
-        const updated = dbConn.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+        const updated = await getOne('SELECT * FROM orders WHERE id = ?', req.params.id);
         res.json({ order: updated, aiBrief });
     } catch (err) {
         console.error('Admin: Error generating AI brief:', err);
@@ -279,7 +285,7 @@ router.post('/orders/:id/ai-brief', requireAdmin, async (req, res) => {
 });
 
 // PATCH /api/admin/orders/:id/status
-router.patch('/orders/:id/status', requireAdmin, (req, res) => {
+router.patch('/orders/:id/status', requireAdmin, async (req, res) => {
     const { status } = req.body;
     const validStatuses = ['in_production', 'completed', 'cancelled'];
 
@@ -288,16 +294,12 @@ router.patch('/orders/:id/status', requireAdmin, (req, res) => {
     }
 
     try {
-        const dbConn = getDb();
-        const result = dbConn
-            .prepare('UPDATE orders SET status = ? WHERE id = ?')
-            .run(status, req.params.id);
-
+        const result = await execSql('UPDATE orders SET status = ? WHERE id = ?', status, req.params.id);
         if (result.changes === 0) {
             return res.status(404).json({ error: 'Order not found' });
         }
 
-        const order = dbConn.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+        const order = await getOne('SELECT * FROM orders WHERE id = ?', req.params.id);
 
         if (status === 'completed' && order?.customer_email) {
             getEmailModule().sendCompletionEmail({
@@ -317,7 +319,7 @@ router.patch('/orders/:id/status', requireAdmin, (req, res) => {
 });
 
 // POST /api/admin/orders/:id/song — attach a finished song URL and mark completed
-router.post('/orders/:id/song', requireAdmin, (req, res) => {
+router.post('/orders/:id/song', requireAdmin, async (req, res) => {
     const url = typeof req.body?.url === 'string' ? req.body.url.trim() : '';
     const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
 
@@ -326,21 +328,19 @@ router.post('/orders/:id/song', requireAdmin, (req, res) => {
     }
 
     try {
-        const dbConn = getDb();
         const deliveredAt = new Date().toISOString();
-        const result = dbConn
-            .prepare(`
-                UPDATE orders
-                SET final_song_url = ?, final_song_title = ?, delivered_at = ?, status = 'completed'
-                WHERE id = ?
-            `)
-            .run(url, title || null, deliveredAt, req.params.id);
+        const result = await execSql(
+            `UPDATE orders
+             SET final_song_url = ?, final_song_title = ?, delivered_at = ?, status = 'completed'
+             WHERE id = ?`,
+            url, title || null, deliveredAt, req.params.id
+        );
 
         if (result.changes === 0) {
             return res.status(404).json({ error: 'Order not found' });
         }
 
-        const order = dbConn.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+        const order = await getOne('SELECT * FROM orders WHERE id = ?', req.params.id);
 
         if (order?.customer_email) {
             void getEmailModule().sendCompletionEmail({
@@ -360,11 +360,11 @@ router.post('/orders/:id/song', requireAdmin, (req, res) => {
 });
 
 // GET /api/admin/subscribers — list captured emails for follow-up
-router.get('/subscribers', requireAdmin, (req, res) => {
+router.get('/subscribers', requireAdmin, async (req, res) => {
     try {
-        const rows = getDb()
-            .prepare('SELECT id, email, created_at, source, converted_order_id, last_emailed_at FROM subscribers ORDER BY created_at DESC')
-            .all();
+        const rows = await getAll(
+            'SELECT id, email, created_at, source, converted_order_id, last_emailed_at FROM subscribers ORDER BY created_at DESC'
+        );
         res.json({ data: rows, total: rows.length });
     } catch (err) {
         console.error('Admin: Error listing subscribers:', err);
@@ -373,9 +373,9 @@ router.get('/subscribers', requireAdmin, (req, res) => {
 });
 
 // GET /api/admin/songs
-router.get('/songs', requireAdmin, (req, res) => {
+router.get('/songs', requireAdmin, async (req, res) => {
     try {
-        const songs = getDb().prepare('SELECT * FROM songs ORDER BY id ASC').all();
+        const songs = await getAll('SELECT * FROM songs ORDER BY id ASC');
         res.json(songs);
     } catch {
         res.status(500).json({ error: 'Failed to fetch songs' });

@@ -145,18 +145,19 @@ function parsePromoMetadata(metadata = {}) {
     };
 }
 
-function createOneTimeFreeCode(db) {
+async function createOneTimeFreeCode() {
+    const { execSql } = require('./db-helpers.cjs');
     const code = makeOneTimeCode();
     const now = new Date().toISOString();
     const id = crypto.randomUUID();
 
-    db.prepare(`
+    await execSql(`
         INSERT INTO promo_codes (
             id, code_hash, code_preview, discount_percent, max_uses, used_count,
             disabled, created_at
         )
         VALUES (?, ?, ?, 100, 1, 0, 0, ?)
-    `).run(id, hashCode(code), maskCode(code), now);
+    `, id, hashCode(code), maskCode(code), now);
 
     return {
         id,
@@ -172,26 +173,28 @@ function createOneTimeFreeCode(db) {
     };
 }
 
-function listOneTimeCodes(db) {
-    return db.prepare(`
+async function listOneTimeCodes() {
+    const { getAll } = require('./db-helpers.cjs');
+    return await getAll(`
         SELECT
             id,
-            code_preview AS codePreview,
-            discount_percent AS discountPercent,
-            max_uses AS maxUses,
-            used_count AS usedCount,
+            code_preview AS "codePreview",
+            discount_percent AS "discountPercent",
+            max_uses AS "maxUses",
+            used_count AS "usedCount",
             disabled,
-            created_at AS createdAt,
-            used_at AS usedAt,
-            used_order_id AS usedOrderId
+            created_at AS "createdAt",
+            used_at AS "usedAt",
+            used_order_id AS "usedOrderId"
         FROM promo_codes
         ORDER BY created_at DESC
         LIMIT 100
-    `).all();
+    `);
 }
 
-function disablePromoCode(db, id) {
-    const result = db.prepare('UPDATE promo_codes SET disabled = 1 WHERE id = ? AND used_count = 0').run(id);
+async function disablePromoCode(id) {
+    const { execSql } = require('./db-helpers.cjs');
+    const result = await execSql('UPDATE promo_codes SET disabled = 1 WHERE id = ? AND used_count = 0', id);
     return result.changes > 0;
 }
 
