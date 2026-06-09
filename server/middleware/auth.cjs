@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const { getOne, execSql, pgVariantSql } = require('../db-helpers.cjs');
 
 function getJwtSecret() {
     const jwtSecret = process.env.JWT_SECRET;
@@ -8,12 +9,6 @@ function getJwtSecret() {
 
     // A missing secret means tokens could be forged with a weak/default key.
     throw new Error('JWT_SECRET environment variable is required but not set.');
-}
-
-let db;
-function getDb() {
-    if (!db) db = require('../db.cjs');
-    return db;
 }
 
 function extractToken(req) {
@@ -25,32 +20,33 @@ function extractToken(req) {
     return null;
 }
 
-function isRevoked(jti) {
+async function isRevoked(jti) {
     if (!jti) return false;
     // Let DB errors propagate — requireAuth's outer try/catch returns 401,
     // which is the correct fail-closed behaviour (revoked token stays revoked).
-    const row = getDb().prepare('SELECT 1 FROM revoked_tokens WHERE jti = ?').get(jti);
+    const row = await getOne('SELECT 1 AS x FROM revoked_tokens WHERE jti = ?', jti);
     return !!row;
 }
 
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
     const token = extractToken(req);
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
 
     try {
         const payload = jwt.verify(token, getJwtSecret());
-        if (isRevoked(payload.jti)) {
+        if (await isRevoked(payload.jti)) {
             return res.status(401).json({ error: 'Session has been revoked. Please sign in again.' });
         }
         req.user = payload;
         next();
-    } catch {
+    } catch (err) {
+        console.warn('[Auth] requireAuth rejected:', err?.message || err);
         return res.status(401).json({ error: 'Invalid or expired token' });
     }
 }
 
-function requireAdmin(req, res, next) {
-    requireAuth(req, res, () => {
+async function requireAdmin(req, res, next) {
+    await requireAuth(req, res, () => {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ error: 'Forbidden: Admin access only' });
         }
@@ -72,16 +68,19 @@ function generateToken(user) {
     );
 }
 
-function revokeToken(jwtToken) {
+async function revokeToken(jwtToken) {
     try {
         const payload = jwt.decode(jwtToken);
         if (!payload?.jti || !payload?.exp) return;
         const expiresAt = new Date(payload.exp * 1000).toISOString();
-        getDb().prepare(
-            'INSERT OR IGNORE INTO revoked_tokens (jti, expires_at) VALUES (?, ?)'
-        ).run(payload.jti, expiresAt);
-    } catch {
-        // best-effort
+        const sql = pgVariantSql({
+            sqlite: 'INSERT OR IGNORE INTO revoked_tokens (jti, expires_at) VALUES (?, ?)',
+            postgres: 'INSERT INTO revoked_tokens (jti, expires_at) VALUES (?, ?) ON CONFLICT (jti) DO NOTHING',
+        });
+        await execSql(sql, payload.jti, expiresAt);
+    } catch (err) {
+        // best-effort — logout still clears the cookie client-side
+        console.warn('[Auth] revokeToken failed (best-effort):', err?.message || err);
     }
 }
 

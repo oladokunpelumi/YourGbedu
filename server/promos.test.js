@@ -44,8 +44,8 @@ describe('promo checkout quotes', () => {
     expect(quote.promo.discountPercent).toBe(50);
   });
 
-  it('quotes one-time free codes as 100% off', () => {
-    const code = createOneTimeFreeCode(db);
+  it('quotes one-time free codes as 100% off', async () => {
+    const code = await createOneTimeFreeCode();
     const quote = quoteCheckout({
       db,
       provider: 'paystack',
