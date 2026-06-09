@@ -75,7 +75,8 @@ async function initSchema() {
             artist TEXT,
             tags TEXT,
             audio_url TEXT,
-            story TEXT
+            story TEXT,
+            sort_order INTEGER DEFAULT 99
         );
 
         CREATE TABLE IF NOT EXISTS orders (
@@ -149,6 +150,7 @@ async function initSchema() {
         );
     `);
 
+    await pool.query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 99');
     await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS occasion_detail TEXT');
     await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_code_id TEXT');
     await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_code_preview TEXT');
@@ -201,18 +203,6 @@ async function initSchema() {
                 sort_order: 2,
             },
             {
-                title: "Mummy's 60th Birthday",
-                genre: 'Afro-Beats',
-                duration: '3:29',
-                description: '"A 60th birthday tribute — a joyful Afro-Beats celebration of a mother\'s love, life, and the legacy she has built."',
-                cover_url: '/musics/Cover%20Phtotos/MummyBirthday_Cover.jpg',
-                artist: 'The Family',
-                tags: JSON.stringify(['Birthday', 'Celebration', 'Mother']),
-                audio_url: "/musics/Mummy's 60th Birthday.mp3",
-                story: "A heartfelt Afro-Beats track celebrating a mother's 60th birthday milestone.",
-                sort_order: 3,
-            },
-            {
                 title: 'Like Roses (You Are Your Name)',
                 genre: 'R&B',
                 duration: '4:03',
@@ -223,6 +213,18 @@ async function initSchema() {
                 audio_url: '/musics/Like Roses ( You Are Your Name).mp3',
                 story: 'A first date love story turned into a romantic R&B track.',
                 sort_order: 4,
+            },
+            {
+                title: "Mummy's 60th Birthday",
+                genre: 'Afro-Beats',
+                duration: '3:29',
+                description: '"A 60th birthday tribute — a joyful Afro-Beats celebration of a mother\'s love, life, and the legacy she has built."',
+                cover_url: '/musics/Cover%20Phtotos/MummyBirthday_Cover.jpg',
+                artist: 'The Family',
+                tags: JSON.stringify(['Birthday', 'Celebration', 'Mother']),
+                audio_url: "/musics/Mummy's 60th Birthday.mp3",
+                story: "A heartfelt Afro-Beats track celebrating a mother's 60th birthday milestone.",
+                sort_order: 3,
             },
             {
                 title: 'Mimi (Give Me Wealth)',
@@ -247,60 +249,6 @@ async function initSchema() {
             );
         }
         console.log('[PostgreSQL] ✅ Seeded 5 sample songs');
-    }
-
-    // ── Live data migrations (run on every startup so existing Postgres dbs
-    //    that were seeded with old URLs heal themselves on the next deploy).
-    //    Mirrors the SQLite block in db.cjs.
-    try {
-        await pool.query("DELETE FROM songs WHERE title = 'Baby Steps'");
-        await pool.query("UPDATE songs SET audio_url = '/musics/Mimi (Give Me Wealth).mp3' WHERE title LIKE 'Mimi%' AND (audio_url LIKE '%\"%' OR audio_url IS NULL)");
-        await pool.query("UPDATE songs SET genre = 'R&B' WHERE title = 'Like Roses (You Are Your Name)' AND genre != 'R&B'");
-
-        // Refresh cover URLs to the local catalogue assets every boot.
-        await pool.query("UPDATE songs SET cover_url = '/musics/Cover%20Phtotos/Anniversary_Cover.jpg' WHERE title = 'Anniversary'");
-        await pool.query("UPDATE songs SET cover_url = '/musics/Cover%20Phtotos/valentine.jpg' WHERE title = 'Valentine'");
-        await pool.query("UPDATE songs SET cover_url = '/musics/Cover%20Phtotos/LikeRoses_Cover.jpg' WHERE title = 'Like Roses (You Are Your Name)'");
-        await pool.query("UPDATE songs SET cover_url = '/musics/Cover%20Phtotos/Mimi_Cover.jpg' WHERE title = 'Mimi (Give Me Wealth)'");
-        await pool.query("UPDATE songs SET cover_url = '/musics/Cover%20Phtotos/MummyBirthday_Cover.jpg' WHERE title = $1", ["Mummy's 60th Birthday"]);
-
-        // Ensure Anniversary and Mummy's 60th exist for older Postgres seeds.
-        const anniversaryExists = await pool.query("SELECT 1 FROM songs WHERE title = 'Anniversary' LIMIT 1");
-        if (anniversaryExists.rowCount === 0) {
-            await pool.query(
-                `INSERT INTO songs (title, genre, duration, description, cover_url, artist, tags, audio_url, story, sort_order)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-                ['Anniversary', 'Afro-Beats', '3:45',
-                 '"A celebration of love and togetherness — crafted for a special couple whose bond only grows stronger with every passing year."',
-                 '/musics/Cover%20Phtotos/Anniversary_Cover.jpg', 'A Special Couple',
-                 JSON.stringify(['Anniversary', 'Love', 'Celebration']),
-                 '/musics/Anniversary.mp3',
-                 "An Afro-Beats track crafted to celebrate a couple's love and lasting bond.", 1]
-            );
-            console.log('[PostgreSQL] ✅ Added Anniversary to catalogue');
-        }
-        const mummyExists = await pool.query("SELECT 1 FROM songs WHERE title = $1 LIMIT 1", ["Mummy's 60th Birthday"]);
-        if (mummyExists.rowCount === 0) {
-            await pool.query(
-                `INSERT INTO songs (title, genre, duration, description, cover_url, artist, tags, audio_url, story, sort_order)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-                ["Mummy's 60th Birthday", 'Afro-Beats', '3:29',
-                 '"A 60th birthday tribute — a joyful Afro-Beats celebration of a mother\'s love, life, and the legacy she has built."',
-                 '/musics/Cover%20Phtotos/MummyBirthday_Cover.jpg', 'The Family',
-                 JSON.stringify(['Birthday', 'Celebration', 'Mother']),
-                 "/musics/Mummy's 60th Birthday.mp3",
-                 "A heartfelt Afro-Beats track celebrating a mother's 60th birthday milestone.", 3]
-            );
-            console.log("[PostgreSQL] ✅ Added Mummy's 60th Birthday to catalogue");
-        }
-
-        await pool.query("UPDATE songs SET sort_order = 1 WHERE title = 'Anniversary'");
-        await pool.query("UPDATE songs SET sort_order = 2 WHERE title = 'Valentine'");
-        await pool.query("UPDATE songs SET sort_order = 3 WHERE title = $1", ["Mummy's 60th Birthday"]);
-        await pool.query("UPDATE songs SET sort_order = 4 WHERE title = 'Like Roses (You Are Your Name)'");
-        await pool.query("UPDATE songs SET sort_order = 5 WHERE title = 'Mimi (Give Me Wealth)'");
-    } catch (err) {
-        console.warn('[PostgreSQL] Song catalogue migration warning:', err.message);
     }
 }
 
