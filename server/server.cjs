@@ -103,10 +103,31 @@ app.use(helmet({
 
 // CORS: in dev, allow the local dev origins. In production, the SPA is served
 // from the same Express app — so the *request's own origin* is always trusted
-// (same-host). We additionally allow an explicit CLIENT_URL when the SPA is
-// hosted on a separate domain. This makes the app robust to a mis-set
-// CLIENT_URL: cookie-based auth on the same Railway domain just works.
+// (same-host). We accept CLIENT_URL and its www/apex variant so a custom
+// domain like yourgbedu.com works whether the user types www or not. We also
+// accept the Railway default subdomain regardless of CLIENT_URL, so a
+// mis-set env var can't silently kill cookie auth on the platform domain.
 const DEV_ORIGINS = getDevClientOrigins();
+
+function hostVariants(url) {
+    if (!url) return new Set();
+    try {
+        const u = new URL(url);
+        const scheme = u.protocol;
+        const host = u.host;
+        const hostNoWww = host.startsWith('www.') ? host.slice(4) : host;
+        const hostWithWww = host.startsWith('www.') ? host : `www.${host}`;
+        return new Set([
+            `${scheme}//${hostNoWww}`,
+            `${scheme}//${hostWithWww}`,
+        ]);
+    } catch {
+        return new Set([url]);
+    }
+}
+
+const ALLOWED_PROD_ORIGINS = hostVariants(CLIENT_URL);
+
 app.use(
     cors({
         origin: (origin, callback) => {
@@ -114,13 +135,12 @@ app.use(
             if (!origin) return callback(null, true);
 
             if (IS_PROD) {
-                // Same-host requests are always allowed (SPA served by us).
-                // Cross-host requests require CLIENT_URL to match.
-                if (origin === CLIENT_URL) return callback(null, true);
+                if (ALLOWED_PROD_ORIGINS.has(origin)) return callback(null, true);
                 // Allow same Railway domain even if CLIENT_URL drifted in env.
                 if (process.env.RAILWAY_PUBLIC_DOMAIN && origin.endsWith(process.env.RAILWAY_PUBLIC_DOMAIN)) {
                     return callback(null, true);
                 }
+                console.warn(`[CORS] rejecting origin=${origin} (not in ${[...ALLOWED_PROD_ORIGINS].join(', ')} and not a Railway subdomain)`);
                 return callback(null, false);
             }
 
@@ -229,6 +249,7 @@ app.listen(PORT, () => {
     console.log(`🎵 YourGbedu server running on http://localhost:${PORT}`);
     if (IS_PROD) {
         console.log(`🔐 CORS — CLIENT_URL: ${CLIENT_URL}`);
+        console.log(`🔐 CORS — allowed prod origins: ${[...ALLOWED_PROD_ORIGINS].join(', ')}`);
         console.log(`🔐 CORS — RAILWAY_PUBLIC_DOMAIN: ${process.env.RAILWAY_PUBLIC_DOMAIN || '(not set)'}`);
         console.log(`🍪 Cookie — secure: true, sameSite: lax, trust proxy: 1`);
         console.log(`🌐 Serving SPA from: ${path.join(__dirname, '..', 'dist')}`);
