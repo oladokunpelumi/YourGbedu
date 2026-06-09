@@ -48,6 +48,14 @@ const app = express();
 const PORT = process.env.PORT || process.env.SERVER_PORT || 3001;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000';
 
+// Railway (and most PaaS) terminate TLS at the edge and forward to the container
+// over HTTP with X-Forwarded-For/-Proto. Trust the first proxy hop so:
+//   - express-rate-limit keys correctly on the real client IP (avoids
+//     ERR_ERL_UNEXPECTED_X_FORWARDED_FOR warnings)
+//   - req.secure reflects HTTPS truth, which Set-Cookie `secure: true` relies on
+//   - req.protocol is 'https' for redirects and URL building
+app.set('trust proxy', 1);
+
 // ─── Security Middleware ───────────────────────────────────────────────────────
 app.use(helmet({
     contentSecurityPolicy: {
