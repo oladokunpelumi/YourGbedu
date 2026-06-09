@@ -170,7 +170,11 @@ async function initSchema() {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_orders_customer_email_lower ON orders(LOWER(TRIM(customer_email)))');
     console.log('[PostgreSQL] Schema initialized');
 
-    // Seed sample songs if the table is empty
+    // sort_order is part of the catalogue ordering — added via ALTER for fresh dbs.
+    await pool.query("ALTER TABLE songs ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 99");
+
+    // Seed sample songs if the table is empty. Cover URLs and audio paths match
+    // the SQLite seed exactly so the catalogue looks identical on both adapters.
     const { rows } = await pool.query('SELECT COUNT(*) AS count FROM songs');
     if (parseInt(rows[0].count, 10) === 0) {
         const seedSongs = [

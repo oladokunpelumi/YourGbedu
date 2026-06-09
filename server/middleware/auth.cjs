@@ -85,10 +85,16 @@ function revokeToken(jwtToken) {
     }
 }
 
+// sameSite: 'lax' is the right default for cookie-based auth on an SPA — it still
+// blocks CSRF on top-level cross-site requests, but allows the cookie to ride
+// along on the SPA's own fetch() calls that fire immediately after login.
+// 'strict' breaks the admin login flow: the cookie is set on the POST response
+// but then dropped on the very next fetch (followup useEffect → fetchData),
+// which returns 401 and bounces the user back to the login form.
 const COOKIE_OPTS = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    sameSite: 'lax',
 };
 
 module.exports = {
