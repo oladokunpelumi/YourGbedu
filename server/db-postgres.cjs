@@ -75,7 +75,8 @@ async function initSchema() {
             artist TEXT,
             tags TEXT,
             audio_url TEXT,
-            story TEXT
+            story TEXT,
+            sort_order INTEGER DEFAULT 99
         );
 
         CREATE TABLE IF NOT EXISTS orders (
@@ -149,6 +150,7 @@ async function initSchema() {
         );
     `);
 
+    await pool.query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 99');
     await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS occasion_detail TEXT');
     await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_code_id TEXT');
     await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_code_preview TEXT');
