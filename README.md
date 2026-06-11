@@ -1,6 +1,4 @@
 <div align="center">
-<img width="1200" height="475" alt="YourGbedu Banner" src="/Users/pelumioladokun/Downloads/sonnetary/musics/Cover Phtotos/Cover LOGO.jpeg" />
-
 # YourGbedu
 
 **Turn your most meaningful moments into music — professionally produced, personally yours.**
@@ -25,9 +23,18 @@ Meaningful gifts are hard to find. Most presents are forgotten — YourGbedu cre
 
 - **Personalised song briefs** — a simple guided form that collects everything the music team needs: the recipient's story, the mood, the occasion, and the preferred sound
 - **Secure payments** — fast, reliable checkout so your order is confirmed instantly
-- **Order tracking** — check your order status at any time using just your email address or order number
+- **Order tracking** — check your order status through a secure tracker link or email sign-in
+- **Private tracker links** — customer order links use a per-order tracking token; older links recover through magic-link email sign-in
 - **48-hour crafted delivery** — we build and deliver professionally produced tracks quickly, so you're never scrambling before a special occasion
 - **Completion notifications** — automatic email delivery when your song is ready
+
+---
+
+## Media And Deployment Notes
+
+Large catalogue media is intentionally not tracked in Git. Keep local development copies under `musics/`, and serve production audio/covers from a CDN or object store.
+
+Set `MEDIA_CDN_ORIGINS` to the comma-separated HTTPS origins allowed by CSP, for example `https://cdn.yourgbedu.com,https://your-bucket.s3.amazonaws.com`. If catalogue audio paths move off `/musics`, set the production audio base URL in deployment config and keep `/musics` only as a local fallback.
 
 ---
 
