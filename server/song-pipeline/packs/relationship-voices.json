@@ -1,0 +1,90 @@
+{
+  "husband": {
+    "pov": "first person singular",
+    "address_style": "second person, intimate",
+    "diction": "warm, devoted, mature",
+    "default_archetype": "lifelong partner",
+    "natural_imagery": ["home", "quiet mornings", "the small things he does", "his hands", "his patience"],
+    "avoid": ["father-figure language", "infantilizing terms"]
+  },
+  "wife": {
+    "pov": "first person singular",
+    "address_style": "second person, intimate",
+    "diction": "tender, grateful, romantic",
+    "default_archetype": "anchor and partner",
+    "natural_imagery": ["home", "her laughter", "shared mornings", "her steadiness", "kitchen warmth"],
+    "avoid": ["mother-figure language unless requested", "objectifying language"]
+  },
+  "boyfriend": {
+    "pov": "first person singular",
+    "address_style": "second person, playful or romantic depending on tone",
+    "diction": "current, alive, hopeful",
+    "default_archetype": "chosen one, present love",
+    "natural_imagery": ["late texts", "long drives", "his arms", "the way he shows up"],
+    "avoid": ["wedding vow language unless requested"]
+  },
+  "girlfriend": {
+    "pov": "first person singular",
+    "address_style": "second person, romantic or playful",
+    "diction": "current, alive, tender",
+    "default_archetype": "chosen one, present love",
+    "natural_imagery": ["her smile", "long walks", "shared playlists", "her voice on the phone"],
+    "avoid": ["wedding vow language unless requested", "possessive language"]
+  },
+  "children": {
+    "pov": "first person singular, parent voice",
+    "address_style": "second person, gentle, protective",
+    "diction": "warm, hopeful, timeless, lullaby cadence",
+    "default_archetype": "child of promise",
+    "natural_imagery": ["small hands", "first words", "tiny footsteps", "your future", "blessings"],
+    "avoid": ["adult romance language", "club energy", "anything sexual"]
+  },
+  "father": {
+    "pov": "first person singular, child voice",
+    "address_style": "second person, respectful and warm",
+    "diction": "grateful, mature, dignified",
+    "default_archetype": "provider and example",
+    "natural_imagery": ["his hands", "his quiet strength", "advice he gave", "lessons that stayed"],
+    "avoid": ["romantic language", "casual slang where it cheapens reverence"]
+  },
+  "mother": {
+    "pov": "first person singular, child voice",
+    "address_style": "second person, warm, grateful",
+    "diction": "tender, devoted, reverent",
+    "default_archetype": "nurturer and origin",
+    "natural_imagery": ["her cooking", "her prayers", "the sound of her voice", "her sacrifice"],
+    "avoid": ["romantic language", "irreverent humor unless requested"]
+  },
+  "sibling": {
+    "pov": "first person singular",
+    "address_style": "second person, familiar, equal",
+    "diction": "honest, warm, shared-history",
+    "default_archetype": "co-witness to childhood",
+    "natural_imagery": ["fights we made up from", "inside jokes", "growing up together"],
+    "avoid": ["romantic language", "parental tone"]
+  },
+  "friend": {
+    "pov": "first person singular",
+    "address_style": "second person, warm and honest",
+    "diction": "real, grounded, no performance",
+    "default_archetype": "chosen family",
+    "natural_imagery": ["the calls that lasted hours", "showing up uninvited", "loyalty without fanfare"],
+    "avoid": ["romantic language unless explicitly requested"]
+  },
+  "myself": {
+    "pov": "first person singular, self-addressed",
+    "address_style": "second person to self, or reflective first person",
+    "diction": "honest, sometimes confessional",
+    "default_archetype": "self at a turning point",
+    "natural_imagery": ["the mirror", "old scars", "small wins", "where I started"],
+    "avoid": ["self-praise without grounding", "false motivation tone"]
+  },
+  "other": {
+    "pov": "first person singular",
+    "address_style": "second person, calibrate from customer context",
+    "diction": "match tone preference",
+    "default_archetype": "context-dependent",
+    "natural_imagery": [],
+    "avoid": ["assuming a relationship intensity not stated by the customer"]
+  }
+}

@@ -1,0 +1,299 @@
+{
+  "birthday": {
+    "emotional_center": "celebration with personal gratitude",
+    "arc": {
+      "start_state": "noticing the recipient's presence",
+      "rise": "memories and traits gather warmth",
+      "peak": "full celebration of who they are",
+      "resolution": "blessing, affirmation, joy"
+    },
+    "best_hook_types": ["name_hook", "praise_hook", "memory_hook"],
+    "lyric_job": [
+      "make recipient feel seen, celebrated, and loved",
+      "include age only if provided",
+      "avoid generic birthday lines"
+    ],
+    "style_modifier": [
+      "brighter mix",
+      "warmer percussion",
+      "chorus should feel open and singable"
+    ],
+    "bridge_job": "say the thing people forget to say on birthdays",
+    "avoid": [
+      "happy birthday to you style cliches",
+      "shallow praise",
+      "listing traits without emotion"
+    ]
+  },
+  "anniversary": {
+    "emotional_center": "gratitude for shared history",
+    "arc": {
+      "start_state": "tender memory",
+      "rise": "journey and proof of love",
+      "peak": "deep recognition of what the person means",
+      "resolution": "renewed choice"
+    },
+    "best_hook_types": ["phrase_hook", "memory_hook", "promise_hook"],
+    "lyric_job": [
+      "make the relationship feel lived-in",
+      "use specific memories as proof",
+      "let love feel mature, not performative"
+    ],
+    "style_modifier": [
+      "intimate opening",
+      "slow emotional lift",
+      "final chorus should feel fuller than the first"
+    ],
+    "bridge_job": "confess what the sender rarely says",
+    "avoid": [
+      "generic forever lines",
+      "wedding-style vows unless requested"
+    ]
+  },
+  "wedding": {
+    "emotional_center": "sacred joy and public commitment",
+    "arc": {
+      "start_state": "anticipation",
+      "rise": "promises becoming real",
+      "peak": "union, vow, shared future",
+      "resolution": "forever-forward blessing"
+    },
+    "best_hook_types": ["vow_hook", "promise_hook", "name_hook"],
+    "lyric_job": [
+      "sound suitable for ceremony, entrance, first dance, or reception",
+      "balance romance with dignity",
+      "make the chorus feel memorable"
+    ],
+    "style_modifier": [
+      "elegant opening",
+      "emotional chorus lift",
+      "polished arrangement"
+    ],
+    "bridge_job": "turn private love into public promise",
+    "avoid": [
+      "overly sensual lyrics",
+      "jokes unless requested",
+      "breakup imagery"
+    ]
+  },
+  "valentine": {
+    "emotional_center": "romantic closeness and desire",
+    "arc": {
+      "start_state": "longing or admiration",
+      "rise": "physical or emotional closeness",
+      "peak": "passionate declaration",
+      "resolution": "warm intimacy"
+    },
+    "best_hook_types": ["phrase_hook", "desire_hook", "name_hook"],
+    "lyric_job": [
+      "make romance feel specific, not copied",
+      "keep sensuality tasteful unless mild explicitness is allowed",
+      "use small intimate details"
+    ],
+    "style_modifier": [
+      "lush textures",
+      "close vocal",
+      "smooth chorus"
+    ],
+    "bridge_job": "reveal the vulnerable truth beneath desire",
+    "avoid": [
+      "cheap pickup-line energy",
+      "generic baby girl overuse"
+    ]
+  },
+  "appreciation": {
+    "emotional_center": "gratitude for what the recipient gives",
+    "arc": {
+      "start_state": "noticing quiet acts",
+      "rise": "naming their sacrifices or presence",
+      "peak": "overflowing thanks",
+      "resolution": "steady love and respect"
+    },
+    "best_hook_types": ["praise_hook", "phrase_hook", "gratitude_hook"],
+    "lyric_job": [
+      "make invisible care visible",
+      "focus on actions, not empty adjectives"
+    ],
+    "style_modifier": [
+      "warm arrangement",
+      "steady groove",
+      "chorus should feel sincere, not loud"
+    ],
+    "bridge_job": "admit the sender has not said thank you enough",
+    "avoid": [
+      "corporate award tone",
+      "generic thanks for all you do"
+    ]
+  },
+  "apology": {
+    "emotional_center": "regret with hope for repair",
+    "arc": {
+      "start_state": "regret",
+      "rise": "ownership without excuses",
+      "peak": "raw honesty",
+      "resolution": "humble hope"
+    },
+    "best_hook_types": ["question_hook", "repair_hook", "confession_hook"],
+    "lyric_job": [
+      "own the hurt clearly",
+      "never manipulate forgiveness",
+      "keep hope humble"
+    ],
+    "style_modifier": [
+      "stripped opening",
+      "restrained percussion",
+      "bridge should be nearly bare"
+    ],
+    "bridge_job": "say the hardest honest line",
+    "avoid": [
+      "if I hurt you language",
+      "blaming the recipient",
+      "dramatic self-pity"
+    ]
+  },
+  "memorial": {
+    "emotional_center": "remembrance, grief, love persisting",
+    "arc": {
+      "start_state": "gentle grief",
+      "rise": "treasured memories",
+      "peak": "presence still felt",
+      "resolution": "peace, honor, love continuing"
+    },
+    "best_hook_types": ["memory_hook", "presence_hook", "blessing_hook"],
+    "lyric_job": [
+      "honor without exploiting grief",
+      "use soft, concrete memories",
+      "let love remain present"
+    ],
+    "style_modifier": [
+      "slower tempo",
+      "spacious arrangement",
+      "no hard drops",
+      "reverent vocal"
+    ],
+    "bridge_job": "speak directly to the person as if they can still hear",
+    "avoid": [
+      "gone too soon unless provided",
+      "melodrama",
+      "forcing closure"
+    ]
+  },
+  "graduation": {
+    "emotional_center": "pride, growth, future",
+    "arc": {
+      "start_state": "looking back",
+      "rise": "struggle and progress",
+      "peak": "achievement",
+      "resolution": "future blessing"
+    },
+    "best_hook_types": ["pride_hook", "future_hook", "name_hook"],
+    "lyric_job": [
+      "make the journey feel earned",
+      "balance pride with momentum"
+    ],
+    "style_modifier": [
+      "uplifting build",
+      "confident rhythm",
+      "chorus should feel forward-moving"
+    ],
+    "bridge_job": "name the cost behind the achievement",
+    "avoid": [
+      "generic motivational poster lines",
+      "empty reach for the stars language"
+    ]
+  },
+  "proposal": {
+    "emotional_center": "certainty becoming commitment",
+    "arc": {
+      "start_state": "quiet love",
+      "rise": "reasons become certainty",
+      "peak": "the question or lifetime promise",
+      "resolution": "joyful future"
+    },
+    "best_hook_types": ["question_hook", "promise_hook", "forever_hook"],
+    "lyric_job": [
+      "build toward commitment",
+      "make the question feel inevitable",
+      "use specific proof of love"
+    ],
+    "style_modifier": [
+      "intimate beginning",
+      "cinematic chorus lift",
+      "final chorus should feel like a yes waiting to happen"
+    ],
+    "bridge_job": "say why this person is the future",
+    "avoid": [
+      "revealing proposal too early if song is meant to build suspense",
+      "wedding cliches"
+    ]
+  },
+  "welcome_baby": {
+    "emotional_center": "wonder, protection, promise",
+    "arc": {
+      "start_state": "awe",
+      "rise": "imagining their future",
+      "peak": "overwhelming love",
+      "resolution": "promise to protect"
+    },
+    "best_hook_types": ["blessing_hook", "promise_hook", "name_hook"],
+    "lyric_job": [
+      "sound gentle, protective, and timeless",
+      "avoid making baby lyrics too adult"
+    ],
+    "style_modifier": [
+      "soft opening",
+      "lullaby warmth",
+      "tender chorus"
+    ],
+    "bridge_job": "parent promises presence through life",
+    "avoid": [
+      "heavy romance language",
+      "loud club energy unless intentionally celebratory"
+    ]
+  },
+  "just_because": {
+    "emotional_center": "spontaneous honest affection",
+    "arc": {
+      "start_state": "thinking of them",
+      "rise": "reasons surface naturally",
+      "peak": "honest overflow",
+      "resolution": "simple truth"
+    },
+    "best_hook_types": ["phrase_hook", "name_hook", "small_moment_hook"],
+    "lyric_job": [
+      "make it feel like a message sent from the heart",
+      "avoid over-explaining the occasion"
+    ],
+    "style_modifier": [
+      "natural, relaxed arrangement",
+      "not too formal",
+      "chorus should feel effortless"
+    ],
+    "bridge_job": "admit the feeling came up and had to be said",
+    "avoid": [
+      "making it sound like a birthday or anniversary"
+    ]
+  },
+  "other": {
+    "emotional_center": "follow the customer's stated emotion",
+    "arc": {
+      "start_state": "context-dependent",
+      "rise": "context-dependent",
+      "peak": "context-dependent",
+      "resolution": "context-dependent"
+    },
+    "best_hook_types": ["phrase_hook", "memory_hook", "name_hook"],
+    "lyric_job": [
+      "lean heavily on customer input",
+      "let stated tone and intensity guide structure"
+    ],
+    "style_modifier": [
+      "match tone preference",
+      "do not impose a default emotional arc"
+    ],
+    "bridge_job": "deliver the rawest honest moment",
+    "avoid": [
+      "imposing a template emotion the customer did not request"
+    ]
+  }
+}

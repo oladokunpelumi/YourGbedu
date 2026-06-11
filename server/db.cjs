@@ -12,6 +12,7 @@ if (process.env.DATABASE_URL) {
 }
 
 const Database = require('better-sqlite3');
+const crypto = require('crypto');
 const path = require('path');
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'yourgbedu.db');
@@ -65,6 +66,29 @@ db.exec(`
     used_at TEXT,
     used_order_id TEXT
   );
+
+  CREATE TABLE IF NOT EXISTS song_generations (
+    id TEXT PRIMARY KEY,
+    order_id TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL DEFAULT 'queued',
+    current_stage TEXT,
+    pipeline_form TEXT,
+    derived_fields TEXT,
+    state TEXT,
+    final_output TEXT,
+    llm_usage TEXT,
+    stage_status TEXT,
+    stage_comments TEXT,
+    error TEXT,
+    resume_attempts INTEGER DEFAULT 0,
+    run_count INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    started_at TEXT,
+    completed_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_song_generations_order_id ON song_generations(order_id);
+  CREATE INDEX IF NOT EXISTS idx_song_generations_status ON song_generations(status);
 `);
 
 // Safe migrations for new columns
@@ -87,6 +111,7 @@ try { db.exec("ALTER TABLE orders ADD COLUMN final_song_url TEXT"); } catch { /*
 try { db.exec("ALTER TABLE orders ADD COLUMN final_song_title TEXT"); } catch { /* already migrated */ }
 try { db.exec("ALTER TABLE orders ADD COLUMN delivered_at TEXT"); } catch { /* already migrated */ }
 try { db.exec("ALTER TABLE orders ADD COLUMN rating INTEGER"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE orders ADD COLUMN tracking_token TEXT"); } catch { /* already migrated */ }
 try { db.exec("ALTER TABLE songs ADD COLUMN sort_order INTEGER DEFAULT 99"); } catch { /* already migrated */ }
 
 // Subscribers — email-capture popup list
@@ -271,6 +296,18 @@ try {
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_orders_customer_email ON orders(customer_email)'); } catch { /* best effort index */ }
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_orders_paystack_reference ON orders(paystack_reference)'); } catch { /* best effort index */ }
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_orders_stripe_session_id ON orders(stripe_session_id)'); } catch { /* best effort index */ }
+try {
+  const missingTokens = db.prepare("SELECT id FROM orders WHERE tracking_token IS NULL OR tracking_token = ''").all();
+  const updateToken = db.prepare('UPDATE orders SET tracking_token = ? WHERE id = ?');
+  const backfill = db.transaction((rows) => {
+    for (const row of rows) updateToken.run(crypto.randomBytes(16).toString('hex'), row.id);
+  });
+  backfill(missingTokens);
+} catch { /* best effort token backfill */ }
+try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_tracking_token ON orders(tracking_token)'); } catch { /* best effort index */ }
+try { db.exec("ALTER TABLE song_generations ADD COLUMN final_output TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE song_generations ADD COLUMN llm_usage TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE song_generations ADD COLUMN resume_attempts INTEGER DEFAULT 0"); } catch { /* already migrated */ }
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_promo_codes_code_hash ON promo_codes(code_hash)'); } catch { /* best effort index */ }
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_promo_codes_used_order_id ON promo_codes(used_order_id)'); } catch { /* best effort index */ }
 

@@ -1,0 +1,132 @@
+{
+  "afro_beats": {
+    "suno_tags": ["Afrobeats", "Afropop", "rhythmic percussion", "warm melodic vocal"],
+    "tempo_range": "100-120 BPM",
+    "core_palette": ["log drums", "shakers", "rhythmic guitar", "soft horn stabs", "dancehall bounce"],
+    "vocal_direction": ["melodic", "rhythmic", "catchy chorus", "light call-and-response"],
+    "best_for": ["birthday", "wedding", "graduation", "appreciation", "just_because"],
+    "emotional_adjustments": {
+      "soft":         "reduce percussion density, warmer guitar",
+      "emotional":    "add pads and layered harmonies",
+      "celebratory":  "brighter percussion, bigger chorus"
+    },
+    "avoid": ["overcrowded percussion", "generic party lyrics"]
+  },
+  "afro_rnb": {
+    "suno_tags": ["Afro-R&B", "neo-soul", "intimate Afropop", "smooth vocal"],
+    "tempo_range": "70-95 BPM",
+    "core_palette": ["muted Rhodes", "warm pads", "finger-picked guitar", "light shakers", "soft sub-bass"],
+    "vocal_direction": ["close", "smooth", "breathy", "emotional ad-libs"],
+    "best_for": ["anniversary", "valentine", "apology", "proposal", "appreciation"],
+    "emotional_adjustments": {
+      "apology":      "strip drums back, dry vocal",
+      "memorial":     "slower, spacious pads, soft harmonies",
+      "romantic":     "warmer bass, lush backing vocals"
+    },
+    "avoid": ["overly polished generic R&B", "too many vocal runs"]
+  },
+  "afro_house": {
+    "suno_tags": ["Afro-house", "deep house", "tribal percussion", "euphoric vocal hook"],
+    "tempo_range": "120-128 BPM",
+    "core_palette": ["four-on-the-floor kick", "tribal log drums", "filtered pads", "delayed vocal chops", "percussive loops"],
+    "vocal_direction": ["chanted hook", "spacious lead vocal", "repeated emotional phrase"],
+    "best_for": ["wedding", "birthday", "graduation", "appreciation", "just_because"],
+    "emotional_adjustments": {
+      "memorial":   "use only if customer wants uplifting remembrance; keep reverent",
+      "apology":    "not recommended unless dance-healing tone is requested",
+      "proposal":   "euphoric build, less club-heavy"
+    },
+    "avoid": ["cold EDM feel", "emotionless drops"]
+  },
+  "afro_reggae": {
+    "suno_tags": ["Afro-reggae", "roots reggae", "dancehall warmth", "relaxed vocal"],
+    "tempo_range": "80-100 BPM",
+    "core_palette": ["offbeat guitar skank", "deep bassline", "one-drop drums", "brass accents", "dub delay"],
+    "vocal_direction": ["relaxed", "warm", "melodic", "lightly conversational"],
+    "best_for": ["appreciation", "birthday", "just_because", "apology", "memorial"],
+    "emotional_adjustments": {
+      "apology":     "humble, stripped reggae-soul",
+      "memorial":    "warm remembrance, less bounce",
+      "celebration": "brighter brass and sing-along chorus"
+    },
+    "avoid": ["caricatured island slang", "fake patois"]
+  },
+  "gospel": {
+    "suno_tags": ["Gospel", "Afro-gospel", "worship ballad", "choir harmonies"],
+    "tempo_range": "80-110 BPM",
+    "core_palette": ["piano", "organ swells", "choir backing", "hand claps", "orchestral lift"],
+    "vocal_direction": ["powerful", "reverent", "emotional", "choir-supported"],
+    "best_for": ["wedding", "memorial", "birthday", "graduation", "welcome_baby", "appreciation"],
+    "emotional_adjustments": {
+      "light_religious":  "use gratitude and blessing language, avoid sermon tone",
+      "strong_religious": "include prayerful phrases and worship-style lift",
+      "memorial":         "reverent, spacious, peaceful"
+    },
+    "avoid": ["preaching unless requested", "forcing God language when religious_language is none"]
+  },
+  "rnb": {
+    "suno_tags": ["contemporary R&B", "neo-soul", "smooth slow jam", "emotional vocal"],
+    "tempo_range": "65-90 BPM",
+    "core_palette": ["muted keys", "soft hi-hats", "finger snaps", "sub-bass", "airy pads"],
+    "vocal_direction": ["silky", "controlled", "intimate", "tasteful runs"],
+    "best_for": ["valentine", "anniversary", "apology", "proposal", "just_because"],
+    "emotional_adjustments": {
+      "apology":    "minimal drums, exposed vocal",
+      "valentine":  "lush and sensual but tasteful",
+      "memorial":   "slow soul-R&B with sparse percussion"
+    },
+    "avoid": ["cliche bedroom lyrics", "overused romantic lines"]
+  },
+  "hip_hop": {
+    "suno_tags": ["melodic hip-hop", "Afro-rap", "trap-soul", "spoken-word bridge"],
+    "tempo_range": "85-100 BPM",
+    "core_palette": ["808 bass", "crisp hats", "melodic sample", "reverbed snare", "ambient texture"],
+    "vocal_direction": ["rhythmic verses", "melodic hook", "honest delivery", "spoken-word emotional bridge"],
+    "best_for": ["graduation", "birthday", "appreciation", "apology", "just_because"],
+    "emotional_adjustments": {
+      "apology":     "softer drums, more spoken honesty",
+      "graduation":  "confident, triumphant",
+      "memorial":    "poetic tribute, low percussion"
+    },
+    "avoid": ["aggressive bragging unless requested", "generic rap filler"]
+  },
+  "pop": {
+    "suno_tags": ["emotional pop", "Afropop", "radio-ready chorus", "polished vocal"],
+    "tempo_range": "95-120 BPM",
+    "core_palette": ["bright synths", "clean drums", "hand claps", "layered backing vocals", "catchy hook"],
+    "vocal_direction": ["clear", "direct", "singable", "chorus-forward"],
+    "best_for": ["birthday", "graduation", "wedding", "appreciation", "just_because"],
+    "emotional_adjustments": {
+      "proposal":  "cinematic pop ballad",
+      "apology":   "stripped emotional pop",
+      "memorial":  "piano pop tribute"
+    },
+    "avoid": ["plastic cheerfulness", "generic chorus slogans"]
+  },
+  "soul": {
+    "suno_tags": ["soul", "neo-soul", "warm live band", "raw emotional vocal"],
+    "tempo_range": "65-85 BPM",
+    "core_palette": ["upright bass", "Wurlitzer", "brushed drums", "subtle strings", "tape warmth"],
+    "vocal_direction": ["raw", "heartfelt", "textured", "emotionally cracked where appropriate"],
+    "best_for": ["anniversary", "memorial", "appreciation", "apology", "proposal"],
+    "emotional_adjustments": {
+      "appreciation": "warm and grounded",
+      "apology":      "exposed and remorseful",
+      "memorial":     "restrained, reverent, timeless"
+    },
+    "avoid": ["oversinging", "melodrama"]
+  },
+  "highlife": {
+    "suno_tags": ["Highlife", "palm-wine guitar", "Afrobeat influence", "warm brass"],
+    "tempo_range": "90-110 BPM",
+    "core_palette": ["palm-wine guitar", "brass section", "talking drum", "melodic bass", "congas"],
+    "vocal_direction": ["storytelling", "communal chorus", "warm call-and-response"],
+    "best_for": ["birthday", "wedding", "appreciation", "anniversary", "graduation"],
+    "emotional_adjustments": {
+      "memorial":     "nostalgic tribute, slower, soft brass",
+      "proposal":     "romantic palm-wine guitar, elegant chorus",
+      "welcome_baby": "gentle family celebration"
+    },
+    "avoid": ["novelty cultural sound", "too much brass in tender songs"]
+  }
+}

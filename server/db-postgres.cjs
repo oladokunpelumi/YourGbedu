@@ -13,6 +13,7 @@
  * This adapter provides the interface; the actual async calls happen in the routes.
  */
 const { Pool } = require('pg');
+const crypto = require('crypto');
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
@@ -111,7 +112,8 @@ async function initSchema() {
             final_song_url TEXT,
             final_song_title TEXT,
             delivered_at TEXT,
-            rating INTEGER
+            rating INTEGER,
+            tracking_token TEXT
         );
 
         CREATE TABLE IF NOT EXISTS subscribers (
@@ -135,6 +137,30 @@ async function initSchema() {
             used_at TEXT,
             used_order_id TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS song_generations (
+            id TEXT PRIMARY KEY,
+            order_id TEXT NOT NULL UNIQUE,
+            status TEXT NOT NULL DEFAULT 'queued',
+            current_stage TEXT,
+            pipeline_form TEXT,
+            derived_fields TEXT,
+            state TEXT,
+            final_output TEXT,
+            llm_usage TEXT,
+            stage_status TEXT,
+            stage_comments TEXT,
+            error TEXT,
+            resume_attempts INTEGER DEFAULT 0,
+            run_count INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            started_at TEXT,
+            completed_at TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_song_generations_order_id ON song_generations(order_id);
+        CREATE INDEX IF NOT EXISTS idx_song_generations_status ON song_generations(status);
 
         CREATE TABLE IF NOT EXISTS magic_links (
             token TEXT PRIMARY KEY,
@@ -167,9 +193,21 @@ async function initSchema() {
     await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS final_song_title TEXT');
     await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivered_at TEXT');
     await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS rating INTEGER');
+    await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_token TEXT');
+    await pool.query('ALTER TABLE song_generations ADD COLUMN IF NOT EXISTS final_output TEXT');
+    await pool.query('ALTER TABLE song_generations ADD COLUMN IF NOT EXISTS llm_usage TEXT');
+    await pool.query('ALTER TABLE song_generations ADD COLUMN IF NOT EXISTS resume_attempts INTEGER DEFAULT 0');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_promo_codes_code_hash ON promo_codes(code_hash)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_promo_codes_used_order_id ON promo_codes(used_order_id)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_subscribers_email ON subscribers(email)');
+    const missingTokens = await pool.query("SELECT id FROM orders WHERE tracking_token IS NULL OR tracking_token = ''");
+    for (const row of missingTokens.rows) {
+        await pool.query('UPDATE orders SET tracking_token = $1 WHERE id = $2', [
+            crypto.randomBytes(16).toString('hex'),
+            row.id,
+        ]);
+    }
+    await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_tracking_token ON orders(tracking_token)');
     // Normalize historical customer_email casing so case-insensitive lookups always match.
     await pool.query("UPDATE orders SET customer_email = LOWER(TRIM(customer_email)) WHERE customer_email IS NOT NULL AND customer_email != LOWER(TRIM(customer_email))");
     await pool.query('CREATE INDEX IF NOT EXISTS idx_orders_customer_email_lower ON orders(LOWER(TRIM(customer_email)))');

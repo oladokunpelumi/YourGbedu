@@ -43,6 +43,7 @@ const inMemoryDb = await (async () => {
       customer_email TEXT,
       ai_brief TEXT,
       recipient_type TEXT,
+      recipient_name TEXT,
       sender_name TEXT,
       voice_gender TEXT,
       special_qualities TEXT,
@@ -53,6 +54,26 @@ const inMemoryDb = await (async () => {
       promo_discount_percent INTEGER,
       original_amount INTEGER,
       discounted_amount INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS song_generations (
+      id TEXT PRIMARY KEY,
+      order_id TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'queued',
+      current_stage TEXT,
+      pipeline_form TEXT,
+      derived_fields TEXT,
+      state TEXT,
+      final_output TEXT,
+      llm_usage TEXT,
+      stage_status TEXT,
+      stage_comments TEXT,
+      error TEXT,
+      resume_attempts INTEGER DEFAULT 0,
+      run_count INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      started_at TEXT,
+      completed_at TEXT
     );
     CREATE TABLE IF NOT EXISTS songs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -290,6 +311,74 @@ describe('POST /api/admin/orders/:id/ai-brief (protected)', () => {
 
     const row = routeDb.prepare('SELECT ai_brief FROM orders WHERE id = ?').get(orderId);
     expect(row.ai_brief).toBe(res.body.aiBrief);
+  });
+});
+
+describe('DELETE /api/admin/orders/:id (protected)', () => {
+  it('rejects order deletion without a cookie', async () => {
+    const { default: supertest } = await import('supertest');
+    const res = await supertest(app).delete('/api/admin/orders/order-delete-001');
+    expect(res.status).toBe(401);
+  });
+
+  it('deletes the order and generation row, and unlinks subscribers', async () => {
+    const { default: supertest } = await import('supertest');
+    const orderId = crypto.randomUUID();
+    const now = new Date().toISOString();
+
+    routeDb.prepare(`
+      INSERT INTO orders (id, song_title, genre, occasion, created_at, delivery_date, customer_email)
+      VALUES (?, 'Custom Song', 'Afro-Beats', 'birthday', ?, ?, 'erase@test.com')
+    `).run(orderId, now, now);
+    routeDb.prepare(`
+      INSERT INTO song_generations (id, order_id, status, created_at, updated_at)
+      VALUES (?, ?, 'completed', ?, ?)
+    `).run(crypto.randomUUID(), orderId, now, now);
+    routeDb.prepare(`
+      INSERT INTO subscribers (id, email, created_at, converted_order_id)
+      VALUES (?, 'erase@test.com', ?, ?)
+    `).run(crypto.randomUUID(), now, orderId);
+
+    const loginRes = await supertest(app)
+      .post('/api/admin/login')
+      .send({ username: 'testadmin', password: 'supersecret_test_password_123!' })
+      .set('Content-Type', 'application/json');
+
+    const res = await supertest(app)
+      .delete(`/api/admin/orders/${orderId}`)
+      .set('Cookie', loginRes.headers['set-cookie']);
+
+    expect(res.status).toBe(200);
+    expect(routeDb.prepare('SELECT 1 FROM orders WHERE id = ?').get(orderId)).toBeUndefined();
+    expect(routeDb.prepare('SELECT 1 FROM song_generations WHERE order_id = ?').get(orderId)).toBeUndefined();
+    expect(routeDb.prepare('SELECT converted_order_id FROM subscribers WHERE email = ?').get('erase@test.com').converted_order_id).toBeNull();
+  });
+
+  it('returns 409 when the generation is running', async () => {
+    const { default: supertest } = await import('supertest');
+    const orderId = crypto.randomUUID();
+    const now = new Date().toISOString();
+
+    routeDb.prepare(`
+      INSERT INTO orders (id, song_title, genre, occasion, created_at, delivery_date)
+      VALUES (?, 'Custom Song', 'Afro-Beats', 'birthday', ?, ?)
+    `).run(orderId, now, now);
+    routeDb.prepare(`
+      INSERT INTO song_generations (id, order_id, status, created_at, updated_at)
+      VALUES (?, ?, 'running', ?, ?)
+    `).run(crypto.randomUUID(), orderId, now, now);
+
+    const loginRes = await supertest(app)
+      .post('/api/admin/login')
+      .send({ username: 'testadmin', password: 'supersecret_test_password_123!' })
+      .set('Content-Type', 'application/json');
+
+    const res = await supertest(app)
+      .delete(`/api/admin/orders/${orderId}`)
+      .set('Cookie', loginRes.headers['set-cookie']);
+
+    expect(res.status).toBe(409);
+    expect(routeDb.prepare('SELECT 1 FROM orders WHERE id = ?').get(orderId)).toBeTruthy();
   });
 });
 
