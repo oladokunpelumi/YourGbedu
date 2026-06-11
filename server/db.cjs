@@ -292,6 +292,21 @@ try {
   db.prepare("UPDATE songs SET sort_order = 5 WHERE title = 'Mimi (Give Me Wealth)'").run();
 } catch { /* best effort cleanup */ }
 
+// Resolve catalogue media to an external base URL in production.
+// musics/ is gitignored, so relative /musics/* paths 404 on a fresh deploy.
+// When MEDIA_BASE_URL is set, rewrite relative /musics/... paths to absolute CDN
+// URLs. Idempotent (the LIKE only matches still-relative paths) and a no-op in dev
+// where MEDIA_BASE_URL is unset and the files are served locally from /musics.
+// Runs after the cover/audio resets above so it always wins on each boot.
+const MEDIA_BASE_URL = (process.env.MEDIA_BASE_URL || '').replace(/\/$/, '');
+if (MEDIA_BASE_URL) {
+  try {
+    db.prepare("UPDATE songs SET audio_url = ? || audio_url WHERE audio_url LIKE '/musics/%'").run(MEDIA_BASE_URL);
+    db.prepare("UPDATE songs SET cover_url = ? || cover_url WHERE cover_url LIKE '/musics/%'").run(MEDIA_BASE_URL);
+    console.log(`[Media] Catalogue media resolved to ${MEDIA_BASE_URL}/musics/...`);
+  } catch { /* best effort media rewrite */ }
+}
+
 // ── Indexes for hot query paths ───────────────────────────────────────────────
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_orders_customer_email ON orders(customer_email)'); } catch { /* best effort index */ }
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_orders_paystack_reference ON orders(paystack_reference)'); } catch { /* best effort index */ }

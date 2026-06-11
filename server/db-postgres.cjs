@@ -347,6 +347,17 @@ async function initSchema() {
         await pool.query("UPDATE songs SET sort_order = 3 WHERE title = $1", ["Mummy's 60th Birthday"]);
         await pool.query("UPDATE songs SET sort_order = 4 WHERE title = 'Like Roses (You Are Your Name)'");
         await pool.query("UPDATE songs SET sort_order = 5 WHERE title = 'Mimi (Give Me Wealth)'");
+
+        // Resolve catalogue media to an external base URL in production.
+        // musics/ is gitignored, so relative /musics/* paths 404 on a fresh deploy.
+        // When MEDIA_BASE_URL is set, prefix still-relative /musics/... paths with it.
+        // Idempotent (LIKE only matches relative paths); no-op in dev where it's unset.
+        const MEDIA_BASE_URL = (process.env.MEDIA_BASE_URL || '').replace(/\/$/, '');
+        if (MEDIA_BASE_URL) {
+            await pool.query("UPDATE songs SET audio_url = $1 || audio_url WHERE audio_url LIKE '/musics/%'", [MEDIA_BASE_URL]);
+            await pool.query("UPDATE songs SET cover_url = $1 || cover_url WHERE cover_url LIKE '/musics/%'", [MEDIA_BASE_URL]);
+            console.log(`[PostgreSQL] Catalogue media resolved to ${MEDIA_BASE_URL}/musics/...`);
+        }
     } catch (err) {
         console.warn('[PostgreSQL] Song catalogue migration warning:', err.message);
     }
