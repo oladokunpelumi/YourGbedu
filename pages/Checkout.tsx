@@ -415,7 +415,7 @@ const Checkout: React.FC = () => {
       transaction = popup.resumeTransaction({ accessCode: paystackInline.accessCode, ...callbacks });
     }
 
-    if (transaction?.getStatus) {
+    if (transaction && typeof transaction.getStatus === 'function') {
       const stopAt = Date.now() + 10 * 60 * 1000;
       const poll = window.setInterval(() => {
         if (Date.now() > stopAt) {

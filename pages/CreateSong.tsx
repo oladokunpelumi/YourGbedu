@@ -596,7 +596,7 @@ const CreateSong: React.FC = () => {
                         Skip the queue and get your song in exactly 24 hours.
                       </span>
                       <span className="mt-1 block font-body text-sm font-bold text-ink">
-                        {fastPrice.upgrade}
+                        {'upgrade' in fastPrice ? fastPrice.upgrade : ''}
                       </span>
                     </span>
                     <span
