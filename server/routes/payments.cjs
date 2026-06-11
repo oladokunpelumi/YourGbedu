@@ -11,12 +11,6 @@ function getStripeClient() {
     return stripeClient;
 }
 
-let db;
-function getDb() {
-    if (!db) db = require('../db.cjs');
-    return db;
-}
-
 // POST /api/create-checkout-session
 router.post('/create-checkout-session', async (req, res) => {
     try {
@@ -40,8 +34,7 @@ router.post('/create-checkout-session', async (req, res) => {
         } = req.body;
 
         const resolvedEmail = email || customerEmail || 'guest@yourgbedu.com';
-        const quote = quoteCheckout({
-            db: getDb(),
+        const quote = await quoteCheckout({
             provider: 'stripe',
             fastDelivery,
             promoCode,
