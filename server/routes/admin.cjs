@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const { generateToken, requireAdmin, revokeToken, COOKIE_OPTS } = require('../middleware/auth.cjs');
 const { createOneTimeFreeCode, listOneTimeCodes, disablePromoCode } = require('../promos.cjs');
-const { getOne, getAll, execSql } = require('../db-helpers.cjs');
+const { getOne, getAll, execSql, pgVariantSql } = require('../db-helpers.cjs');
 const adminGenerationRouter = require('./admin-generation.cjs');
 
 // Strict in production, forgiving in local development so a typo does not
@@ -50,7 +50,12 @@ function buildOrderFilters(query) {
     if (search) {
         // Escape SQL wildcard chars so user input is treated as a literal string.
         const safeLike = `%${search.replace(/[%_\\]/g, '\\$&')}%`;
-        where += " AND (o.sender_name LIKE ? ESCAPE '\\' OR o.customer_email LIKE ? ESCAPE '\\' OR o.id LIKE ? ESCAPE '\\' OR o.recipient_type LIKE ? ESCAPE '\\' OR o.genre LIKE ? ESCAPE '\\' OR o.occasion LIKE ? ESCAPE '\\')";
+        // SQLite LIKE is case-insensitive for ASCII; Postgres LIKE is not — use ILIKE
+        // there so admin search behaves identically across adapters.
+        where += pgVariantSql({
+            sqlite: " AND (o.sender_name LIKE ? ESCAPE '\\' OR o.customer_email LIKE ? ESCAPE '\\' OR o.id LIKE ? ESCAPE '\\' OR o.recipient_type LIKE ? ESCAPE '\\' OR o.genre LIKE ? ESCAPE '\\' OR o.occasion LIKE ? ESCAPE '\\')",
+            postgres: " AND (o.sender_name ILIKE ? OR o.customer_email ILIKE ? OR o.id ILIKE ? OR o.recipient_type ILIKE ? OR o.genre ILIKE ? OR o.occasion ILIKE ?)",
+        });
         params.push(safeLike, safeLike, safeLike, safeLike, safeLike, safeLike);
     }
 
@@ -349,13 +354,44 @@ router.delete('/orders/:id', requireAdmin, async (req, res) => {
     }
 });
 
+// Reject URLs that resolve to private/loopback/link-local hosts to prevent SSRF —
+// an attacker-supplied "song URL" must not be usable to probe internal services
+// (cloud metadata at 169.254.169.254, localhost admin panels, RFC1918 ranges, etc.).
+function isPublicHttpUrl(raw) {
+    let parsed;
+    try {
+        parsed = new URL(raw);
+    } catch {
+        return false;
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    if (
+        host === 'localhost' ||
+        host === '0.0.0.0' ||
+        host === '::1' ||
+        host.endsWith('.localhost') ||
+        host.endsWith('.internal') ||
+        /^127\./.test(host) ||
+        /^10\./.test(host) ||
+        /^192\.168\./.test(host) ||
+        /^169\.254\./.test(host) ||           // link-local incl. cloud metadata
+        /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+        /^(fc|fd)[0-9a-f]{2}:/.test(host) ||   // unique-local IPv6
+        /^fe80:/.test(host)                    // link-local IPv6
+    ) {
+        return false;
+    }
+    return true;
+}
+
 // POST /api/admin/orders/:id/song — attach a finished song URL and mark completed
 router.post('/orders/:id/song', requireAdmin, async (req, res) => {
     const url = typeof req.body?.url === 'string' ? req.body.url.trim() : '';
     const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
 
-    if (!url || !/^https?:\/\//i.test(url)) {
-        return res.status(400).json({ error: 'A valid http(s) URL is required.' });
+    if (!url || url.length > 2048 || !isPublicHttpUrl(url)) {
+        return res.status(400).json({ error: 'A valid public http(s) URL is required.' });
     }
 
     try {

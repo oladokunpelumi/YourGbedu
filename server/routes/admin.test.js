@@ -382,6 +382,65 @@ describe('DELETE /api/admin/orders/:id (protected)', () => {
   });
 });
 
+describe('POST /api/admin/orders/:id/song (SSRF guard)', () => {
+  async function adminCookie(supertest) {
+    const loginRes = await supertest(app)
+      .post('/api/admin/login')
+      .send({ username: 'testadmin', password: 'supersecret_test_password_123!' })
+      .set('Content-Type', 'application/json');
+    return loginRes.headers['set-cookie'];
+  }
+
+  it('rejects private/loopback/link-local hosts with 400', async () => {
+    const { default: supertest } = await import('supertest');
+    const orderId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    routeDb.prepare(`
+      INSERT INTO orders (id, song_title, genre, occasion, created_at, delivery_date)
+      VALUES (?, 'Custom Song', 'Afro-Beats', 'birthday', ?, ?)
+    `).run(orderId, now, now);
+    const cookie = await adminCookie(supertest);
+
+    const blocked = [
+      'http://169.254.169.254/latest/meta-data/',
+      'http://localhost:3000/internal',
+      'https://127.0.0.1/x.mp3',
+      'http://10.0.0.5/x.mp3',
+      'http://192.168.1.10/x.mp3',
+      'ftp://example.com/x.mp3',
+    ];
+    for (const url of blocked) {
+      const res = await supertest(app)
+        .post(`/api/admin/orders/${orderId}/song`)
+        .set('Cookie', cookie)
+        .send({ url });
+      expect(res.status, `should block ${url}`).toBe(400);
+    }
+    // order must remain untouched (no final_song_url written)
+    expect(routeDb.prepare('SELECT final_song_url FROM orders WHERE id = ?').get(orderId).final_song_url).toBeFalsy();
+  });
+
+  it('accepts a public https URL', async () => {
+    const { default: supertest } = await import('supertest');
+    const orderId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    routeDb.prepare(`
+      INSERT INTO orders (id, song_title, genre, occasion, created_at, delivery_date)
+      VALUES (?, 'Custom Song', 'Afro-Beats', 'birthday', ?, ?)
+    `).run(orderId, now, now);
+    const cookie = await adminCookie(supertest);
+
+    const res = await supertest(app)
+      .post(`/api/admin/orders/${orderId}/song`)
+      .set('Cookie', cookie)
+      .send({ url: 'https://cdn.example.com/songs/final.mp3', title: 'Final Mix' });
+
+    expect(res.status).toBe(200);
+    expect(routeDb.prepare('SELECT final_song_url FROM orders WHERE id = ?').get(orderId).final_song_url)
+      .toBe('https://cdn.example.com/songs/final.mp3');
+  });
+});
+
 describe('POST /api/admin/logout', () => {
   it('clears the admin cookie and revokes the session', async () => {
     const { default: supertest } = await import('supertest');

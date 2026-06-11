@@ -1,7 +1,10 @@
 const express = require('express');
 const { getSongPipeline, RESUMABLE_STAGES } = require('../services/song-pipeline.cjs');
+const { VALID_ENUMS } = require('../song-pipeline/lib/loader.cjs');
 
 const router = express.Router({ mergeParams: true });
+
+const OVERRIDE_FIELDS = ['tone_preference', 'relationship_energy', 'emotion_intensity'];
 
 function handleError(res, err) {
     const status = err.statusCode || 500;
@@ -45,10 +48,16 @@ router.post('/stages/:stage/regenerate', async (req, res) => {
 
 router.patch('/overrides', async (req, res) => {
     try {
-        const allowed = ['tone_preference', 'relationship_energy', 'emotion_intensity'];
         const overrides = {};
-        for (const field of allowed) {
-            if (req.body?.[field]) overrides[field] = req.body[field];
+        for (const field of OVERRIDE_FIELDS) {
+            const value = req.body?.[field];
+            if (value === undefined || value === null || value === '') continue;
+            if (typeof value !== 'string' || !VALID_ENUMS[field].includes(value)) {
+                return res.status(400).json({
+                    error: `${field} must be one of: ${VALID_ENUMS[field].join(', ')}`,
+                });
+            }
+            overrides[field] = value;
         }
         const generation = await getSongPipeline().applyOverrides(req.params.orderId, overrides);
         res.json(generation);

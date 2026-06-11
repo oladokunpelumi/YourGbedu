@@ -166,6 +166,45 @@ async function readAdminPayload(response: Response, action: string) {
   return payload;
 }
 
+// Customer free-text (qualities, memories, the heart message) is sensitive PII.
+// Keep it hidden by default in the queue so it isn't shoulder-surfed or left
+// on-screen; the operator clicks to reveal the full text when they need it.
+const RevealableText: React.FC<{ value: string | null | undefined }> = ({ value }) => {
+  const [revealed, setRevealed] = useState(false);
+  const text = (value || '').trim();
+  if (!text) {
+    return (
+      <p className="min-h-28 whitespace-pre-wrap rounded-lg border border-line bg-cream p-3 leading-relaxed text-ink-soft">
+        -
+      </p>
+    );
+  }
+  if (!revealed) {
+    return (
+      <button
+        type="button"
+        onClick={() => setRevealed(true)}
+        className="flex min-h-28 w-full items-center justify-center rounded-lg border border-dashed border-line bg-cream p-3 text-center font-label text-xs font-bold uppercase tracking-[0.14em] text-ink-muted transition-colors hover:border-terracotta hover:text-terracotta"
+        aria-label="Reveal customer message"
+      >
+        Hidden · click to reveal
+      </button>
+    );
+  }
+  return (
+    <p className="min-h-28 whitespace-pre-wrap rounded-lg border border-line bg-cream p-3 leading-relaxed text-ink-soft">
+      {text}
+      <button
+        type="button"
+        onClick={() => setRevealed(false)}
+        className="mt-2 block font-label text-[11px] font-bold uppercase tracking-[0.14em] text-ink-muted underline hover:text-terracotta"
+      >
+        Hide
+      </button>
+    </p>
+  );
+};
+
 const Admin: React.FC = () => {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [username, setUsername] = useState('');
@@ -948,9 +987,7 @@ const Admin: React.FC = () => {
                               <span className="mb-2 block font-label text-xs font-bold uppercase tracking-[0.14em] text-terracotta">
                                 {label}
                               </span>
-                              <p className="min-h-28 whitespace-pre-wrap rounded-lg border border-line bg-cream p-3 leading-relaxed text-ink-soft">
-                                {value || '-'}
-                              </p>
+                              <RevealableText value={value} />
                             </div>
                           ))}
                         </div>
