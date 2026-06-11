@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Search, X, Loader2, Mail } from 'lucide-react';
@@ -19,7 +19,43 @@ const TrackOrderModal: React.FC<TrackOrderModalProps> = ({ isOpen, onClose }) =>
   const [identifier, setIdentifier] = useState('');
   const [modalState, setModalState] = useState<ModalState>('input');
   const [errorMessage, setErrorMessage] = useState('');
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isOpen) return;
+    restoreFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') handleClose();
+      if (event.key !== 'Tab') return;
+      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (!focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      restoreFocusRef.current?.focus();
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -70,10 +106,11 @@ const TrackOrderModal: React.FC<TrackOrderModalProps> = ({ isOpen, onClose }) =>
 
   return ReactDOM.createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/45 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-ink/45 p-4 backdrop-blur-sm"
       onClick={handleClose}
     >
       <div
+        ref={dialogRef}
         className="relative w-full max-w-md rounded-2xl border border-line bg-cream p-6 shadow-[0_18px_44px_rgba(31,27,20,0.2)]"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
@@ -124,6 +161,7 @@ const TrackOrderModal: React.FC<TrackOrderModalProps> = ({ isOpen, onClose }) =>
             <form onSubmit={handleTrack} className="space-y-4">
               <div>
                 <input
+                  ref={inputRef}
                   aria-label="Order ID or email address"
                   type="text"
                   value={identifier}

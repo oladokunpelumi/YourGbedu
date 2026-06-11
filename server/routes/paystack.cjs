@@ -6,6 +6,7 @@ const { z } = require('zod');
 const { isFastDelivery } = require('../pricing.cjs');
 const { getClientUrlFromRequest } = require('../client-url.cjs');
 const { quoteCheckout, quoteMetadata, parsePromoMetadata } = require('../promos.cjs');
+const { getOne, execSql } = require('../db-helpers.cjs');
 
 const InitializeSchema = z.object({
     email: z.string().email().optional().or(z.literal('')),
@@ -19,10 +20,8 @@ const PAYSTACK_BASE_URL = 'https://api.paystack.co';
 const STANDARD_DELIVERY_HOURS = 48;
 const FAST_DELIVERY_HOURS = 24;
 
-let db;
-function getDb() {
-    if (!db) db = require('../db.cjs');
-    return db;
+function makeTrackingToken() {
+    return crypto.randomBytes(16).toString('hex');
 }
 
 let emailModule;
@@ -67,8 +66,7 @@ router.post('/initialize', async (req, res) => {
         const { email, metadata, promoCode, fullPrice } = parsed.data;
         const customerEmail = email || 'guest@yourgbedu.com';
         const resolvedMetadata = metadata || {};
-        const quote = quoteCheckout({
-            db: getDb(),
+        const quote = await quoteCheckout({
             provider: 'paystack',
             fastDelivery: resolvedMetadata.fastDelivery,
             promoCode,
@@ -188,17 +186,18 @@ router.post('/webhook', (req, res) => {
     res.sendStatus(200);
 
     if (event.event === 'charge.success') {
-        const dbConn = getDb();
+        void (async () => {
         const { reference, metadata, customer, amount } = event.data;
         const promo = parsePromoMetadata(metadata || {});
 
-        const existing = dbConn.prepare('SELECT id FROM orders WHERE paystack_reference = ?').get(reference);
+        const existing = await getOne('SELECT id FROM orders WHERE paystack_reference = ?', reference);
         if (existing) {
             console.log(`[Webhook] Order for reference already exists, skipping`);
             return;
         }
 
         const id = uuidv4();
+        const trackingToken = makeTrackingToken();
         const createdAt = new Date().toISOString();
         const actualDeliveryHours = isFastDelivery(metadata?.fastDelivery)
             ? FAST_DELIVERY_HOURS
@@ -208,18 +207,19 @@ router.post('/webhook', (req, res) => {
         ).toISOString();
 
         try {
-            dbConn.prepare(`
+            await execSql(`
                 INSERT INTO orders (
-                    id, song_title, genre, mood, tempo, occasion, occasion_detail, story, status,
+                    id, tracking_token, song_title, genre, mood, tempo, occasion, occasion_detail, story, status,
                     created_at, delivery_date, paystack_reference, amount,
                     recipient_type, sender_name, voice_gender,
                     special_qualities, favorite_memories, special_message, customer_email,
                     promo_code_id, promo_code_preview, promo_discount_percent,
                     original_amount, discounted_amount
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'in_production', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).run(
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'in_production', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `,
                 id,
+                trackingToken,
                 'Custom Song',
                 metadata?.genre || '',
                 '', 100,
@@ -247,12 +247,15 @@ router.post('/webhook', (req, res) => {
             );
 
             console.log(`[Webhook] Order created`);
+            const order = await getOne('SELECT * FROM orders WHERE id = ?', id);
+            require('../services/song-pipeline.cjs').getSongPipeline().startGenerationInBackgroundForOrder(order);
 
             const customerEmail = metadata?.customerEmail || customer?.email;
             if (customerEmail) {
                 getEmailModule().sendConfirmationEmail({
                     to: customerEmail,
-                    orderId: id.slice(0, 8).toUpperCase(),
+                    orderId: id,
+                    trackingToken,
                     genre: metadata?.genre,
                     mood: metadata?.mood,
                     deliveryDate,
@@ -263,6 +266,7 @@ router.post('/webhook', (req, res) => {
         } catch (err) {
             console.error('[Webhook] Error creating order:', err);
         }
+        })().catch((err) => console.error('[Webhook] async handler failed:', err));
     }
 });
 

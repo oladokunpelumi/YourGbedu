@@ -166,6 +166,25 @@ describe('GET /api/auth/verify', () => {
     expect(setCookie.some((c) => c.includes('HttpOnly'))).toBe(true);
   });
 
+  it('allows only one successful verification for the same token', async () => {
+    const { default: supertest } = await import('supertest');
+
+    const plainToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = hashToken(plainToken);
+    const expires = new Date(Date.now() + 60000).toISOString();
+    db
+      .prepare('INSERT INTO magic_links (token, email, expires_at, used) VALUES (?, ?, ?, 0)')
+      .run(tokenHash, 'race@example.com', expires);
+
+    const [first, second] = await Promise.all([
+      supertest(app).post('/api/auth/verify').send({ token: plainToken }),
+      supertest(app).post('/api/auth/verify').send({ token: plainToken }),
+    ]);
+
+    expect([first.status, second.status].sort()).toEqual([200, 401]);
+    expect(db.prepare('SELECT used FROM magic_links WHERE token = ?').get(tokenHash).used).toBe(1);
+  });
+
   it('rejects a used token', async () => {
     const { default: supertest } = await import('supertest');
 

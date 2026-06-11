@@ -14,6 +14,7 @@ describe('email URL helpers', () => {
     vi.stubEnv('CLIENT_URL', 'https://yourgbedu.example/app/');
 
     expect(email.getTrackUrl('ABC 123')).toBe('https://yourgbedu.example/app/#/track?id=ABC%20123');
+    expect(email.getTrackUrl('ABC 123', 'tok+en')).toBe('https://yourgbedu.example/app/#/track?id=ABC%20123&t=tok%2Ben');
     expect(email.getVerifyUrl({
       clientUrl: 'https://yourgbedu.example/',
       token: 'token+with spaces',

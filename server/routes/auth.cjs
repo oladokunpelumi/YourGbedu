@@ -3,14 +3,9 @@ const router = express.Router();
 const crypto = require('crypto');
 const { generateToken, revokeToken, requireAuth, COOKIE_OPTS } = require('../middleware/auth.cjs');
 const { getClientUrlFromRequest } = require('../client-url.cjs');
+const { getOne, execSql, execRaw } = require('../db-helpers.cjs');
 
 const TOKEN_TTL_MINUTES = 15;
-
-let db;
-function getDb() {
-    if (!db) db = require('../db.cjs');
-    return db;
-}
 
 let emailModule;
 function getEmailModule() {
@@ -31,11 +26,10 @@ function redactEmail(email) {
 }
 
 let tablesEnsured = false;
-function ensureAuthTables() {
+async function ensureAuthTables() {
     if (tablesEnsured) return;
-    const dbConn = getDb();
 
-    dbConn.exec(`
+    await execRaw(`
       CREATE TABLE IF NOT EXISTS magic_links (
         token TEXT PRIMARY KEY,
         email TEXT NOT NULL,
@@ -44,7 +38,7 @@ function ensureAuthTables() {
       );
     `);
 
-    dbConn.exec(`
+    await execRaw(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
         email TEXT UNIQUE NOT NULL,
@@ -57,8 +51,7 @@ function ensureAuthTables() {
 
 // POST /api/auth/request — send a magic link to the given email
 router.post('/request', async (req, res) => {
-    ensureAuthTables();
-    const dbConn = getDb();
+    await ensureAuthTables();
     const { email } = req.body;
 
     if (!email || !email.includes('@')) {
@@ -72,17 +65,22 @@ router.post('/request', async (req, res) => {
     // least one order so the endpoint can't be used to spam arbitrary addresses.
     // Case-insensitive on the column too — orders created before we started
     // normalizing on insert may still have mixed-case addresses.
-    const hasOrders = dbConn
-        .prepare('SELECT 1 FROM orders WHERE LOWER(TRIM(customer_email)) = ? LIMIT 1')
-        .get(normalizedEmail);
+    const hasOrders = await getOne(
+        'SELECT 1 FROM orders WHERE LOWER(TRIM(customer_email)) = ? LIMIT 1',
+        normalizedEmail
+    );
 
     if (hasOrders) {
         const plainToken = crypto.randomBytes(32).toString('hex');
         const tokenHash = hashToken(plainToken);
         const expiresAt = new Date(Date.now() + TOKEN_TTL_MINUTES * 60 * 1000).toISOString();
 
-        dbConn.prepare('INSERT INTO magic_links (token, email, expires_at, used) VALUES (?, ?, ?, 0)')
-            .run(tokenHash, normalizedEmail, expiresAt);
+        await execSql(
+            'INSERT INTO magic_links (token, email, expires_at, used) VALUES (?, ?, ?, 0)',
+            tokenHash,
+            normalizedEmail,
+            expiresAt
+        );
 
         const delivery = await getEmailModule().sendMagicLinkEmail({
             to: normalizedEmail,
@@ -102,31 +100,42 @@ router.post('/request', async (req, res) => {
 
 // POST /api/auth/verify — exchange magic-link token for a session cookie.
 // Using POST keeps the token out of server access logs (it's in the body, not the URL).
-router.post('/verify', (req, res) => {
-    ensureAuthTables();
-    const dbConn = getDb();
+router.post('/verify', async (req, res) => {
+    await ensureAuthTables();
     const { token } = req.body;
     if (!token) return res.status(400).json({ error: 'Token is required.' });
 
     const tokenHash = hashToken(String(token));
-    const record = dbConn.prepare('SELECT * FROM magic_links WHERE token = ?').get(tokenHash);
+    const record = await getOne('SELECT * FROM magic_links WHERE token = ?', tokenHash);
 
     if (!record) return res.status(401).json({ error: 'Invalid or expired link.' });
     if (record.used) return res.status(401).json({ error: 'Link already used.' });
-    if (new Date(record.expires_at) < new Date()) {
+    const now = new Date();
+    if (new Date(record.expires_at) < now) {
         return res.status(401).json({ error: 'Link has expired. Please request a new one.' });
     }
 
-    dbConn.prepare('UPDATE magic_links SET used = 1 WHERE token = ?').run(tokenHash);
+    const consumed = await execSql(
+        'UPDATE magic_links SET used = 1 WHERE token = ? AND used = 0 AND expires_at >= ?',
+        tokenHash,
+        now.toISOString()
+    );
+    if (consumed.changes === 0) {
+        return res.status(401).json({ error: 'Invalid or expired link.' });
+    }
 
-    const existing = dbConn.prepare('SELECT id FROM users WHERE email = ?').get(record.email);
+    const existing = await getOne('SELECT id FROM users WHERE email = ?', record.email);
     let userId;
     if (existing) {
         userId = existing.id;
     } else {
         userId = crypto.randomUUID();
-        dbConn.prepare('INSERT INTO users (id, email, created_at) VALUES (?, ?, ?)')
-            .run(userId, record.email, new Date().toISOString());
+        await execSql(
+            'INSERT INTO users (id, email, created_at) VALUES (?, ?, ?)',
+            userId,
+            record.email,
+            new Date().toISOString()
+        );
     }
 
     // Magic link always issues a regular user token — admin access is only via
@@ -147,9 +156,9 @@ router.get('/me', requireAuth, (req, res) => {
 });
 
 // POST /api/auth/logout — revoke the current session cookie
-router.post('/logout', (req, res) => {
+router.post('/logout', async (req, res) => {
     const token = req.cookies?.sonnetary_token;
-    if (token) revokeToken(token);
+    if (token) await revokeToken(token);
     res.clearCookie('sonnetary_token', COOKIE_OPTS);
     res.json({ message: 'Signed out.' });
 });

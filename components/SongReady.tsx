@@ -70,24 +70,27 @@ const SongReady: React.FC<SongReadyProps> = ({ order, onRatingSaved }) => {
       setRating(value);
       setSavingRating(true);
       try {
-        await fetch(`/api/orders/${encodeURIComponent(order.id)}/rating`, {
+        const tokenParam = order.trackingToken ? `?t=${encodeURIComponent(order.trackingToken)}` : '';
+        await fetch(`/api/orders/${encodeURIComponent(order.id)}/rating${tokenParam}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ rating: value }),
+          credentials: 'include',
         });
         onRatingSaved?.(value);
       } finally {
         setSavingRating(false);
       }
     },
-    [order.id, onRatingSaved]
+    [order.id, order.trackingToken, onRatingSaved]
   );
 
   const handleShare = useCallback(async () => {
-    const shareUrl = `${window.location.origin}/#/track?id=${encodeURIComponent(order.id)}`;
+    const tokenParam = order.trackingToken ? `&t=${encodeURIComponent(order.trackingToken)}` : '';
+    const shareUrl = `${window.location.origin}/#/track?id=${encodeURIComponent(order.id)}${tokenParam}`;
     const shareData = {
       title: order.finalSongTitle || order.songTitle || 'Your custom song',
-      text: 'Listen to my custom song from PrayerSong',
+      text: 'Listen to my custom song from YourGbedu',
       url: shareUrl,
     };
     if (navigator.share) {
@@ -105,7 +108,7 @@ const SongReady: React.FC<SongReadyProps> = ({ order, onRatingSaved }) => {
     } catch {
       // best effort — clipboard may be blocked
     }
-  }, [order.id, order.finalSongTitle, order.songTitle]);
+  }, [order.id, order.trackingToken, order.finalSongTitle, order.songTitle]);
 
   const title = order.finalSongTitle || order.songTitle || 'Your song';
 
@@ -113,7 +116,7 @@ const SongReady: React.FC<SongReadyProps> = ({ order, onRatingSaved }) => {
     <section className="mx-auto flex max-w-2xl flex-col items-center px-4 py-10">
       <div
         className={`relative flex h-64 w-64 items-center justify-center rounded-full bg-ink shadow-[0_24px_60px_rgba(31,27,20,0.25)] sm:h-72 sm:w-72 ${
-          isPlaying ? 'animate-[spin_8s_linear_infinite]' : ''
+          isPlaying ? 'animate-[spin_8s_linear_infinite] motion-reduce:animate-none' : ''
         }`}
         aria-hidden="true"
       >
@@ -162,7 +165,7 @@ const SongReady: React.FC<SongReadyProps> = ({ order, onRatingSaved }) => {
 
       <div className="mt-10 w-full max-w-md rounded-2xl border border-line bg-cream p-5 text-center">
         <p className="font-headline text-2xl font-medium text-ink">How did we do?</p>
-        <div className="mt-3 flex items-center justify-center gap-2">
+        <div className="mt-3 flex items-center justify-center gap-2" role="radiogroup" aria-label="Rate your finished song">
           {[1, 2, 3, 4, 5].map((star) => {
             const active = (hoverRating || rating) >= star;
             return (
@@ -173,8 +176,10 @@ const SongReady: React.FC<SongReadyProps> = ({ order, onRatingSaved }) => {
                 onClick={() => submitRating(star)}
                 onMouseEnter={() => setHoverRating(star)}
                 onMouseLeave={() => setHoverRating(0)}
+                role="radio"
+                aria-checked={rating === star}
                 aria-label={`Rate ${star} star${star === 1 ? '' : 's'}`}
-                className="text-3xl leading-none transition-transform hover:scale-110 disabled:opacity-60"
+                className="rounded-full p-1 text-3xl leading-none transition-colors hover:bg-terracotta-pale disabled:opacity-60"
               >
                 <span
                   className={`material-symbols-outlined ${active ? 'text-terracotta' : 'text-ink-muted/40'}`}
@@ -216,14 +221,14 @@ const SongReady: React.FC<SongReadyProps> = ({ order, onRatingSaved }) => {
             <span className="material-symbols-outlined text-lg" aria-hidden="true">
               card_giftcard
             </span>
-            Tip PrayerSong
+            Tip YourGbedu
           </a>
         )}
       </div>
 
       {REACTION_FORM_URL && (
         <div className="mt-10 w-full max-w-md rounded-2xl border border-line bg-cream p-6 text-center">
-          <span className="inline-block rounded-full bg-terracotta-pale px-3 py-1 font-label text-[10px] font-bold uppercase tracking-[0.14em] text-terracotta-dark">
+          <span className="inline-block rounded-full bg-terracotta-pale px-3 py-1 font-label text-xs font-bold uppercase tracking-[0.14em] text-terracotta-dark">
             Limited time
           </span>
           <p className="mt-4 font-headline text-2xl font-semibold text-ink">Submit your reaction video</p>

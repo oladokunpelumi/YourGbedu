@@ -29,11 +29,15 @@ const OrderStatus: React.FC = () => {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const urlId = params.get('id');
+    const urlToken = params.get('t');
     const trackId = urlId || sessionStorage.getItem('yourgbedu_track_id');
+    const trackToken = urlToken || sessionStorage.getItem('yourgbedu_track_token');
 
     if (trackId && !trackId.includes('@')) {
       sessionStorage.setItem('yourgbedu_track_id', trackId);
-      fetch(`/api/orders/${encodeURIComponent(trackId)}`, { credentials: 'include' })
+      if (trackToken) sessionStorage.setItem('yourgbedu_track_token', trackToken);
+      const tokenParam = trackToken ? `?t=${encodeURIComponent(trackToken)}` : '';
+      fetch(`/api/orders/${encodeURIComponent(trackId)}${tokenParam}`, { credentials: 'include' })
         .then(async (res) => {
           if (res.ok) {
             const data = await res.json();
@@ -42,7 +46,7 @@ const OrderStatus: React.FC = () => {
             setAuthState('authenticated');
           } else {
             setOrders([]);
-            setAuthState('authenticated');
+            setAuthState('unauthenticated');
           }
         })
         .catch(() => setAuthState('unauthenticated'))
@@ -200,10 +204,10 @@ const OrderStatus: React.FC = () => {
       <div className="bg-ivory px-5 py-8 sm:px-8 lg:px-12">
         <div className="mx-auto max-w-3xl">
           <div className="mb-6 flex items-center justify-between gap-3">
-            <span className="rounded-full border border-line bg-cream px-3 py-1 font-label text-[10px] font-bold uppercase tracking-[0.14em] text-ink-muted">
+            <span className="rounded-full border border-line bg-cream px-3 py-1 font-label text-xs font-bold uppercase tracking-[0.14em] text-ink-muted">
               Order #{order.id.slice(0, 8)}
             </span>
-            <span className="rounded-full bg-sage-pale px-3 py-1 font-label text-[10px] font-bold uppercase tracking-[0.14em] text-sage-dark">
+            <span className="rounded-full bg-sage-pale px-3 py-1 font-label text-xs font-bold uppercase tracking-[0.14em] text-sage-dark">
               Song ready
             </span>
           </div>
@@ -229,10 +233,10 @@ const OrderStatus: React.FC = () => {
           <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
             <div>
               <div className="flex flex-wrap items-center gap-3">
-                <span className="rounded-full border border-line bg-ivory px-3 py-1 font-label text-[10px] font-bold uppercase tracking-[0.14em] text-ink-muted">
+                <span className="rounded-full border border-line bg-ivory px-3 py-1 font-label text-xs font-bold uppercase tracking-[0.14em] text-ink-muted">
                   Order #{order.id.slice(0, 8)}
                 </span>
-                <span className={`rounded-full px-3 py-1 font-label text-[10px] font-bold uppercase tracking-[0.14em] ${
+                <span className={`rounded-full px-3 py-1 font-label text-xs font-bold uppercase tracking-[0.14em] ${
                   order.status === 'completed'
                     ? 'bg-sage-pale text-sage-dark'
                     : 'bg-terracotta-pale text-terracotta-dark'
@@ -263,7 +267,7 @@ const OrderStatus: React.FC = () => {
                   <span className="block font-headline text-4xl font-semibold leading-none text-ink">
                     {item.val}
                   </span>
-                  <span className="mt-2 block font-label text-[9px] font-bold uppercase tracking-[0.12em] text-ink-muted">
+                  <span className="mt-2 block font-label text-xs font-bold uppercase tracking-[0.12em] text-ink-muted">
                     {item.label}
                   </span>
                 </div>
@@ -289,7 +293,7 @@ const OrderStatus: React.FC = () => {
               <h2 className="font-headline text-4xl font-medium leading-none text-ink">
                 Production timeline
               </h2>
-              <span className="rounded-full border border-line bg-ivory px-3 py-1 font-label text-[10px] font-bold uppercase tracking-[0.14em] text-ink-muted">
+              <span className="rounded-full border border-line bg-ivory px-3 py-1 font-label text-xs font-bold uppercase tracking-[0.14em] text-ink-muted">
                 Step {order.currentStep} of {order.steps.length}
               </span>
             </div>
@@ -323,7 +327,7 @@ const OrderStatus: React.FC = () => {
                         <h3 className="font-headline text-3xl font-medium leading-none text-ink">
                           {item.title}
                         </h3>
-                        <span className="rounded-full bg-cream px-3 py-1 font-label text-[10px] font-bold uppercase tracking-[0.12em] text-ink-muted">
+                        <span className="rounded-full bg-cream px-3 py-1 font-label text-xs font-bold uppercase tracking-[0.12em] text-ink-muted">
                           {item.status}
                         </span>
                       </div>
@@ -332,7 +336,7 @@ const OrderStatus: React.FC = () => {
                       </p>
                       {item.active && (
                         <div className="mt-5">
-                          <div className="mb-2 flex justify-between font-label text-[10px] font-bold uppercase tracking-[0.12em] text-ink-muted">
+                          <div className="mb-2 flex justify-between font-label text-xs font-bold uppercase tracking-[0.12em] text-ink-muted">
                             <span>Tracking progress</span>
                             <span>{item.progress}%</span>
                           </div>
@@ -365,7 +369,7 @@ const OrderStatus: React.FC = () => {
                   ...(order.senderName ? [{ label: 'From', value: order.senderName }] : []),
                 ].map((item) => (
                   <div key={item.label} className="rounded-xl border border-line bg-ivory p-4">
-                    <p className="font-label text-[10px] font-bold uppercase tracking-[0.16em] text-ink-muted">
+                    <p className="font-label text-xs font-bold uppercase tracking-[0.16em] text-ink-muted">
                       {item.label}
                     </p>
                     <p className="mt-1 font-body text-sm font-bold text-ink">{item.value}</p>
@@ -375,7 +379,7 @@ const OrderStatus: React.FC = () => {
             </div>
 
             <div className="rounded-2xl bg-ink p-6 text-cream">
-              <p className="font-label text-[10px] font-bold uppercase tracking-[0.16em] text-cream/45">
+              <p className="font-label text-xs font-bold uppercase tracking-[0.16em] text-cream/45">
                 Price summary
               </p>
               <div className="mt-3 flex items-center justify-between gap-4">
@@ -387,7 +391,7 @@ const OrderStatus: React.FC = () => {
                     {isNigeria ? '₦60,000' : '$50'}
                   </p>
                 </div>
-                <span className="rounded-full bg-mustard px-3 py-1 font-label text-[10px] font-bold uppercase tracking-[0.12em] text-ink">
+                <span className="rounded-full bg-mustard px-3 py-1 font-label text-xs font-bold uppercase tracking-[0.12em] text-ink">
                   50% off
                 </span>
               </div>
@@ -402,7 +406,7 @@ const OrderStatus: React.FC = () => {
                   {orders.map((o, i) => (
                     <div key={o.id} className={`rounded-xl border p-3 ${i === 0 ? 'border-terracotta bg-terracotta-pale' : 'border-line bg-ivory'}`}>
                       <p className="font-headline text-2xl italic leading-none text-ink">{o.songTitle}</p>
-                      <p className="mt-1 font-label text-[10px] font-bold uppercase tracking-[0.14em] text-ink-muted">
+                      <p className="mt-1 font-label text-xs font-bold uppercase tracking-[0.14em] text-ink-muted">
                         {o.genre} - {o.overallProgress}%
                       </p>
                     </div>

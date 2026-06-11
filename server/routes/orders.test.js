@@ -4,7 +4,7 @@
  * Key security invariants tested:
  *  - GET /api/orders/track requires authentication (returns 401 without cookie)
  *  - Authenticated users can only see their own orders (uses email from JWT, not query param)
- *  - GET /api/orders/:id is accessible without auth (UUID is a capability token)
+ *  - GET /api/orders/:id requires a per-order tracking token unless authenticated owner/admin
  *  - POST /api/orders is idempotent on duplicate payment references
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -76,9 +76,11 @@ describe('POST /api/orders', () => {
     const row = db.prepare('SELECT occasion, occasion_detail FROM orders WHERE id = ?').get(res.body.id);
     expect(row.occasion).toBe('anniversary');
     expect(row.occasion_detail).toBe('10 years together');
+    expect(res.body.trackingToken).toMatch(/^[a-f0-9]{32}$/);
     expect(sendConfirmationEmailMock).toHaveBeenCalledWith(expect.objectContaining({
       to: 'test@example.com',
-      orderId: res.body.id.slice(0, 8).toUpperCase(),
+      orderId: res.body.id,
+      trackingToken: res.body.trackingToken,
       genre: 'Afro-Beats',
       deliveryDate: expect.any(String),
       reference: 'ref_001',
@@ -114,6 +116,31 @@ describe('POST /api/orders', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBeTruthy();
+  });
+
+  it('requires exactly one payment reference', async () => {
+    const { default: supertest } = await import('supertest');
+    const res = await supertest(app)
+      .post('/api/orders')
+      .send({ paystackReference: 'ref_both_001', stripeSessionId: 'cs_both_001' })
+      .set('Content-Type', 'application/json');
+
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects a verified payment amount that does not match checkout pricing', async () => {
+    const { default: supertest } = await import('supertest');
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      json: async () => ({ status: true, data: { status: 'success', amount: 1, metadata: { fastDelivery: 'false' } } }),
+    })));
+
+    const res = await supertest(app)
+      .post('/api/orders')
+      .send({ genre: 'Afro-Beats', paystackReference: 'ref_underpay_001' })
+      .set('Content-Type', 'application/json');
+
+    expect(res.status).toBe(402);
+    expect(db.prepare('SELECT id FROM orders WHERE paystack_reference = ?').get('ref_underpay_001')).toBeUndefined();
   });
 });
 
@@ -185,7 +212,7 @@ describe('GET /api/orders/:id', () => {
     expect(res.status).toBe(404);
   });
 
-  it('returns an existing order without auth (UUID is capability token)', async () => {
+  it('requires the per-order tracking token for public order access', async () => {
     const { default: supertest } = await import('supertest');
 
     const created = await supertest(app)
@@ -193,7 +220,14 @@ describe('GET /api/orders/:id', () => {
       .send({ songTitle: 'My Song', genre: 'Afro-Jazz', paystackReference: 'ref_get_001' })
       .set('Content-Type', 'application/json');
 
-    const fetched = await supertest(app).get(`/api/orders/${created.body.id}`);
+    const noToken = await supertest(app).get(`/api/orders/${created.body.id}`);
+    const wrongToken = await supertest(app).get(`/api/orders/${created.body.id}?t=wrong`);
+    const shortId = await supertest(app).get(`/api/orders/${created.body.id.slice(0, 8)}?t=${created.body.trackingToken}`);
+    const fetched = await supertest(app).get(`/api/orders/${created.body.id}?t=${created.body.trackingToken}`);
+
+    expect(noToken.status).toBe(404);
+    expect(wrongToken.status).toBe(404);
+    expect(shortId.status).toBe(404);
     expect(fetched.status).toBe(200);
     expect(fetched.body.id).toBe(created.body.id);
     expect(fetched.body.currentStep).toBe(1);
@@ -203,6 +237,49 @@ describe('GET /api/orders/:id', () => {
       'Song Composing',
       'Final Mastering',
     ]);
+  });
+
+  it('allows an authenticated owner to fetch their order without the URL token', async () => {
+    const { default: supertest } = await import('supertest');
+    const email = 'owner@example.com';
+
+    const created = await supertest(app)
+      .post('/api/orders')
+      .send({ songTitle: 'Owner Song', genre: 'R&B', paystackReference: 'ref_owner_001', customerEmail: email })
+      .set('Content-Type', 'application/json');
+
+    const fetched = await supertest(app)
+      .get(`/api/orders/${created.body.id}`)
+      .set('Cookie', makeAuthCookie(email));
+
+    expect(fetched.status).toBe(200);
+    expect(fetched.body.id).toBe(created.body.id);
+  });
+});
+
+describe('PATCH /api/orders/:id/rating', () => {
+  it('requires the tracking token for public rating updates', async () => {
+    const { default: supertest } = await import('supertest');
+
+    const created = await supertest(app)
+      .post('/api/orders')
+      .send({ genre: 'Soul', paystackReference: 'ref_rating_001' })
+      .set('Content-Type', 'application/json');
+
+    const noToken = await supertest(app)
+      .patch(`/api/orders/${created.body.id}/rating`)
+      .send({ rating: 5 });
+    const wrongToken = await supertest(app)
+      .patch(`/api/orders/${created.body.id}/rating?t=wrong`)
+      .send({ rating: 5 });
+    const valid = await supertest(app)
+      .patch(`/api/orders/${created.body.id}/rating?t=${created.body.trackingToken}`)
+      .send({ rating: 5 });
+
+    expect(noToken.status).toBe(404);
+    expect(wrongToken.status).toBe(404);
+    expect(valid.status).toBe(200);
+    expect(db.prepare('SELECT rating FROM orders WHERE id = ?').get(created.body.id).rating).toBe(5);
   });
 });
 

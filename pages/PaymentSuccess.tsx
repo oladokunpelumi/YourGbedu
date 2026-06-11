@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 const PaymentSuccess: React.FC = () => {
   const [status, setStatus] = useState<'creating' | 'success' | 'error'>('creating');
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [trackingToken, setTrackingToken] = useState<string | null>(null);
   const [amountPaid, setAmountPaid] = useState<string>('');
   const [deliveryLabel, setDeliveryLabel] = useState('48 hours');
   const [errorMessage, setErrorMessage] = useState(
@@ -24,13 +25,16 @@ const PaymentSuccess: React.FC = () => {
     const briefRaw = sessionStorage.getItem('yourgbedu_brief');
     const brief = briefRaw ? JSON.parse(briefRaw) : {};
 
-    const finalize = (id: string) => {
+    const finalize = (id: string, token?: string | null) => {
       setOrderId(id);
+      setTrackingToken(token || null);
       setStatus('success');
       sessionStorage.setItem('yourgbedu_track_id', id);
+      if (token) sessionStorage.setItem('yourgbedu_track_token', token);
       sessionStorage.removeItem('yourgbedu_brief');
+      const tokenParam = token ? `&t=${encodeURIComponent(token)}` : '';
       setTimeout(() => {
-        navigate(`/track?id=${id}`, { replace: false });
+        navigate(`/track?id=${encodeURIComponent(id)}${tokenParam}`, { replace: false });
       }, 4000);
     };
 
@@ -80,7 +84,7 @@ const PaymentSuccess: React.FC = () => {
             setStatus('error');
             return;
           }
-          finalize(orderData.id);
+          finalize(orderData.id, orderData.trackingToken);
         } else {
           const verifyRes = await fetch(`/api/paystack/verify/${paystackReference}`);
           const verifyData = await verifyRes.json().catch(() => null);
@@ -128,7 +132,7 @@ const PaymentSuccess: React.FC = () => {
             setStatus('error');
             return;
           }
-          finalize(orderData.id);
+          finalize(orderData.id, orderData.trackingToken);
         }
       } catch (err) {
         console.error('Order creation error:', err);
@@ -197,7 +201,7 @@ const PaymentSuccess: React.FC = () => {
               ['Build window', deliveryLabel],
             ].map(([label, value]) => (
               <div key={label} className="flex items-center justify-between gap-4 border-b border-line py-3 first:pt-0 last:border-b-0 last:pb-0">
-                <span className="font-label text-[10px] font-bold uppercase tracking-[0.16em] text-ink-muted">
+                <span className="font-label text-xs font-bold uppercase tracking-[0.16em] text-ink-muted">
                   {label}
                 </span>
                 <span className="text-right font-body text-sm font-bold text-ink">{value}</span>
@@ -207,7 +211,7 @@ const PaymentSuccess: React.FC = () => {
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link
-              to={orderId ? `/track?id=${orderId}` : '/track'}
+              to={orderId ? `/track?id=${encodeURIComponent(orderId)}${trackingToken ? `&t=${encodeURIComponent(trackingToken)}` : ''}` : '/track'}
               className="inline-flex min-h-12 items-center justify-center rounded-full bg-ink px-7 py-3 font-label text-sm font-bold uppercase tracking-[0.14em] text-cream transition-colors hover:bg-terracotta"
             >
               Track order
@@ -222,8 +226,10 @@ const PaymentSuccess: React.FC = () => {
         </div>
 
         <img
-          src="/images/Composing.jpg"
+          src="/images/Composing.webp"
           alt="A YourGbedu production scene"
+          loading="lazy"
+          decoding="async"
           className="hidden h-full min-h-[520px] w-full object-cover sepia-[0.12] lg:block"
         />
       </div>
