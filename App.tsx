@@ -1,20 +1,21 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useRef, useCallback } from 'react';
 import { HashRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import PersistentPlayer from './components/PersistentPlayer';
 import EmailCapturePopup from './components/EmailCapturePopup';
 import Home from './pages/Home';
-import CreateSong from './pages/CreateSong';
-import OrderStatus from './pages/OrderStatus';
-import Library from './pages/Library';
-import PaymentSuccess from './pages/PaymentSuccess';
 import PaymentCancel from './pages/PaymentCancel';
-import Admin from './pages/Admin';
 import Verify from './pages/Verify';
-import Checkout from './pages/Checkout';
 import { Song } from './types';
 import { PlayerContext, PlayerContextType } from './contexts/PlayerContext';
+
+const CreateSong = lazy(() => import('./pages/CreateSong'));
+const OrderStatus = lazy(() => import('./pages/OrderStatus'));
+const Library = lazy(() => import('./pages/Library'));
+const PaymentSuccess = lazy(() => import('./pages/PaymentSuccess'));
+const Admin = lazy(() => import('./pages/Admin'));
+const Checkout = lazy(() => import('./pages/Checkout'));
 
 const PREVIEW_LIMIT_SECONDS = 30;
 const DIRECT_HASH_ROUTES = new Set([
@@ -242,8 +243,11 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
     <PlayerContext.Provider value={contextValue}>
       <div className={`min-h-screen flex flex-col ${isAdminRoute || isCheckoutRoute ? '' : 'pb-28 md:pb-24'}`}>
+        <a href="#main-content" className="skip-link">
+          Skip to main content
+        </a>
         {!isAdminRoute && <Header />}
-        <main className={`${isAdminRoute ? '' : 'pt-16'} flex-grow`}>{children}</main>
+        <main id="main-content" role="main" className={`${isAdminRoute ? '' : 'pt-16'} flex-grow`}>{children}</main>
         {!isAdminRoute && <Footer />}
         {!isAdminRoute && !isCheckoutRoute && <PersistentPlayer />}
         {!isAdminRoute && <EmailCapturePopup />}
@@ -266,18 +270,20 @@ const App: React.FC = () => {
   return (
     <Router>
       <AppLayout>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/create" element={<CreateSong />} />
-          <Route path="/track" element={<OrderStatus />} />
-          <Route path="/library" element={<Library />} />
-          <Route path="/payment-success" element={<PaymentSuccess />} />
-          <Route path="/payment-cancel" element={<PaymentCancel />} />
-          <Route path="/checkout" element={<Checkout />} />
-          <Route path="/checkout/return" element={<Checkout />} />
-          <Route path="/admin" element={<Admin />} />
-          <Route path="/verify" element={<Verify />} />
-        </Routes>
+        <Suspense fallback={<div className="min-h-[60vh] bg-ivory" />}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/create" element={<CreateSong />} />
+            <Route path="/track" element={<OrderStatus />} />
+            <Route path="/library" element={<Library />} />
+            <Route path="/payment-success" element={<PaymentSuccess />} />
+            <Route path="/payment-cancel" element={<PaymentCancel />} />
+            <Route path="/checkout" element={<Checkout />} />
+            <Route path="/checkout/return" element={<Checkout />} />
+            <Route path="/admin" element={<Admin />} />
+            <Route path="/verify" element={<Verify />} />
+          </Routes>
+        </Suspense>
       </AppLayout>
     </Router>
   );

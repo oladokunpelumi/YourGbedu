@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { loadStripe, type StripeEmbeddedCheckout } from '@stripe/stripe-js';
 import { PaymentProvider, getDiscountedPrice } from '../constants';
+import { paymentProviderFromGeo, reconcilePaymentProvider } from '../services/checkoutProvider';
 
 type CheckoutStatus = 'loading' | 'ready' | 'processing' | 'success' | 'error';
 
@@ -82,13 +83,17 @@ const stripePromise = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY
   : Promise.resolve(null);
 
 function getApiError(data: unknown, fallback: string) {
+  let message = fallback;
   if (data && typeof data === 'object' && 'error' in data && typeof data.error === 'string') {
-    return data.error;
+    message = data.error;
+  } else if (data && typeof data === 'object' && 'message' in data && typeof data.message === 'string') {
+    message = data.message;
   }
-  if (data && typeof data === 'object' && 'message' in data && typeof data.message === 'string') {
-    return data.message;
+
+  if (/too many requests|rate limit/i.test(message) && message !== fallback) {
+    return `${fallback} ${message}`;
   }
-  return fallback;
+  return message;
 }
 
 function readBrief(): CheckoutBrief | null {
@@ -97,7 +102,8 @@ function readBrief(): CheckoutBrief | null {
 
   try {
     const parsed = JSON.parse(raw) as Partial<CheckoutBrief>;
-    if (!parsed.customerEmail || !parsed.paymentProvider) return null;
+    if (!parsed.customerEmail) return null;
+    const paymentProvider = parsed.paymentProvider === 'stripe' ? 'stripe' : 'paystack';
     return {
       recipientType: parsed.recipientType || '',
       recipientName: parsed.recipientName || '',
@@ -111,11 +117,15 @@ function readBrief(): CheckoutBrief | null {
       specialMessage: parsed.specialMessage || '',
       customerEmail: parsed.customerEmail,
       fastDelivery: Boolean(parsed.fastDelivery),
-      paymentProvider: parsed.paymentProvider,
+      paymentProvider,
     };
   } catch {
     return null;
   }
+}
+
+function saveBrief(brief: CheckoutBrief) {
+  sessionStorage.setItem('yourgbedu_brief', JSON.stringify(brief));
 }
 
 function loadScript(src: string, id: string) {
@@ -152,10 +162,12 @@ function formatCheckoutAmount(provider: PaymentProvider, amount: number) {
 }
 
 const Checkout: React.FC = () => {
-  const [brief] = useState<CheckoutBrief | null>(() => readBrief());
+  const [brief, setBrief] = useState<CheckoutBrief | null>(() => readBrief());
   const [status, setStatus] = useState<CheckoutStatus>('loading');
   const [message, setMessage] = useState('Preparing secure checkout...');
+  const [providerResolved, setProviderResolved] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [trackingToken, setTrackingToken] = useState<string | null>(null);
   const [promoCode, setPromoCode] = useState('');
   const [activePromoCode, setActivePromoCode] = useState('');
   const [promoQuote, setPromoQuote] = useState<PromoQuote | null>(null);
@@ -174,29 +186,35 @@ const Checkout: React.FC = () => {
 
   const query = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const returnedStripeSessionId = query.get('session_id');
-  const providerLabel = brief?.paymentProvider === 'stripe' ? 'Stripe' : 'Paystack';
-  const price = brief ? getDiscountedPrice(brief.paymentProvider, brief.fastDelivery) : null;
+  const displayBrief = brief && !providerResolved && !returnedStripeSessionId
+    ? { ...brief, paymentProvider: 'paystack' as PaymentProvider }
+    : brief;
+  const providerLabel = displayBrief?.paymentProvider === 'stripe' ? 'Stripe' : 'Paystack';
+  const price = displayBrief ? getDiscountedPrice(displayBrief.paymentProvider, displayBrief.fastDelivery) : null;
   const isFullPriceCheckout = payFullPrice && !promoQuote?.promo;
-  const displayTotal = brief && promoQuote
-    ? formatCheckoutAmount(brief.paymentProvider, promoQuote.finalAmount)
+  const displayTotal = displayBrief && promoQuote
+    ? formatCheckoutAmount(displayBrief.paymentProvider, promoQuote.finalAmount)
     : isFullPriceCheckout
       ? price?.original
       : price?.current;
-  const displayOriginal = brief && promoQuote
-    ? formatCheckoutAmount(brief.paymentProvider, promoQuote.originalAmount)
+  const displayOriginal = displayBrief && promoQuote
+    ? formatCheckoutAmount(displayBrief.paymentProvider, promoQuote.originalAmount)
     : isFullPriceCheckout
       ? undefined
       : price?.original;
 
   const finalizeOrder = useCallback(
-    (id: string) => {
+    (id: string, trackingToken?: string | null) => {
       setOrderId(id);
+      setTrackingToken(trackingToken || null);
       setStatus('success');
       setMessage('Payment confirmed. Your production order is ready.');
       sessionStorage.setItem('yourgbedu_track_id', id);
+      if (trackingToken) sessionStorage.setItem('yourgbedu_track_token', trackingToken);
       sessionStorage.removeItem('yourgbedu_brief');
       clearPayFullPriceFlag();
-      setTimeout(() => navigate(`/track?id=${id}`, { replace: false }), 3500);
+      const tokenParam = trackingToken ? `&t=${encodeURIComponent(trackingToken)}` : '';
+      setTimeout(() => navigate(`/track?id=${encodeURIComponent(id)}${tokenParam}`, { replace: false }), 3500);
     },
     [navigate]
   );
@@ -255,7 +273,7 @@ const Checkout: React.FC = () => {
         throw new Error(getApiError(orderData, 'Payment was verified, but the order could not be created.'));
       }
 
-      finalizeOrder(orderData.id);
+      finalizeOrder(orderData.id, orderData.trackingToken);
     },
     [brief, finalizeOrder]
   );
@@ -323,7 +341,7 @@ const Checkout: React.FC = () => {
         throw new Error(getApiError(orderData, 'Could not complete free checkout.'));
       }
 
-      finalizeOrder(orderData.id);
+      finalizeOrder(orderData.id, orderData.trackingToken);
     },
     [brief, finalizeOrder]
   );
@@ -397,7 +415,7 @@ const Checkout: React.FC = () => {
       transaction = popup.resumeTransaction({ accessCode: paystackInline.accessCode, ...callbacks });
     }
 
-    if (transaction?.getStatus) {
+    if (transaction && typeof transaction.getStatus === 'function') {
       const stopAt = Date.now() + 10 * 60 * 1000;
       const poll = window.setInterval(() => {
         if (Date.now() > stopAt) {
@@ -533,10 +551,44 @@ const Checkout: React.FC = () => {
   }, [restartCheckout]);
 
   useEffect(() => {
+    if (!brief || providerResolved || returnedStripeSessionId) return;
+    let cancelled = false;
+
+    const resolveProvider = async () => {
+      setMessage('Confirming local checkout provider...');
+      let provider: PaymentProvider = 'paystack';
+
+      try {
+        const response = await fetch('/api/geo/country');
+        const data = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(getApiError(data, 'Geo detection failed.'));
+        provider = paymentProviderFromGeo(data);
+      } catch {
+        provider = 'paystack';
+      }
+
+      if (cancelled) return;
+      setBrief((current) => {
+        if (!current) return current;
+        const next = reconcilePaymentProvider(current, provider);
+        if (next !== current) saveBrief(next);
+        return next;
+      });
+      setProviderResolved(true);
+    };
+
+    void resolveProvider();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [brief, providerResolved, returnedStripeSessionId]);
+
+  useEffect(() => {
     if (initializedRef.current) return;
-    initializedRef.current = true;
 
     if (returnedStripeSessionId) {
+      initializedRef.current = true;
       const verifyReturnedPayment = async () => {
         try {
           await verifyStripe(returnedStripeSessionId);
@@ -551,17 +603,21 @@ const Checkout: React.FC = () => {
     }
 
     if (!brief) {
+      initializedRef.current = true;
       sessionStorage.setItem('yourgbedu_checkout_error', 'Please complete your song brief before checkout.');
       navigate('/create', { replace: true });
       return;
     }
 
+    if (!providerResolved) return;
+
+    initializedRef.current = true;
     const start = brief.paymentProvider === 'stripe' ? startStripeCheckout : startPaystackCheckout;
     void start().catch((err) => {
       setStatus('error');
       setMessage(err instanceof Error ? err.message : 'Could not start checkout.');
     });
-  }, [brief, navigate, returnedStripeSessionId, startPaystackCheckout, startStripeCheckout, verifyStripe]);
+  }, [brief, navigate, providerResolved, returnedStripeSessionId, startPaystackCheckout, startStripeCheckout, verifyStripe]);
 
   useEffect(() => {
     return () => {
@@ -586,12 +642,13 @@ const Checkout: React.FC = () => {
   useEffect(() => {
     if (autoPromoAppliedRef.current) return;
     if (!autoPromoSeededRef.current) return;
+    if (!providerResolved && !returnedStripeSessionId) return;
     if (!brief || activePromoCode || isApplyingPromo || !promoCode) return;
     const urlPromo = query.get('promo');
     if (!urlPromo || urlPromo !== promoCode) return;
     autoPromoAppliedRef.current = true;
     void applyPromoCode();
-  }, [query, brief, promoCode, activePromoCode, isApplyingPromo, applyPromoCode]);
+  }, [query, brief, promoCode, activePromoCode, isApplyingPromo, providerResolved, returnedStripeSessionId, applyPromoCode]);
 
   if (!brief && !returnedStripeSessionId) {
     return null;
@@ -624,7 +681,7 @@ const Checkout: React.FC = () => {
                       <p className="mt-1 text-sm text-ink-muted line-through">{displayOriginal}</p>
                     )}
                   </div>
-                  <span className="rounded-full bg-mustard px-3 py-1 font-label text-[10px] font-bold uppercase tracking-[0.12em] text-ink">
+                  <span className="rounded-full bg-mustard px-3 py-1 font-label text-xs font-bold uppercase tracking-[0.12em] text-ink">
                     {promoQuote?.promo ? `${promoQuote.promo.discountPercent}% off` : isFullPriceCheckout ? 'Full price' : 'Discounted'}
                   </span>
                 </div>
@@ -698,7 +755,7 @@ const Checkout: React.FC = () => {
                   ['Email', brief.customerEmail],
                 ].map(([label, value]) => (
                   <div key={label} className="flex items-start justify-between gap-4 border-b border-line pb-3">
-                    <dt className="font-label text-[10px] font-bold uppercase tracking-[0.16em] text-ink-muted">
+                    <dt className="font-label text-xs font-bold uppercase tracking-[0.16em] text-ink-muted">
                       {label}
                     </dt>
                     <dd className="max-w-[190px] text-right font-body font-semibold text-ink">
@@ -753,14 +810,14 @@ const Checkout: React.FC = () => {
                 Your order is ready. We are opening your tracker now.
               </p>
               {orderId && (
-                <Link to={`/track?id=${orderId}`} className="mt-6 rounded-full bg-ink px-6 py-3 font-label text-sm font-bold uppercase tracking-[0.12em] text-cream">
+                <Link to={`/track?id=${encodeURIComponent(orderId)}${trackingToken ? `&t=${encodeURIComponent(trackingToken)}` : ''}`} className="mt-6 rounded-full bg-ink px-6 py-3 font-label text-sm font-bold uppercase tracking-[0.12em] text-cream">
                   Open tracker
                 </Link>
               )}
             </div>
           ) : (
             <>
-              {brief?.paymentProvider === 'stripe' ? (
+              {displayBrief?.paymentProvider === 'stripe' ? (
                 <div
                   ref={stripeMountRef}
                   className="min-h-[520px] overflow-hidden rounded-2xl border border-line bg-white p-2"

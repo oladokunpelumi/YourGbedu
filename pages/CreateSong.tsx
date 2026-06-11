@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { OCCASION_ACCENTS, PaymentProvider, getDiscountedPrice } from '../constants';
+import { paymentProviderFromGeo } from '../services/checkoutProvider';
 
 const RECIPIENTS = [
   'Parents',
@@ -138,8 +139,9 @@ const CreateSong: React.FC = () => {
       setIsDetectingLocation(true);
       try {
         const response = await fetch('/api/geo/country');
-        const data = await response.json();
-        if (!cancelled) setPaymentProvider(data.isNigeria ? 'paystack' : 'stripe');
+        const data = await response.json().catch(() => null);
+        if (!response.ok) throw new Error('Geo detection failed.');
+        if (!cancelled) setPaymentProvider(paymentProviderFromGeo(data));
       } catch {
         if (!cancelled) setPaymentProvider('paystack');
       } finally {
@@ -298,7 +300,7 @@ const CreateSong: React.FC = () => {
               </div>
               {nextStepMeta && (
                 <div className="rounded-2xl border border-line bg-ivory p-4 sm:max-w-[240px] lg:hidden">
-                  <p className="font-label text-[10px] font-bold uppercase tracking-[0.16em] text-ink-muted">
+                  <p className="font-label text-xs font-bold uppercase tracking-[0.16em] text-ink-muted">
                     Next
                   </p>
                   <p className="mt-1 font-label text-sm font-bold text-ink">{nextStepMeta.title}</p>
@@ -319,7 +321,7 @@ const CreateSong: React.FC = () => {
               <div className="space-y-8">
                 {selectedPersona && (
                   <div className="rounded-2xl border border-terracotta/30 bg-terracotta-pale p-4 text-terracotta-dark">
-                    <p className="font-label text-[10px] font-bold uppercase tracking-[0.16em]">
+                    <p className="font-label text-xs font-bold uppercase tracking-[0.16em]">
                       Selected path
                     </p>
                     <p className="mt-1 text-sm leading-6">
@@ -463,7 +465,7 @@ const CreateSong: React.FC = () => {
                         }`}
                       >
                         <span className="block font-headline text-2xl italic leading-none">{g.name}</span>
-                        <span className={`mt-2 block font-label text-[10px] font-bold uppercase tracking-[0.14em] ${genre === g.name ? 'text-terracotta-soft' : 'text-ink-muted'}`}>
+                        <span className={`mt-2 block font-label text-xs font-bold uppercase tracking-[0.14em] ${genre === g.name ? 'text-terracotta-soft' : 'text-ink-muted'}`}>
                           {g.desc}
                         </span>
                       </button>
@@ -572,7 +574,7 @@ const CreateSong: React.FC = () => {
                       { label: 'Voice', value: voiceGender },
                     ].map((item) => (
                       <div key={item.label} className="rounded-xl border border-line bg-cream p-4">
-                        <p className="font-label text-[10px] font-bold uppercase tracking-[0.16em] text-ink-muted">
+                        <p className="font-label text-xs font-bold uppercase tracking-[0.16em] text-ink-muted">
                           {item.label}
                         </p>
                         <p className="mt-1 truncate font-body text-lg font-bold text-ink">{item.value}</p>
@@ -594,7 +596,7 @@ const CreateSong: React.FC = () => {
                         Skip the queue and get your song in exactly 24 hours.
                       </span>
                       <span className="mt-1 block font-body text-sm font-bold text-ink">
-                        {fastPrice.upgrade}
+                        {'upgrade' in fastPrice ? fastPrice.upgrade : ''}
                       </span>
                     </span>
                     <span
@@ -641,7 +643,7 @@ const CreateSong: React.FC = () => {
                           {price.current}
                         </span>
                         <span className="text-sm text-cream/35 line-through">{price.original}</span>
-                        <span className="rounded-full bg-mustard px-3 py-1 font-label text-[10px] font-bold uppercase tracking-[0.12em] text-ink">
+                        <span className="rounded-full bg-mustard px-3 py-1 font-label text-xs font-bold uppercase tracking-[0.12em] text-ink">
                           Discounted
                         </span>
                       </div>

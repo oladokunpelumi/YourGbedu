@@ -60,9 +60,10 @@ function getStandardPromo(normalizedCode) {
     };
 }
 
-function getStoredPromo(db, normalizedCode) {
+async function getStoredPromo(normalizedCode) {
     if (!normalizedCode) return null;
-    const row = db.prepare('SELECT * FROM promo_codes WHERE code_hash = ?').get(hashCode(normalizedCode));
+    const { getOne } = require('./db-helpers.cjs');
+    const row = await getOne('SELECT * FROM promo_codes WHERE code_hash = ?', hashCode(normalizedCode));
     if (!row || row.disabled) return null;
     if (row.max_uses !== null && row.max_uses !== undefined && row.used_count >= row.max_uses) return null;
     return {
@@ -75,17 +76,17 @@ function getStoredPromo(db, normalizedCode) {
     };
 }
 
-function findPromoByCode(db, code) {
+async function findPromoByCode(code) {
     const normalizedCode = normalizeCode(code);
     if (!normalizedCode) return null;
-    return getStandardPromo(normalizedCode) || getStoredPromo(db, normalizedCode);
+    return getStandardPromo(normalizedCode) || await getStoredPromo(normalizedCode);
 }
 
-function quoteCheckout({ db, provider = 'paystack', fastDelivery = false, promoCode = '', fullPrice = false }) {
+async function quoteCheckout({ provider = 'paystack', fastDelivery = false, promoCode = '', fullPrice = false }) {
     const resolvedProvider = provider === 'stripe' ? 'stripe' : 'paystack';
     const fast = isFastDelivery(fastDelivery);
     const amounts = getBaseAmounts(resolvedProvider, fast);
-    const promo = findPromoByCode(db, promoCode);
+    const promo = await findPromoByCode(promoCode);
 
     if (promoCode && !promo) {
         const err = new Error('Promo code is invalid or has already been used.');

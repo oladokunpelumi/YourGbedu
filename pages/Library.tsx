@@ -47,8 +47,10 @@ const Library: React.FC = () => {
           </div>
           <div className="relative overflow-hidden rounded-2xl bg-ink">
             <img
-              src="/images/Listen.jpg"
+              src="/images/Listen.webp"
               alt="A listening-room scene for YourGbedu catalogue samples"
+              loading="lazy"
+              decoding="async"
               className="aspect-[4/3] w-full object-cover opacity-75 sepia-[0.14] mix-blend-luminosity"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/30 to-transparent" />
@@ -99,6 +101,7 @@ const Library: React.FC = () => {
                     src={song.coverUrl}
                     alt={song.title}
                     loading="lazy"
+                    decoding="async"
                     className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
                   />
                   <div className="absolute inset-0 flex items-center justify-center bg-ink/0 transition-colors group-hover:bg-ink/35">
@@ -109,7 +112,7 @@ const Library: React.FC = () => {
                     </span>
                   </div>
                   {!song.audioUrl && (
-                    <span className="absolute left-3 top-3 rounded-full border border-cream/20 bg-ink/70 px-3 py-1 font-label text-[10px] font-bold uppercase tracking-[0.14em] text-cream">
+                    <span className="absolute left-3 top-3 rounded-full border border-cream/20 bg-ink/70 px-3 py-1 font-label text-xs font-bold uppercase tracking-[0.14em] text-cream">
                       Sample only
                     </span>
                   )}
@@ -117,14 +120,14 @@ const Library: React.FC = () => {
                 <div className="p-5">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                      <p className="font-label text-[10px] font-bold uppercase tracking-[0.16em] text-terracotta">
+                      <p className="font-label text-xs font-bold uppercase tracking-[0.16em] text-terracotta">
                         {song.tags?.[0] || song.genre}
                       </p>
                       <h2 className="mt-2 truncate font-headline text-3xl italic leading-none text-ink">
                         {song.title}
                       </h2>
                     </div>
-                    <span className="rounded-full bg-ivory px-3 py-1 font-mono text-[10px] text-ink-muted">
+                    <span className="rounded-full bg-ivory px-3 py-1 font-mono text-xs text-ink-muted">
                       {song.duration}
                     </span>
                   </div>

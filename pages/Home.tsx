@@ -25,7 +25,7 @@ const RELATIONSHIPS = [
   {
     label: 'Parents',
     slug: 'parents',
-    cover: '/images/relationship-covers/parents.jpg',
+    cover: '/images/relationship-covers/parents.webp',
     coverAlt: 'Warm portrait representing a custom song for parents',
     coverPosition: 'object-center',
     accentLine: 'bg-sage-soft',
@@ -39,7 +39,7 @@ const RELATIONSHIPS = [
   {
     label: 'Friends & Loved Ones',
     slug: 'friends-loved-ones',
-    cover: '/images/relationship-covers/friends-loved-ones.jpg',
+    cover: '/images/relationship-covers/friends-loved-ones.webp',
     coverAlt: 'Warm portrait representing a custom song for friends and loved ones',
     coverPosition: 'object-center',
     accentLine: 'bg-mustard-soft',
@@ -53,7 +53,7 @@ const RELATIONSHIPS = [
   {
     label: 'Partner',
     slug: 'partner',
-    cover: '/images/relationship-covers/partner.jpg',
+    cover: '/images/relationship-covers/partner.webp',
     coverAlt: 'Warm portrait representing a custom song for a partner',
     coverPosition: 'object-center',
     accentLine: 'bg-terracotta-soft',
@@ -67,7 +67,7 @@ const RELATIONSHIPS = [
   {
     label: 'Yourself',
     slug: 'yourself',
-    cover: '/images/relationship-covers/yourself.jpg',
+    cover: '/images/relationship-covers/yourself.webp',
     coverAlt: 'Warm portrait representing a custom song for yourself',
     coverPosition: 'object-center',
     accentLine: 'bg-line-strong',
@@ -184,7 +184,7 @@ const Home: React.FC = () => {
                   <p className="font-headline text-4xl font-semibold leading-none text-ink">
                     {value}
                   </p>
-                  <p className="mt-2 font-label text-[10px] font-bold uppercase tracking-[0.16em] text-ink-muted">
+                  <p className="mt-2 font-label text-xs font-bold uppercase tracking-[0.16em] text-ink-muted">
                     {label}
                   </p>
                 </div>
@@ -195,7 +195,7 @@ const Home: React.FC = () => {
           <div className="relative">
             <div className="editorial-panel overflow-hidden p-3">
               <img
-                src="/images/Homepage.jpg"
+                src="/images/Homepage.webp"
                 alt="A YourGbedu artist listening through a finished custom song"
                 className="aspect-[4/5] w-full rounded-2xl object-cover sepia-[0.12] lg:aspect-auto lg:h-[52svh] lg:max-h-[620px] lg:min-h-[420px]"
               />
@@ -255,7 +255,7 @@ const Home: React.FC = () => {
             <SoundToggleVideo />
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink via-ink/70 to-transparent px-5 pb-5 pt-14">
               <p className="font-headline text-2xl italic text-cream">Anniversary</p>
-              <p className="font-label text-[10px] font-bold uppercase tracking-[0.16em] text-cream/60">
+              <p className="font-label text-xs font-bold uppercase tracking-[0.16em] text-cream/60">
                 Afro-Beats sample
               </p>
             </div>
@@ -313,7 +313,7 @@ const Home: React.FC = () => {
                 <button
                   type="button"
                   onClick={togglePlay}
-                  className="flex h-20 w-20 items-center justify-center rounded-full bg-mustard text-ink transition-transform hover:scale-105"
+                  className="flex h-20 w-20 items-center justify-center rounded-full bg-mustard text-ink transition-colors hover:brightness-95"
                   aria-label={isPlaying ? 'Pause catalogue sample' : 'Play catalogue sample'}
                 >
                   <span className="material-symbols-outlined text-4xl" aria-hidden="true">
@@ -321,7 +321,7 @@ const Home: React.FC = () => {
                   </span>
                 </button>
               </div>
-              <p className="mt-8 font-label text-[10px] font-bold uppercase tracking-[0.18em] text-mustard-soft">
+              <p className="mt-8 font-label text-xs font-bold uppercase tracking-[0.18em] text-mustard-soft">
                 Now selected
               </p>
               <h3 className="mt-2 font-headline text-4xl italic leading-none text-cream">
@@ -346,14 +346,15 @@ const Home: React.FC = () => {
                         : 'border-line bg-ivory hover:border-terracotta/60 hover:bg-cream'
                     }`}
                   >
-                    <img
-                      src={song.coverUrl}
-                      alt=""
-                      loading="lazy"
-                      className="h-[72px] w-[72px] rounded-xl object-cover"
-                    />
+                  <img
+                    src={song.coverUrl}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    className="h-[72px] w-[72px] rounded-xl object-cover"
+                  />
                     <span className="min-w-0">
-                      <span className="block font-label text-[10px] font-bold uppercase tracking-[0.16em] text-ink-muted">
+                      <span className="block font-label text-xs font-bold uppercase tracking-[0.16em] text-ink-muted">
                         {song.genre}
                       </span>
                       <span className="mt-1 block truncate font-headline text-2xl italic leading-none text-ink">
@@ -428,6 +429,7 @@ const Home: React.FC = () => {
                     alt={item.coverAlt}
                     className={`h-full w-full object-cover saturate-[0.72] contrast-[0.92] brightness-[0.9] transition-[filter,transform] duration-500 ease-out group-hover:scale-[1.035] group-hover:saturate-100 group-hover:contrast-100 group-hover:brightness-100 group-focus-visible:scale-[1.035] group-focus-visible:saturate-100 group-focus-visible:contrast-100 group-focus-visible:brightness-100 group-active:saturate-100 group-active:contrast-100 group-active:brightness-100 motion-reduce:transform-none motion-reduce:transition-none ${item.coverPosition}`}
                     loading="lazy"
+                    decoding="async"
                   />
                   <div
                     className={`absolute inset-0 opacity-80 transition-opacity duration-500 group-hover:opacity-0 group-focus-visible:opacity-0 group-active:opacity-0 motion-reduce:transition-none ${item.washClass}`}
@@ -438,14 +440,14 @@ const Home: React.FC = () => {
                     aria-hidden="true"
                   />
                 </div>
-                <p className={`mt-5 font-label text-[10px] font-bold uppercase tracking-[0.16em] transition-colors ${item.eyebrowClass}`}>
+                <p className={`mt-5 font-label text-xs font-bold uppercase tracking-[0.16em] transition-colors ${item.eyebrowClass}`}>
                   {item.eyebrow}
                 </p>
                 <h3 className="mt-1 font-headline text-3xl italic leading-none">{item.label}</h3>
                 <p className="mt-3 text-sm leading-6 text-cream/70 transition-colors group-hover:text-ink-soft group-focus-visible:text-ink-soft">
                   {item.caption}
                 </p>
-                <span className={`mt-auto inline-flex items-center gap-2 pt-6 font-label text-[10px] font-bold uppercase tracking-[0.16em] transition-colors ${item.ctaClass}`}>
+                <span className={`mt-auto inline-flex items-center gap-2 pt-6 font-label text-xs font-bold uppercase tracking-[0.16em] transition-colors ${item.ctaClass}`}>
                   Start this brief
                   <span className="material-symbols-outlined text-base transition-transform group-hover:translate-x-1 group-focus-visible:translate-x-1 motion-reduce:transition-none" aria-hidden="true">
                     arrow_forward
@@ -477,7 +479,7 @@ const Home: React.FC = () => {
                 }`}
               >
                 <p className="font-headline text-3xl italic leading-none">{name}</p>
-                <p className={`mt-3 font-label text-[10px] font-bold uppercase tracking-[0.14em] ${idx === 0 ? 'text-mustard-soft' : 'text-ink-muted'}`}>
+                <p className={`mt-3 font-label text-xs font-bold uppercase tracking-[0.14em] ${idx === 0 ? 'text-mustard-soft' : 'text-ink-muted'}`}>
                   {desc}
                 </p>
               </Link>

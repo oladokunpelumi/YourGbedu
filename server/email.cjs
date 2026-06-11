@@ -40,8 +40,9 @@ function normalizeClientUrl(clientUrl) {
   return (clientUrl || process.env.CLIENT_URL || 'http://localhost:3000').replace(/\/$/, '');
 }
 
-function getTrackUrl(orderId) {
-  return `${getClientUrl()}/#/track?id=${encodeURIComponent(orderId)}`;
+function getTrackUrl(orderId, trackingToken) {
+  const tokenParam = trackingToken ? `&t=${encodeURIComponent(trackingToken)}` : '';
+  return `${getClientUrl()}/#/track?id=${encodeURIComponent(orderId)}${tokenParam}`;
 }
 
 function getVerifyUrl({ clientUrl, token }) {
@@ -91,13 +92,14 @@ function sentEmailResult(type, to, result) {
  * Send a payment/order confirmation email.
  * @param {object} params
  * @param {string} params.to - Customer email
- * @param {string} params.orderId - Short order reference
+ * @param {string} params.orderId - Full order UUID
+ * @param {string} params.trackingToken - Per-order tracking capability token
  * @param {string} params.genre - Song genre
  * @param {string} params.deliveryDate - ISO date string
  * @param {string} params.reference - Payment reference
  * @param {string} [params.amountLabel] - Human-readable paid amount
  */
-async function sendConfirmationEmail({ to, orderId, genre, deliveryDate, reference, amountLabel }) {
+async function sendConfirmationEmail({ to, orderId, trackingToken, genre, deliveryDate, reference, amountLabel }) {
   const { client: resend, reason } = getResendClientStatus();
   if (!resend) {
     return skippedEmailResult('confirmation', to, reason);
@@ -110,11 +112,11 @@ async function sendConfirmationEmail({ to, orderId, genre, deliveryDate, referen
     day: 'numeric',
   });
 
-  const safeOrderId   = escapeHtml(orderId);
+  const safeOrderId   = escapeHtml(String(orderId || '').slice(0, 8).toUpperCase());
   const safeGenre     = escapeHtml(genre || 'Custom');
   const safeReference = escapeHtml(reference);
   const safeAmount    = escapeHtml(amountLabel || 'Paid');
-  const trackUrl      = getTrackUrl(orderId);
+  const trackUrl      = getTrackUrl(orderId, trackingToken);
 
   const html = `
 <!DOCTYPE html>
@@ -165,7 +167,7 @@ async function sendConfirmationEmail({ to, orderId, genre, deliveryDate, referen
     const result = await resend.emails.send({
       from: getFromEmail(),
       to,
-      subject: `🎵 Your YourGbedu order #${orderId} is in production!`,
+      subject: `🎵 Your YourGbedu order #${safeOrderId} is in production!`,
       html,
     });
     if (result.error) return failedEmailResult('confirmation', to, 'resend_rejected', result.error);
@@ -246,22 +248,23 @@ async function sendMagicLinkEmail({ to, token, clientUrl }) {
  * Send an order completion email to the customer.
  * @param {object} params
  * @param {string} params.to - Customer email
- * @param {string} params.orderId - Short order reference (8-char uppercase)
+ * @param {string} params.orderId - Full order UUID
+ * @param {string} params.trackingToken - Per-order tracking capability token
  * @param {string} params.genre - Song genre
  * @param {string} params.senderName - Name of the person who ordered
  * @param {string} params.recipientType - Who the song is for (e.g. "Wife")
  */
-async function sendCompletionEmail({ to, orderId, genre, senderName, recipientType }) {
+async function sendCompletionEmail({ to, orderId, trackingToken, genre, senderName, recipientType }) {
   const { client: resend, reason } = getResendClientStatus();
   if (!resend) {
     return skippedEmailResult('completion', to, reason);
   }
 
-  const safeOrderId       = escapeHtml(orderId);
+  const safeOrderId       = escapeHtml(String(orderId || '').slice(0, 8).toUpperCase());
   const safeGenre         = escapeHtml(genre);
   const safeSenderName    = escapeHtml(senderName);
   const safeRecipientType = escapeHtml(recipientType);
-  const trackUrl          = getTrackUrl(orderId);
+  const trackUrl          = getTrackUrl(orderId, trackingToken);
 
   const html = `
 <!DOCTYPE html>
@@ -321,7 +324,7 @@ async function sendCompletionEmail({ to, orderId, genre, senderName, recipientTy
     const result = await resend.emails.send({
       from: getFromEmail(),
       to,
-      subject: `🎵 Your YourGbedu song #${orderId} is ready!`,
+      subject: `🎵 Your YourGbedu song #${safeOrderId} is ready!`,
       html,
     });
     if (result.error) return failedEmailResult('completion', to, 'resend_rejected', result.error);

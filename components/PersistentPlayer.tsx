@@ -32,7 +32,7 @@ const PersistentPlayer: React.FC = () => {
 
   if (!activeSong) {
     return (
-      <div className="pointer-events-none fixed inset-x-0 bottom-5 z-[100] flex justify-center px-4">
+      <div className="pointer-events-none fixed inset-x-0 bottom-5 z-[100] flex justify-center px-4 pb-[env(safe-area-inset-bottom)]">
         <Link
           to="/create"
           className="pointer-events-auto inline-flex min-h-12 min-w-[190px] items-center justify-center whitespace-nowrap rounded-full border border-cream/10 bg-ink px-7 py-3 font-label text-xs font-bold uppercase tracking-[0.14em] text-cream shadow-[0_14px_32px_rgba(31,27,20,0.24)] transition-colors hover:bg-terracotta"
@@ -53,12 +53,13 @@ const PersistentPlayer: React.FC = () => {
         type="button"
         onClick={() => setIsHidden(false)}
         className="fixed bottom-5 right-5 z-[100] inline-flex h-12 items-center gap-2 rounded-full border border-cream/10 bg-ink px-4 text-cream shadow-[0_10px_24px_rgba(31,27,20,0.22)] transition-colors hover:bg-terracotta"
+        style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
         aria-label="Show music player"
       >
         <span className="material-symbols-outlined text-xl" aria-hidden="true">
           graphic_eq
         </span>
-        <span className="hidden font-label text-[10px] font-bold uppercase tracking-[0.14em] sm:inline">
+        <span className="hidden font-label text-xs font-bold uppercase tracking-[0.14em] sm:inline">
           Player
         </span>
       </button>
@@ -66,7 +67,7 @@ const PersistentPlayer: React.FC = () => {
   }
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[100] flex justify-center px-3">
+    <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[100] flex justify-center px-3 pb-[env(safe-area-inset-bottom)]">
       <div className="pointer-events-auto grid w-full max-w-[960px] grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-[1.75rem] border border-cream/10 bg-ink px-3 py-2.5 text-cream shadow-[0_18px_42px_rgba(31,27,20,0.28)] md:grid-cols-[minmax(170px,245px)_auto_minmax(170px,1fr)_auto_auto] md:rounded-full md:px-4 lg:grid-cols-[minmax(170px,245px)_auto_minmax(170px,1fr)_auto_auto_auto]">
         <div className="flex min-w-0 items-center gap-3">
           <img
@@ -79,7 +80,7 @@ const PersistentPlayer: React.FC = () => {
             <p className="truncate font-headline text-xl font-semibold italic leading-none text-cream">
               {activeSong.title}
             </p>
-            <p className="mt-1 truncate font-label text-[10px] font-bold uppercase tracking-[0.14em] text-mustard-soft/80">
+            <p className="mt-1 truncate font-label text-xs font-bold uppercase tracking-[0.14em] text-mustard-soft/80">
               {activeSong.genre} {hasAudio ? '' : '- no audio'}
             </p>
           </div>
@@ -100,9 +101,9 @@ const PersistentPlayer: React.FC = () => {
             type="button"
             onClick={togglePlay}
             disabled={!hasAudio || isPreviewLocked}
-            className={`flex h-12 w-12 items-center justify-center rounded-full transition-transform ${
+            className={`flex h-12 w-12 items-center justify-center rounded-full transition-colors ${
               hasAudio && !isPreviewLocked
-                ? 'bg-mustard text-ink hover:scale-105'
+                ? 'bg-mustard text-ink hover:brightness-95'
                 : 'cursor-not-allowed bg-cream/10 text-cream/35'
             }`}
             aria-label={isPlaying ? 'Pause sample' : 'Play sample'}
@@ -124,7 +125,7 @@ const PersistentPlayer: React.FC = () => {
         </div>
 
         <div className="hidden min-w-0 items-center gap-3 md:flex">
-          <span className="w-9 text-right font-mono text-[10px] text-cream/55">
+          <span className="w-9 text-right font-mono text-xs text-cream/55">
             {formatTime(currentTime)}
           </span>
           {isPreviewLocked ? (
@@ -183,7 +184,7 @@ const PersistentPlayer: React.FC = () => {
 
         <Link
           to="/create"
-          className="hidden min-h-10 min-w-[150px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-cream/10 px-5 font-label text-[10px] font-bold uppercase tracking-[0.14em] text-mustard-soft transition-colors hover:bg-cream hover:text-ink md:inline-flex"
+          className="hidden min-h-10 min-w-[150px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-cream/10 px-5 font-label text-xs font-bold uppercase tracking-[0.14em] text-mustard-soft transition-colors hover:bg-cream hover:text-ink md:inline-flex"
         >
           Create yours
         </Link>

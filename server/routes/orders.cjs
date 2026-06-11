@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const { randomUUID: uuidv4 } = require('crypto');
+const { randomBytes, randomUUID: uuidv4 } = require('crypto');
 const { z } = require('zod');
-const { requireAuth } = require('../middleware/auth.cjs');
+const { optionalAuth, requireAuth } = require('../middleware/auth.cjs');
 const { PRICING, isFastDelivery } = require('../pricing.cjs');
 const { quoteCheckout, parsePromoMetadata } = require('../promos.cjs');
+const { getOne, getAll, execSql, withTransaction } = require('../db-helpers.cjs');
 
 const PAYSTACK_BASE_URL = 'https://api.paystack.co';
 
@@ -33,12 +34,6 @@ async function verifyStripePayment(sessionId) {
         amount: session.amount_total ?? null,
         metadata: session.metadata ?? {},
     };
-}
-
-let db;
-function getDb() {
-    if (!db) db = require('../db.cjs');
-    return db;
 }
 
 let emailModule;
@@ -75,6 +70,46 @@ function formatPaidAmount(amount, provider) {
     if (typeof amount !== 'number') return undefined;
     if (provider === 'stripe') return `$${(amount / 100).toFixed(2)} USD`;
     return `₦${(amount / 100).toLocaleString('en-NG')}`;
+}
+
+function makeTrackingToken() {
+    return randomBytes(16).toString('hex');
+}
+
+function isOwnerOrAdmin(req, order) {
+    if (req.user?.role === 'admin') return true;
+    const userEmail = String(req.user?.email || '').trim().toLowerCase();
+    const orderEmail = String(order.customer_email || '').trim().toLowerCase();
+    return !!userEmail && !!orderEmail && userEmail === orderEmail;
+}
+
+function hasValidTrackingToken(req, order) {
+    const token = typeof req.query?.t === 'string' ? req.query.t : '';
+    return !!token && !!order.tracking_token && token === order.tracking_token;
+}
+
+function canAccessOrder(req, order) {
+    return hasValidTrackingToken(req, order) || isOwnerOrAdmin(req, order);
+}
+
+async function validateVerifiedAmount({ provider, metadata, requestFastDelivery, verifiedAmount }) {
+    if (typeof verifiedAmount !== 'number') return false;
+
+    const fastDelivery = metadata?.fastDelivery ?? requestFastDelivery;
+    const currentQuote = await quoteCheckout({ provider, fastDelivery });
+    const fullQuote = await quoteCheckout({ provider, fastDelivery, fullPrice: true });
+    const promo = parsePromoMetadata(metadata || {});
+    const allowed = new Set([
+        currentQuote.finalAmount,
+        fullQuote.finalAmount,
+        Math.round(fullQuote.originalAmount * 0.5),
+    ]);
+
+    if (Number.isFinite(promo.discountedAmount)) {
+        return allowed.has(promo.discountedAmount) && verifiedAmount === promo.discountedAmount;
+    }
+
+    return allowed.has(verifiedAmount);
 }
 
 const CreateOrderSchema = z.object({
@@ -166,23 +201,24 @@ function computeOrderProgress(order) {
         finalSongTitle: order.final_song_title || null,
         deliveredAt: order.delivered_at || null,
         rating: typeof order.rating === 'number' ? order.rating : null,
+        trackingToken: order.tracking_token || null,
     };
 }
 
 // GET /api/orders/track — return orders for the authenticated user
 // Uses req.user.email from the verified JWT — the email param is ignored to prevent
 // horizontal privilege escalation (users can only see their own orders).
-router.get('/track', requireAuth, (req, res) => {
+router.get('/track', requireAuth, async (req, res) => {
     try {
-        const dbConn = getDb();
         const email = req.user.email;
         if (!email) {
             return res.status(400).json({ error: 'No email associated with this session.' });
         }
 
-        const orders = dbConn.prepare(
-            'SELECT * FROM orders WHERE LOWER(TRIM(customer_email)) = ? ORDER BY created_at DESC'
-        ).all(String(email).trim().toLowerCase());
+        const orders = await getAll(
+            'SELECT * FROM orders WHERE LOWER(TRIM(customer_email)) = ? ORDER BY created_at DESC',
+            String(email).trim().toLowerCase()
+        );
 
         res.json(orders.map(computeOrderProgress));
     } catch (err) {
@@ -192,42 +228,40 @@ router.get('/track', requireAuth, (req, res) => {
 });
 
 // POST /api/orders/free — create an order with a one-time 100% promo code.
-router.post('/free', (req, res) => {
+router.post('/free', async (req, res) => {
     const parsed = FreeOrderSchema.safeParse(req.body);
     if (!parsed.success) {
         return res.status(400).json({ error: 'Invalid request data.', details: parsed.error.flatten() });
     }
 
     try {
-        const dbConn = getDb();
         const data = parsed.data;
 
-        const createFreeOrder = dbConn.transaction((input) => {
-            const quote = quoteCheckout({
-                db: dbConn,
-                provider: input.paymentProvider || 'paystack',
-                fastDelivery: input.fastDelivery,
-                promoCode: input.promoCode,
-            });
+        const quote = await quoteCheckout({
+            provider: data.paymentProvider || 'paystack',
+            fastDelivery: data.fastDelivery,
+            promoCode: data.promoCode,
+        });
+        if (!quote.promo || quote.promo.discountPercent !== 100 || quote.finalAmount !== 0 || !quote.promo.id) {
+            const err = new Error('This code is not eligible for free checkout.');
+            err.statusCode = 400;
+            throw err;
+        }
 
-            if (!quote.promo || quote.promo.discountPercent !== 100 || quote.finalAmount !== 0 || !quote.promo.id) {
-                const err = new Error('This code is not eligible for free checkout.');
-                err.statusCode = 400;
-                throw err;
-            }
+        const id = uuidv4();
+        const trackingToken = makeTrackingToken();
+        const now = new Date().toISOString();
+        const deliveryHours = isFastDelivery(data.fastDelivery) ? FAST_DELIVERY_HOURS : STANDARD_DELIVERY_HOURS;
+        const deliveryDate = new Date(Date.now() + deliveryHours * 60 * 60 * 1000).toISOString();
 
-            const id = uuidv4();
-            const now = new Date().toISOString();
-            const deliveryHours = isFastDelivery(input.fastDelivery) ? FAST_DELIVERY_HOURS : STANDARD_DELIVERY_HOURS;
-            const deliveryDate = new Date(Date.now() + deliveryHours * 60 * 60 * 1000).toISOString();
-
-            const redeemed = dbConn.prepare(`
+        const order = await withTransaction(async (tx) => {
+            const redeemed = await tx.execSql(`
                 UPDATE promo_codes
                 SET used_count = used_count + 1, used_at = ?, used_order_id = ?
                 WHERE id = ?
                   AND disabled = 0
                   AND (max_uses IS NULL OR used_count < max_uses)
-            `).run(now, id, quote.promo.id);
+            `, now, id, quote.promo.id);
 
             if (redeemed.changes === 0) {
                 const err = new Error('Promo code has already been used.');
@@ -235,9 +269,9 @@ router.post('/free', (req, res) => {
                 throw err;
             }
 
-            dbConn.prepare(`
+            await tx.execSql(`
                 INSERT INTO orders (
-                    id, song_title, genre, mood, tempo, occasion, occasion_detail, story,
+                    id, tracking_token, song_title, genre, mood, tempo, occasion, occasion_detail, story,
                     status, created_at, delivery_date,
                     stripe_session_id, paystack_reference, amount, customer_email,
                     recipient_type, recipient_name, sender_name, voice_gender,
@@ -245,34 +279,36 @@ router.post('/free', (req, res) => {
                     promo_code_id, promo_code_preview, promo_discount_percent,
                     original_amount, discounted_amount
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'in_production', ?, ?, NULL, NULL, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).run(
-                id, input.songTitle || 'Custom Song', input.genre || '', input.mood || '', input.tempo || 100,
-                input.occasion || '', input.occasionDetail || '', input.story || '', now, deliveryDate,
-                input.customerEmail ? String(input.customerEmail).trim().toLowerCase() : null,
-                input.recipientType || '', input.recipientName || '', input.senderName || '',
-                input.voiceGender || '', input.specialQualities || '', input.favoriteMemories || '',
-                input.specialMessage || '', quote.promo.id, quote.promo.codePreview,
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'in_production', ?, ?, NULL, NULL, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `,
+                id, trackingToken, data.songTitle || 'Custom Song', data.genre || '', data.mood || '', data.tempo || 100,
+                data.occasion || '', data.occasionDetail || '', data.story || '', now, deliveryDate,
+                data.customerEmail ? String(data.customerEmail).trim().toLowerCase() : null,
+                data.recipientType || '', data.recipientName || '', data.senderName || '',
+                data.voiceGender || '', data.specialQualities || '', data.favoriteMemories || '',
+                data.specialMessage || '', quote.promo.id, quote.promo.codePreview,
                 quote.promo.discountPercent, quote.originalAmount, quote.finalAmount
             );
 
-            return dbConn.prepare('SELECT * FROM orders WHERE id = ?').get(id);
+            return await tx.getOne('SELECT * FROM orders WHERE id = ?', id);
         });
-
-        const order = createFreeOrder(data);
+        require('../services/song-pipeline.cjs').getSongPipeline().startGenerationInBackgroundForOrder(order);
         if (data.customerEmail) {
             const normalized = String(data.customerEmail).trim().toLowerCase();
             try {
-                getDb()
-                    .prepare('UPDATE subscribers SET converted_order_id = ? WHERE email = ? AND converted_order_id IS NULL')
-                    .run(order.id, normalized);
+                await execSql(
+                    'UPDATE subscribers SET converted_order_id = ? WHERE email = ? AND converted_order_id IS NULL',
+                    order.id,
+                    normalized
+                );
             } catch (subErr) {
                 console.warn('Order: subscriber link skipped:', subErr.message);
             }
 
             void getEmailModule().sendConfirmationEmail({
                 to: data.customerEmail,
-                orderId: order.id.slice(0, 8).toUpperCase(),
+                orderId: order.id,
+                trackingToken: order.tracking_token,
                 genre: data.genre,
                 deliveryDate: order.delivery_date,
                 reference: order.promo_code_preview,
@@ -290,23 +326,17 @@ router.post('/free', (req, res) => {
 });
 
 // PATCH /api/orders/:id/rating — customer submits a 1-5 rating for their completed song.
-// Public (gated by knowing the order id, same as the GET below) so the link in
-// the completion email works without forcing a magic-link login.
-router.patch('/:id/rating', (req, res) => {
+router.patch('/:id/rating', optionalAuth, async (req, res) => {
     const rating = Number(req.body?.rating);
     if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
         return res.status(400).json({ error: 'Rating must be an integer between 1 and 5.' });
     }
 
     try {
-        const dbConn = getDb();
-        const result = dbConn.prepare('UPDATE orders SET rating = ? WHERE id = ?').run(rating, req.params.id);
-        if (result.changes === 0) {
-            const fallback = dbConn.prepare(
-                "UPDATE orders SET rating = ? WHERE UPPER(SUBSTR(id, 1, 8)) = UPPER(?)"
-            ).run(rating, req.params.id.slice(0, 8));
-            if (fallback.changes === 0) return res.status(404).json({ error: 'Order not found' });
-        }
+        const order = await getOne('SELECT * FROM orders WHERE id = ?', req.params.id);
+        if (!order || !canAccessOrder(req, order)) return res.status(404).json({ error: 'Order not found' });
+
+        await execSql('UPDATE orders SET rating = ? WHERE id = ?', rating, req.params.id);
         res.json({ rating });
     } catch (err) {
         console.error('Error saving rating:', err);
@@ -314,16 +344,13 @@ router.patch('/:id/rating', (req, res) => {
     }
 });
 
-// GET /api/orders/:id — return single order (UUID or 8-char short ID)
-// The order id acts as a shareable tracking reference. Email-based order lists
-// still require magic-link authentication via /api/orders/track.
-router.get('/:id', (req, res) => {
+// GET /api/orders/:id — return a single order by full UUID plus capability token,
+// or by an authenticated owner/admin session.
+router.get('/:id', optionalAuth, async (req, res) => {
     try {
-        const dbConn = getDb();
-        const order = dbConn.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id)
-            ?? dbConn.prepare("SELECT * FROM orders WHERE UPPER(SUBSTR(id, 1, 8)) = UPPER(?) LIMIT 1").get(req.params.id.slice(0, 8));
+        const order = await getOne('SELECT * FROM orders WHERE id = ?', req.params.id);
 
-        if (!order) return res.status(404).json({ error: 'Order not found' });
+        if (!order || !canAccessOrder(req, order)) return res.status(404).json({ error: 'Order not found' });
 
         res.json(computeOrderProgress(order));
     } catch (err) {
@@ -342,18 +369,17 @@ router.post('/', async (req, res) => {
 
     const { songTitle, genre, mood, tempo, occasion, occasionDetail, story, stripeSessionId, paystackReference, customerEmail, recipientType, recipientName, senderName, voiceGender, specialQualities, favoriteMemories, specialMessage, fastDelivery } = parsed.data;
 
-    if (!paystackReference && !stripeSessionId) {
-        return res.status(400).json({ error: 'A verified payment reference is required.' });
+    if ((paystackReference ? 1 : 0) + (stripeSessionId ? 1 : 0) !== 1) {
+        return res.status(400).json({ error: 'Exactly one verified payment reference is required.' });
     }
 
     try {
-        const dbConn = getDb();
         let verifiedAmount = null;
         let paymentMetadata = {};
         let paymentProvider = 'paystack';
 
         if (paystackReference) {
-            const existing = dbConn.prepare('SELECT * FROM orders WHERE paystack_reference = ?').get(paystackReference);
+            const existing = await getOne('SELECT * FROM orders WHERE paystack_reference = ?', paystackReference);
             if (existing) return res.status(200).json(computeOrderProgress(existing));
 
             const payment = await verifyPaystackPayment(paystackReference);
@@ -366,7 +392,7 @@ router.post('/', async (req, res) => {
         }
 
         if (stripeSessionId) {
-            const existing = dbConn.prepare('SELECT * FROM orders WHERE stripe_session_id = ?').get(stripeSessionId);
+            const existing = await getOne('SELECT * FROM orders WHERE stripe_session_id = ?', stripeSessionId);
             if (existing) return res.status(200).json(computeOrderProgress(existing));
 
             const payment = await verifyStripePayment(stripeSessionId);
@@ -378,15 +404,26 @@ router.post('/', async (req, res) => {
             paymentProvider = 'stripe';
         }
 
+        const amountValid = await validateVerifiedAmount({
+            provider: paymentProvider,
+            metadata: paymentMetadata,
+            requestFastDelivery: fastDelivery,
+            verifiedAmount,
+        });
+        if (!amountValid) {
+            return res.status(402).json({ error: 'Payment amount does not match checkout total.' });
+        }
+
         const id = uuidv4();
+        const trackingToken = makeTrackingToken();
         const createdAt = new Date().toISOString();
         const deliveryHours = isFastDelivery(fastDelivery) ? FAST_DELIVERY_HOURS : STANDARD_DELIVERY_HOURS;
         const deliveryDate = new Date(Date.now() + deliveryHours * 60 * 60 * 1000).toISOString();
         const promo = parsePromoMetadata(paymentMetadata);
 
-        dbConn.prepare(`
+        await execSql(`
             INSERT INTO orders (
-                id, song_title, genre, mood, tempo, occasion, occasion_detail, story,
+                id, tracking_token, song_title, genre, mood, tempo, occasion, occasion_detail, story,
                 status, created_at, delivery_date,
                 stripe_session_id, paystack_reference, amount, customer_email,
                 recipient_type, recipient_name, sender_name, voice_gender,
@@ -394,9 +431,9 @@ router.post('/', async (req, res) => {
                 promo_code_id, promo_code_preview, promo_discount_percent,
                 original_amount, discounted_amount
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-            id, songTitle || 'Custom Song', genre || '', mood || '', tempo || 100,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+            id, trackingToken, songTitle || 'Custom Song', genre || '', mood || '', tempo || 100,
             occasion || '', occasionDetail || '', story || '', 'in_production', createdAt, deliveryDate,
             stripeSessionId || null, paystackReference || null,
             verifiedAmount || PRICING.ngn.standardKobo,
@@ -407,13 +444,16 @@ router.post('/', async (req, res) => {
             promo.originalAmount, promo.discountedAmount
         );
 
-        const order = dbConn.prepare('SELECT * FROM orders WHERE id = ?').get(id);
+        const order = await getOne('SELECT * FROM orders WHERE id = ?', id);
+        require('../services/song-pipeline.cjs').getSongPipeline().startGenerationInBackgroundForOrder(order);
         if (customerEmail) {
             const normalized = String(customerEmail).trim().toLowerCase();
             try {
-                dbConn
-                    .prepare('UPDATE subscribers SET converted_order_id = ? WHERE email = ? AND converted_order_id IS NULL')
-                    .run(id, normalized);
+                await execSql(
+                    'UPDATE subscribers SET converted_order_id = ? WHERE email = ? AND converted_order_id IS NULL',
+                    id,
+                    normalized
+                );
             } catch (subErr) {
                 // best effort — never block order creation on a subscriber update
                 console.warn('Order: subscriber link skipped:', subErr.message);
@@ -421,7 +461,8 @@ router.post('/', async (req, res) => {
 
             void getEmailModule().sendConfirmationEmail({
                 to: customerEmail,
-                orderId: id.slice(0, 8).toUpperCase(),
+                orderId: id,
+                trackingToken,
                 genre,
                 deliveryDate,
                 reference: paystackReference || stripeSessionId,

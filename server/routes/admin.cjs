@@ -5,15 +5,18 @@ const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const { generateToken, requireAdmin, revokeToken, COOKIE_OPTS } = require('../middleware/auth.cjs');
 const { createOneTimeFreeCode, listOneTimeCodes, disablePromoCode } = require('../promos.cjs');
-const { getOne, getAll, execSql } = require('../db-helpers.cjs');
+const { getOne, getAll, execSql, pgVariantSql } = require('../db-helpers.cjs');
+const adminGenerationRouter = require('./admin-generation.cjs');
 
-// Strict limiter for admin login — same as authLimiter (10 attempts per hour)
+// Strict in production, forgiving in local development so a typo does not
+// lock the workbench while testing.
 const loginLimiter = rateLimit({
     windowMs: 60 * 60 * 1000,
-    max: 10,
+    max: process.env.NODE_ENV === 'production' ? 10 : 1000,
     message: { error: 'Too many login attempts. Please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,
+    skipSuccessfulRequests: true,
 });
 
 let db;
@@ -41,13 +44,18 @@ function buildOrderFilters(query) {
     const params = [];
 
     if (statusFilter && ['in_production', 'completed', 'cancelled'].includes(statusFilter)) {
-        where += ' AND status = ?';
+        where += ' AND o.status = ?';
         params.push(statusFilter);
     }
     if (search) {
         // Escape SQL wildcard chars so user input is treated as a literal string.
         const safeLike = `%${search.replace(/[%_\\]/g, '\\$&')}%`;
-        where += " AND (sender_name LIKE ? ESCAPE '\\' OR customer_email LIKE ? ESCAPE '\\' OR id LIKE ? ESCAPE '\\' OR recipient_type LIKE ? ESCAPE '\\' OR genre LIKE ? ESCAPE '\\' OR occasion LIKE ? ESCAPE '\\')";
+        // SQLite LIKE is case-insensitive for ASCII; Postgres LIKE is not — use ILIKE
+        // there so admin search behaves identically across adapters.
+        where += pgVariantSql({
+            sqlite: " AND (o.sender_name LIKE ? ESCAPE '\\' OR o.customer_email LIKE ? ESCAPE '\\' OR o.id LIKE ? ESCAPE '\\' OR o.recipient_type LIKE ? ESCAPE '\\' OR o.genre LIKE ? ESCAPE '\\' OR o.occasion LIKE ? ESCAPE '\\')",
+            postgres: " AND (o.sender_name ILIKE ? OR o.customer_email ILIKE ? OR o.id ILIKE ? OR o.recipient_type ILIKE ? OR o.genre ILIKE ? OR o.occasion ILIKE ?)",
+        });
         params.push(safeLike, safeLike, safeLike, safeLike, safeLike, safeLike);
     }
 
@@ -109,19 +117,18 @@ function getAdminCredentials() {
 }
 
 let adminPasswordHash = null;
-let adminPasswordRaw = null;
 async function getPasswordHash(password) {
     if (!password) return null;
-    if (!adminPasswordHash || adminPasswordRaw !== password) {
+    if (!adminPasswordHash) {
         adminPasswordHash = await bcrypt.hash(password, 10);
-        adminPasswordRaw = password;
     }
     return adminPasswordHash;
 }
 
 // POST /api/admin/login
 router.post('/login', loginLimiter, async (req, res) => {
-    const { username, password } = req.body;
+    const username = typeof req.body?.username === 'string' ? req.body.username.trim() : req.body?.username;
+    const { password } = req.body;
     const { username: adminUsername, password: adminPassword } = getAdminCredentials();
 
     if (!adminUsername || !adminPassword) {
@@ -165,6 +172,8 @@ router.post('/logout', requireAdmin, async (req, res) => {
     res.json({ message: 'Logged out.' });
 });
 
+router.use('/orders/:orderId/generation', requireAdmin, adminGenerationRouter);
+
 // GET /api/admin/orders — paginated orders, most recent first
 router.get('/orders', requireAdmin, async (req, res) => {
     try {
@@ -173,10 +182,14 @@ router.get('/orders', requireAdmin, async (req, res) => {
         const offset = (page - 1) * limit;
         const { where, params } = buildOrderFilters(req.query);
 
-        const totalRow = await getOne(`SELECT COUNT(*) as count FROM orders WHERE 1=1${where}`, ...params);
+        const totalRow = await getOne(`SELECT COUNT(*) as count FROM orders o WHERE 1=1${where}`, ...params);
         const total = Number(totalRow?.count ?? 0);
         const orders = await getAll(
-            `SELECT * FROM orders WHERE 1=1${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+            `SELECT o.*, sg.status AS generation_status, sg.current_stage AS generation_stage
+             FROM orders o
+             LEFT JOIN song_generations sg ON sg.order_id = o.id
+             WHERE 1=1${where}
+             ORDER BY o.created_at DESC LIMIT ? OFFSET ?`,
             ...params, limit, offset
         );
 
@@ -202,7 +215,7 @@ router.get('/orders/export', requireAdmin, async (req, res) => {
     try {
         const { where, params } = buildOrderFilters(req.query);
         const orders = await getAll(
-            `SELECT * FROM orders WHERE 1=1${where} ORDER BY created_at DESC LIMIT 500`,
+            `SELECT o.* FROM orders o WHERE 1=1${where} ORDER BY o.created_at DESC LIMIT 500`,
             ...params
         );
 
@@ -304,7 +317,8 @@ router.patch('/orders/:id/status', requireAdmin, async (req, res) => {
         if (status === 'completed' && order?.customer_email) {
             getEmailModule().sendCompletionEmail({
                 to: order.customer_email,
-                orderId: order.id.slice(0, 8).toUpperCase(),
+                orderId: order.id,
+                trackingToken: order.tracking_token,
                 genre: order.genre,
                 senderName: order.sender_name,
                 recipientType: order.recipient_type,
@@ -318,13 +332,66 @@ router.patch('/orders/:id/status', requireAdmin, async (req, res) => {
     }
 });
 
+// DELETE /api/admin/orders/:id — erase an order and its generation data.
+router.delete('/orders/:id', requireAdmin, async (req, res) => {
+    try {
+        const generation = await getOne('SELECT status FROM song_generations WHERE order_id = ?', req.params.id);
+        if (generation?.status === 'running') {
+            return res.status(409).json({ error: 'Cannot delete an order while generation is running.' });
+        }
+
+        await execSql('DELETE FROM song_generations WHERE order_id = ?', req.params.id);
+        await execSql('UPDATE subscribers SET converted_order_id = NULL WHERE converted_order_id = ?', req.params.id);
+        const result = await execSql('DELETE FROM orders WHERE id = ?', req.params.id);
+        if (result.changes === 0) {
+            return res.status(404).json({ error: 'Order not found' });
+        }
+
+        res.json({ deleted: true });
+    } catch (err) {
+        console.error('Admin: Error deleting order:', err);
+        res.status(500).json({ error: 'Failed to delete order' });
+    }
+});
+
+// Reject URLs that resolve to private/loopback/link-local hosts to prevent SSRF —
+// an attacker-supplied "song URL" must not be usable to probe internal services
+// (cloud metadata at 169.254.169.254, localhost admin panels, RFC1918 ranges, etc.).
+function isPublicHttpUrl(raw) {
+    let parsed;
+    try {
+        parsed = new URL(raw);
+    } catch {
+        return false;
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    if (
+        host === 'localhost' ||
+        host === '0.0.0.0' ||
+        host === '::1' ||
+        host.endsWith('.localhost') ||
+        host.endsWith('.internal') ||
+        /^127\./.test(host) ||
+        /^10\./.test(host) ||
+        /^192\.168\./.test(host) ||
+        /^169\.254\./.test(host) ||           // link-local incl. cloud metadata
+        /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+        /^(fc|fd)[0-9a-f]{2}:/.test(host) ||   // unique-local IPv6
+        /^fe80:/.test(host)                    // link-local IPv6
+    ) {
+        return false;
+    }
+    return true;
+}
+
 // POST /api/admin/orders/:id/song — attach a finished song URL and mark completed
 router.post('/orders/:id/song', requireAdmin, async (req, res) => {
     const url = typeof req.body?.url === 'string' ? req.body.url.trim() : '';
     const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
 
-    if (!url || !/^https?:\/\//i.test(url)) {
-        return res.status(400).json({ error: 'A valid http(s) URL is required.' });
+    if (!url || url.length > 2048 || !isPublicHttpUrl(url)) {
+        return res.status(400).json({ error: 'A valid public http(s) URL is required.' });
     }
 
     try {
@@ -345,7 +412,8 @@ router.post('/orders/:id/song', requireAdmin, async (req, res) => {
         if (order?.customer_email) {
             void getEmailModule().sendCompletionEmail({
                 to: order.customer_email,
-                orderId: order.id.slice(0, 8).toUpperCase(),
+                orderId: order.id,
+                trackingToken: order.tracking_token,
                 genre: order.genre,
                 senderName: order.sender_name,
                 recipientType: order.recipient_type,

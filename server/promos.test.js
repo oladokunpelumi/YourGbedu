@@ -16,9 +16,8 @@ beforeEach(() => {
 });
 
 describe('promo checkout quotes', () => {
-  it('applies the reusable 50% code against original NGN standard pricing', () => {
-    const quote = quoteCheckout({
-      db,
+  it('applies the reusable 50% code against original NGN standard pricing', async () => {
+    const quote = await quoteCheckout({
       provider: 'paystack',
       fastDelivery: false,
       promoCode: ' yourgbedu50 ',
@@ -30,9 +29,8 @@ describe('promo checkout quotes', () => {
     expect(quote.promo.discountPercent).toBe(50);
   });
 
-  it('applies the reusable 50% code against original USD fast-delivery pricing', () => {
-    const quote = quoteCheckout({
-      db,
+  it('applies the reusable 50% code against original USD fast-delivery pricing', async () => {
+    const quote = await quoteCheckout({
       provider: 'stripe',
       fastDelivery: true,
       promoCode: 'YOURGBEDU50',
@@ -46,8 +44,7 @@ describe('promo checkout quotes', () => {
 
   it('quotes one-time free codes as 100% off', async () => {
     const code = await createOneTimeFreeCode();
-    const quote = quoteCheckout({
-      db,
+    const quote = await quoteCheckout({
       provider: 'paystack',
       fastDelivery: true,
       promoCode: code.code,
@@ -59,9 +56,8 @@ describe('promo checkout quotes', () => {
     expect(quote.promo.discountPercent).toBe(100);
   });
 
-  it('quotes full-price checkout at the original site price when no promo is applied', () => {
-    const quote = quoteCheckout({
-      db,
+  it('quotes full-price checkout at the original site price when no promo is applied', async () => {
+    const quote = await quoteCheckout({
       provider: 'stripe',
       fastDelivery: true,
       fullPrice: true,
@@ -74,9 +70,8 @@ describe('promo checkout quotes', () => {
     expect(quote.promo).toBeNull();
   });
 
-  it('lets a real promo override full-price checkout mode', () => {
-    const quote = quoteCheckout({
-      db,
+  it('lets a real promo override full-price checkout mode', async () => {
+    const quote = await quoteCheckout({
       provider: 'paystack',
       fastDelivery: true,
       fullPrice: true,

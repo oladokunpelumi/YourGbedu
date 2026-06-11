@@ -27,9 +27,9 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
-const rateLimit = require('express-rate-limit');
 const path = require('path');
 const { getDevClientOrigins } = require('./client-url.cjs');
+const { createRateLimiters } = require('./rate-limiters.cjs');
 
 require('./db.cjs');
 
@@ -43,10 +43,24 @@ const geoRouter = require('./routes/geo.cjs');
 const brainstormRouter = require('./routes/brainstorm.cjs');
 const promosRouter = require('./routes/promos.cjs');
 const subscribersRouter = require('./routes/subscribers.cjs');
+const { getSongPipeline } = require('./services/song-pipeline.cjs');
 
 const app = express();
 const PORT = process.env.PORT || process.env.SERVER_PORT || 3001;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000';
+
+function parseOriginList(value) {
+    return String(value || '')
+        .split(',')
+        .map((origin) => origin.trim().replace(/\/$/, ''))
+        .filter(Boolean);
+}
+
+const MEDIA_CDN_ORIGINS = parseOriginList(process.env.MEDIA_CDN_ORIGINS);
+const mediaFallback = MEDIA_CDN_ORIGINS.length === 0;
+if (IS_PROD && mediaFallback) {
+    console.warn('[CSP] MEDIA_CDN_ORIGINS is not set; falling back to broad https: media/image sources.');
+}
 
 // Railway (and most PaaS) terminate TLS at the edge and forward to the container
 // over HTTP with X-Forwarded-For/-Proto. Trust the first proxy hop so:
@@ -71,11 +85,8 @@ app.use(helmet({
             ],
             styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
             fontSrc: ["'self'", 'https://fonts.gstatic.com', 'https://fonts.googleapis.com'],
-            imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
-            // Finished songs are hosted off-domain (Suno, S3, Dropbox, mp3tourl, etc.) —
-            // admins paste the URL into the dashboard and the browser streams it inline.
-            // Allowing `https:` here keeps that flow working without an explicit allowlist.
-            mediaSrc: ["'self'", 'blob:', 'data:', 'https:'],
+            imgSrc: ["'self'", 'data:', 'blob:', ...MEDIA_CDN_ORIGINS, ...(mediaFallback ? ['https:'] : [])],
+            mediaSrc: ["'self'", 'blob:', 'data:', ...MEDIA_CDN_ORIGINS, ...(mediaFallback ? ['https:'] : [])],
             connectSrc: [
                 "'self'",
                 'https://api.paystack.co',
@@ -137,7 +148,7 @@ app.use(
             if (IS_PROD) {
                 if (ALLOWED_PROD_ORIGINS.has(origin)) return callback(null, true);
                 // Allow same Railway domain even if CLIENT_URL drifted in env.
-                if (process.env.RAILWAY_PUBLIC_DOMAIN && origin.endsWith(process.env.RAILWAY_PUBLIC_DOMAIN)) {
+                if (process.env.RAILWAY_PUBLIC_DOMAIN && origin === `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`) {
                     return callback(null, true);
                 }
                 console.warn(`[CORS] rejecting origin=${origin} (not in ${[...ALLOWED_PROD_ORIGINS].join(', ')} and not a Railway subdomain)`);
@@ -170,29 +181,14 @@ if (IS_PROD) {
 }
 
 // ─── Rate Limiters ────────────────────────────────────────────────────────────
-const paymentLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 20,
-    message: { error: 'Too many requests. Please try again later.' },
-    standardHeaders: true,
-    legacyHeaders: false,
-});
-
-const authLimiter = rateLimit({
-    windowMs: 60 * 60 * 1000,
-    max: 10,
-    message: { error: 'Too many sign-in attempts. Please try again later.' },
-    standardHeaders: true,
-    legacyHeaders: false,
-});
-
-const generalApiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 200,
-    message: { error: 'Too many requests. Please try again later.' },
-    standardHeaders: true,
-    legacyHeaders: false,
-});
+// Local limiter state is in memory; restarting the dev server clears local
+// lockouts after aggressive checkout/admin testing.
+const {
+    generalApiLimiter,
+    authLimiter,
+    stripePaymentLimiter,
+    paystackPaymentLimiter,
+} = createRateLimiters({ isProd: IS_PROD });
 
 // ─── Body Parsing ─────────────────────────────────────────────────────────────
 app.use('/api/paystack/webhook', express.raw({ type: 'application/json' }));
@@ -220,14 +216,15 @@ if (IS_PROD) {
 }
 
 // ─── API Routes ───────────────────────────────────────────────────────────────
+app.use('/api/geo', geoRouter);
 app.use('/api', generalApiLimiter);
 app.use('/api/songs', songsRouter);
 app.use('/api/orders', ordersRouter);
+app.use(['/api/create-checkout-session', '/api/verify-session'], stripePaymentLimiter);
 app.use('/api', paymentsRouter);
-app.use('/api/paystack', paymentLimiter, paystackRouter);
+app.use('/api/paystack', paystackPaymentLimiter, paystackRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/auth', authLimiter, authRouter);
-app.use('/api/geo', geoRouter);
 app.use('/api/brainstorm', brainstormRouter);
 app.use('/api/promos', promosRouter);
 app.use('/api/subscribers', subscribersRouter);
@@ -256,4 +253,22 @@ app.listen(PORT, () => {
     } else {
         console.log(`🔐 CORS — dev origins: ${DEV_ORIGINS.join(', ')}`);
     }
+});
+
+setImmediate(() => {
+    const pipeline = getSongPipeline();
+    pipeline.resumeInterruptedRuns().catch((err) => {
+        console.error('[SongPipeline] resume check failed:', err?.message || err);
+    });
+    pipeline.purgeOldGenerationState().catch((err) => {
+        console.error('[SongPipeline] retention purge failed:', err?.message || err);
+    });
+});
+
+process.on('SIGTERM', () => {
+    const pipeline = getSongPipeline();
+    Promise.race([
+        pipeline.markInProcessInterrupted(),
+        new Promise((resolve) => setTimeout(resolve, 3000)),
+    ]).finally(() => process.exit(0));
 });

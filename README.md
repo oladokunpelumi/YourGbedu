@@ -1,6 +1,4 @@
 <div align="center">
-<img width="1200" height="475" alt="YourGbedu Banner" src="/Users/pelumioladokun/Downloads/sonnetary/musics/Cover Phtotos/Cover LOGO.jpeg" />
-
 # YourGbedu
 
 **Turn your most meaningful moments into music — professionally produced, personally yours.**
@@ -25,9 +23,35 @@ Meaningful gifts are hard to find. Most presents are forgotten — YourGbedu cre
 
 - **Personalised song briefs** — a simple guided form that collects everything the music team needs: the recipient's story, the mood, the occasion, and the preferred sound
 - **Secure payments** — fast, reliable checkout so your order is confirmed instantly
-- **Order tracking** — check your order status at any time using just your email address or order number
+- **Order tracking** — check your order status through a secure tracker link or email sign-in
+- **Private tracker links** — customer order links use a per-order tracking token; older links recover through magic-link email sign-in
 - **48-hour crafted delivery** — we build and deliver professionally produced tracks quickly, so you're never scrambling before a special occasion
 - **Completion notifications** — automatic email delivery when your song is ready
+
+---
+
+## Media And Deployment Notes
+
+Large catalogue media (the sample MP3s and cover images) is intentionally **not** tracked in Git. Keep local development copies under `musics/` (served at `/musics/...` in dev). For production you must host them externally, because a fresh build contains no `musics/` files.
+
+**Catalogue media (required for production):**
+
+1. Upload the catalogue files to a CDN / object store, preserving the `musics/` layout, e.g. `https://cdn.yourgbedu.com/musics/Anniversary.mp3` and `https://cdn.yourgbedu.com/musics/Cover%20Phtotos/Anniversary_Cover.jpg`.
+2. Set `MEDIA_BASE_URL` to that origin (no trailing slash), e.g. `MEDIA_BASE_URL=https://cdn.yourgbedu.com`. On boot, the catalogue seeds rewrite every relative `/musics/...` path to `${MEDIA_BASE_URL}/musics/...` (idempotent; a no-op in dev where `MEDIA_BASE_URL` is unset and files are served locally).
+3. Set `MEDIA_CDN_ORIGINS` to the comma-separated HTTPS origins the CSP should allow for images/audio, e.g. `https://cdn.yourgbedu.com`. If unset, the CSP falls back to a broad `https:` source and logs a warning.
+
+## Environment Variables
+
+Copy `.env.example` to `.env.local` and fill in. Required in production: `JWT_SECRET` (server refuses to boot without it), `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `PAYSTACK_SECRET_KEY`, `CLIENT_URL`, `DATABASE_URL` (Postgres; falls back to local SQLite when unset).
+
+Song-generation pipeline:
+
+- `OPENROUTER_API_KEY` — LLM provider key for the brief/style/lyrics pipeline (shared with the production-brief feature).
+- `YG_MODEL_INTAKE`, `YG_MODEL_SONNET` — optional per-tier model overrides (fall back to `LLM_MODEL`, then sensible defaults).
+- `SONG_PIPELINE_AUTO` — `paid` (default; only paid orders auto-generate), `all`, or `off`.
+- `SONG_PIPELINE_CONCURRENCY` — max concurrent generations (default 2).
+- `SONG_PIPELINE_RETENTION_DAYS` — days before completed generations' intermediate state is purged (default 90; `0` disables).
+- `SONG_PIPELINE_MOCK` — `1` to run the pipeline with a mock LLM (used by tests; no API spend).
 
 ---
 

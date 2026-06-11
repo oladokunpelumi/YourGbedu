@@ -45,6 +45,22 @@ async function requireAuth(req, res, next) {
     }
 }
 
+async function optionalAuth(req, res, next) {
+    const token = extractToken(req);
+    if (!token) return next();
+
+    try {
+        const payload = jwt.verify(token, getJwtSecret());
+        if (!(await isRevoked(payload.jti))) {
+            req.user = payload;
+        }
+    } catch {
+        // Public capability-token routes should not fail just because a stale
+        // cookie is present; protected routes still use requireAuth.
+    }
+    next();
+}
+
 async function requireAdmin(req, res, next) {
     await requireAuth(req, res, () => {
         if (req.user.role !== 'admin') {
@@ -99,6 +115,7 @@ const COOKIE_OPTS = {
 
 module.exports = {
     requireAuth,
+    optionalAuth,
     requireAdmin,
     generateToken,
     revokeToken,

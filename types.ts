@@ -68,4 +68,47 @@ export interface OrderData {
   finalSongTitle?: string | null;
   deliveredAt?: string | null;
   rating?: number | null;
+  trackingToken?: string | null;
+}
+
+export type SongGenerationStatus =
+  | 'queued'
+  | 'running'
+  | 'completed'
+  | 'needs_human_review'
+  | 'invalid_input'
+  | 'failed'
+  | 'interrupted'
+  | 'not_started';
+
+export type SongPipelineStage =
+  | 'validate'
+  | 'packs'
+  | 'intake'
+  | 'brief'
+  | 'style'
+  | 'lyrics'
+  | 'quality'
+  | 'format';
+
+export interface SongLlmUsage {
+  calls?: number;
+  input_tokens?: number;
+  output_tokens?: number;
+  total_tokens?: number;
+  provider?: string;
+}
+
+export interface SongGeneration {
+  order_id: string;
+  status: SongGenerationStatus;
+  current_stage: SongPipelineStage | null;
+  pipeline_form: Record<string, any> | null;
+  derived_fields: Record<string, any> | null;
+  state: Record<string, any> | null;
+  final_output: Record<string, any> | null;
+  llm_usage: SongLlmUsage | null;
+  stage_status: Record<string, { status?: string; error?: string; started_at?: string; finished_at?: string }>;
+  stage_comments: Record<string, string>;
+  error: string | null;
 }

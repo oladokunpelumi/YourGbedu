@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { X, Mail, Gift, Loader2 } from 'lucide-react';
 import { DISCOUNTED_PRICING, type PaymentProvider } from '../constants';
+import { paymentProviderFromGeo } from '../services/checkoutProvider';
 
 type PopupState = 'idle' | 'submitting' | 'revealed' | 'error';
 
@@ -12,7 +13,8 @@ interface SubscribeResponse {
   error?: string;
 }
 
-const STORAGE_KEY = 'prayersong_popup_seen_at';
+const STORAGE_KEY = 'yourgbedu_popup_seen_at';
+const LEGACY_STORAGE_KEY = 'prayersong_popup_seen_at';
 const FULL_PRICE_STORAGE_KEY = 'yourgbedu_pay_full_price';
 const SUPPRESS_PATHS = ['/checkout', '/admin', '/verify', '/payment-success', '/payment-cancel', '/track'];
 const SUPPRESS_DAYS = 30;
@@ -22,7 +24,7 @@ function shouldSuppress(pathname: string): boolean {
   if (SUPPRESS_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return true;
 
   try {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
+    const stored = window.localStorage.getItem(STORAGE_KEY) || window.localStorage.getItem(LEGACY_STORAGE_KEY);
     if (!stored) return false;
     const seenAt = Number(stored);
     if (!Number.isFinite(seenAt)) return false;
@@ -89,6 +91,9 @@ const EmailCapturePopup: React.FC = () => {
   const [promo, setPromo] = useState<{ code: string; discountPercent: number } | null>(null);
   const [paymentProvider, setPaymentProvider] = useState<PaymentProvider>(briefContext.paymentProvider || 'paystack');
   const [fastDelivery] = useState(briefContext.fastDelivery);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const emailInputRef = useRef<HTMLInputElement | null>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (shouldSuppress(location.pathname)) return;
@@ -109,7 +114,8 @@ const EmailCapturePopup: React.FC = () => {
       try {
         const response = await fetch('/api/geo/country');
         const data = await response.json().catch(() => null);
-        if (!cancelled) setPaymentProvider(data?.isNigeria ? 'paystack' : 'stripe');
+        if (!response.ok) throw new Error('Geo detection failed.');
+        if (!cancelled) setPaymentProvider(paymentProviderFromGeo(data));
       } catch {
         if (!cancelled) setPaymentProvider('paystack');
       }
@@ -199,6 +205,39 @@ const EmailCapturePopup: React.FC = () => {
     handleClose();
   }, [handleClose]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    restoreFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.setTimeout(() => emailInputRef.current?.focus(), 0);
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') handleClose();
+      if (event.key !== 'Tab') return;
+      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (!focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      restoreFocusRef.current?.focus();
+    };
+  }, [handleClose, isOpen]);
+
   if (!isOpen) return null;
 
   const discount = promo?.discountPercent ?? 50;
@@ -206,10 +245,11 @@ const EmailCapturePopup: React.FC = () => {
 
   return ReactDOM.createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/45 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-ink/45 p-4 backdrop-blur-sm"
       onClick={handleClose}
     >
       <div
+        ref={dialogRef}
         className="relative w-full max-w-md rounded-2xl border border-line bg-cream p-6 shadow-[0_18px_44px_rgba(31,27,20,0.2)]"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
@@ -237,7 +277,7 @@ const EmailCapturePopup: React.FC = () => {
             </p>
 
             <div className="mt-5 w-full rounded-2xl border border-mustard bg-mustard/20 px-5 py-4 text-center">
-              <p className="font-label text-[10px] font-bold uppercase tracking-[0.18em] text-ink-muted">
+              <p className="font-label text-xs font-bold uppercase tracking-[0.18em] text-ink-muted">
                 Your code
               </p>
               <p className="mt-1 font-mono text-2xl font-bold tracking-[0.18em] text-ink">{promo.code}</p>
@@ -277,6 +317,7 @@ const EmailCapturePopup: React.FC = () => {
 
             <form onSubmit={handleSubmit} className="mt-5 space-y-3">
               <input
+                ref={emailInputRef}
                 aria-label="Email address"
                 type="email"
                 value={email}

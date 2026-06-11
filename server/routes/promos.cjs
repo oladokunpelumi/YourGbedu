@@ -4,12 +4,6 @@ const { quoteCheckout } = require('../promos.cjs');
 
 const router = express.Router();
 
-let db;
-function getDb() {
-    if (!db) db = require('../db.cjs');
-    return db;
-}
-
 const QuoteSchema = z.object({
     promoCode: z.string().max(100).optional(),
     paymentProvider: z.enum(['paystack', 'stripe']).optional(),
@@ -17,15 +11,14 @@ const QuoteSchema = z.object({
     fullPrice: z.union([z.boolean(), z.string()]).optional(),
 });
 
-router.post('/quote', (req, res) => {
+router.post('/quote', async (req, res) => {
     const parsed = QuoteSchema.safeParse(req.body);
     if (!parsed.success) {
         return res.status(400).json({ error: 'Invalid promo request.' });
     }
 
     try {
-        const quote = quoteCheckout({
-            db: getDb(),
+        const quote = await quoteCheckout({
             provider: parsed.data.paymentProvider || 'paystack',
             fastDelivery: parsed.data.fastDelivery,
             promoCode: parsed.data.promoCode || '',

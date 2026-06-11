@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { SongPipelinePanel } from '../components/admin/SongPipelinePanel';
 
 interface Order {
   id: string;
@@ -33,6 +34,8 @@ interface Order {
   final_song_title: string | null;
   delivered_at: string | null;
   rating: number | null;
+  generation_status?: string | null;
+  generation_stage?: string | null;
 }
 
 interface PromoCode {
@@ -149,6 +152,59 @@ function downloadJson(fileName: string, payload: unknown) {
   URL.revokeObjectURL(url);
 }
 
+async function readAdminPayload(response: Response, action: string) {
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string'
+      ? payload.error
+      : `${action} failed.`;
+    if (/too many requests|rate limit/i.test(message)) {
+      throw new Error(`${action} was rate-limited. ${message}`);
+    }
+    throw new Error(message);
+  }
+  return payload;
+}
+
+// Customer free-text (qualities, memories, the heart message) is sensitive PII.
+// Keep it hidden by default in the queue so it isn't shoulder-surfed or left
+// on-screen; the operator clicks to reveal the full text when they need it.
+const RevealableText: React.FC<{ value: string | null | undefined }> = ({ value }) => {
+  const [revealed, setRevealed] = useState(false);
+  const text = (value || '').trim();
+  if (!text) {
+    return (
+      <p className="min-h-28 whitespace-pre-wrap rounded-lg border border-line bg-cream p-3 leading-relaxed text-ink-soft">
+        -
+      </p>
+    );
+  }
+  if (!revealed) {
+    return (
+      <button
+        type="button"
+        onClick={() => setRevealed(true)}
+        className="flex min-h-28 w-full items-center justify-center rounded-lg border border-dashed border-line bg-cream p-3 text-center font-label text-xs font-bold uppercase tracking-[0.14em] text-ink-muted transition-colors hover:border-terracotta hover:text-terracotta"
+        aria-label="Reveal customer message"
+      >
+        Hidden · click to reveal
+      </button>
+    );
+  }
+  return (
+    <p className="min-h-28 whitespace-pre-wrap rounded-lg border border-line bg-cream p-3 leading-relaxed text-ink-soft">
+      {text}
+      <button
+        type="button"
+        onClick={() => setRevealed(false)}
+        className="mt-2 block font-label text-[11px] font-bold uppercase tracking-[0.14em] text-ink-muted underline hover:text-terracotta"
+      >
+        Hide
+      </button>
+    </p>
+  );
+};
+
 const Admin: React.FC = () => {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [username, setUsername] = useState('');
@@ -163,7 +219,6 @@ const Admin: React.FC = () => {
   const [stats, setStats] = useState<Stats | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [adminMessage, setAdminMessage] = useState('');
   const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
@@ -172,11 +227,12 @@ const Admin: React.FC = () => {
   const [disablingPromoId, setDisablingPromoId] = useState<string | null>(null);
   const [songInputs, setSongInputs] = useState<Record<string, { url: string; title: string }>>({});
   const [attachingSongId, setAttachingSongId] = useState<string | null>(null);
+  const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [showAllSubscribers, setShowAllSubscribers] = useState(false);
 
-  const currentPendingBriefs = useMemo(
-    () => orders.filter((order) => !order.ai_brief?.trim()).length,
+  const currentPendingGenerations = useMemo(
+    () => orders.filter((order) => order.generation_status !== 'completed').length,
     [orders]
   );
 
@@ -219,10 +275,10 @@ const Admin: React.FC = () => {
         }
 
         const [ordersPayload, statsData, promoPayload, subsPayload] = await Promise.all([
-          ordersRes.json(),
-          statsRes.json(),
-          promoRes.json(),
-          subsRes.ok ? subsRes.json() : Promise.resolve({ data: [] }),
+          readAdminPayload(ordersRes, 'Admin order fetch'),
+          readAdminPayload(statsRes, 'Admin stats fetch'),
+          readAdminPayload(promoRes, 'Admin promo fetch'),
+          subsRes.ok ? subsRes.json() : readAdminPayload(subsRes, 'Admin subscriber fetch').catch(() => ({ data: [] })),
         ]);
         setOrders(ordersPayload.data ?? ordersPayload);
         setPagination(ordersPayload.pagination ?? null);
@@ -231,7 +287,7 @@ const Admin: React.FC = () => {
         setSubscribers(subsPayload.data ?? []);
       } catch (err) {
         console.error('Failed to fetch admin data:', err);
-        setAdminMessage('Could not load the order queue.');
+        setAdminMessage(err instanceof Error ? err.message : 'Could not load the order queue.');
       } finally {
         setIsLoading(false);
       }
@@ -259,7 +315,8 @@ const Admin: React.FC = () => {
         setAuthenticated(true);
         setPassword('');
       } else {
-        setLoginError('Invalid credentials');
+        const data = await res.json().catch(() => null);
+        setLoginError(data?.error || 'Invalid credentials');
       }
     } catch {
       setLoginError('An error occurred during log in.');
@@ -285,26 +342,6 @@ const Admin: React.FC = () => {
       setAdminMessage('Could not update the order status.');
     } finally {
       setUpdatingId(null);
-    }
-  };
-
-  const handleGenerateBrief = async (orderId: string) => {
-    setGeneratingId(orderId);
-    setAdminMessage('');
-    try {
-      const res = await adminFetch(`/api/admin/orders/${orderId}/ai-brief`, { method: 'POST' });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error || 'AI brief generation failed');
-
-      setOrders((current) =>
-        current.map((order) => (order.id === orderId ? { ...order, ai_brief: data.aiBrief } : order))
-      );
-      setAdminMessage('AI production brief generated.');
-    } catch (err) {
-      console.error('Failed to generate AI brief:', err);
-      setAdminMessage(err instanceof Error ? err.message : 'Could not generate the AI brief.');
-    } finally {
-      setGeneratingId(null);
     }
   };
 
@@ -335,6 +372,29 @@ const Admin: React.FC = () => {
       setAdminMessage(err instanceof Error ? err.message : 'Could not attach song.');
     } finally {
       setAttachingSongId(null);
+    }
+  };
+
+  const handleDeleteOrder = async (order: Order) => {
+    const shortId = order.id.slice(0, 8).toUpperCase();
+    if (!window.confirm(`Delete order #${shortId}? This removes the order and its song-generation data.`)) {
+      return;
+    }
+    setDeletingOrderId(order.id);
+    setAdminMessage('');
+    try {
+      const res = await adminFetch(`/api/admin/orders/${order.id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'Order delete failed');
+
+      setExpandedId((current) => (current === order.id ? null : current));
+      await fetchData(currentPage);
+      setAdminMessage(`Order #${shortId} deleted.`);
+    } catch (err) {
+      console.error('Failed to delete order:', err);
+      setAdminMessage(err instanceof Error ? err.message : 'Could not delete the order.');
+    } finally {
+      setDeletingOrderId(null);
     }
   };
 
@@ -453,7 +513,7 @@ const Admin: React.FC = () => {
             <span className="material-symbols-outlined mb-4 block text-4xl text-terracotta">
               admin_panel_settings
             </span>
-            <p className="font-label text-[10px] font-bold uppercase tracking-[0.18em] text-terracotta">
+            <p className="font-label text-xs font-bold uppercase tracking-[0.18em] text-terracotta">
               Production Workbench
             </p>
             <h2 className="mt-3 font-headline text-4xl font-medium leading-none text-ink">
@@ -555,7 +615,7 @@ const Admin: React.FC = () => {
           {[
             { label: 'Total Orders', value: stats?.totalOrders ?? '-', icon: 'receipt_long' },
             { label: 'Revenue', value: stats ? formatAmount(stats.totalRevenue) : '-', icon: 'payments' },
-            { label: 'Visible Pending Briefs', value: currentPendingBriefs, icon: 'auto_awesome' },
+            { label: 'Visible Pending Generations', value: currentPendingGenerations, icon: 'auto_awesome' },
             { label: 'Songs in Library', value: stats?.songCount ?? '-', icon: 'library_music' },
           ].map((stat) => (
             <div
@@ -564,7 +624,7 @@ const Admin: React.FC = () => {
             >
               <span className="material-symbols-outlined text-xl text-terracotta">{stat.icon}</span>
               <div>
-                <p className="font-label text-[10px] font-bold uppercase tracking-[0.16em] text-ink-muted">
+                <p className="font-label text-xs font-bold uppercase tracking-[0.16em] text-ink-muted">
                   {stat.label}
                 </p>
                 <p className="font-label text-lg font-bold text-ink">{stat.value}</p>
@@ -596,7 +656,7 @@ const Admin: React.FC = () => {
 
           {generatedPromoCode && (
             <div className="border-b border-line bg-sage-pale px-5 py-4">
-              <p className="font-label text-[10px] font-bold uppercase tracking-[0.16em] text-sage-dark">
+              <p className="font-label text-xs font-bold uppercase tracking-[0.16em] text-sage-dark">
                 Newly generated
               </p>
               <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -701,7 +761,7 @@ const Admin: React.FC = () => {
             ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
-                  <thead className="text-left font-label text-[10px] font-bold uppercase tracking-[0.14em] text-ink-muted">
+                  <thead className="text-left font-label text-xs font-bold uppercase tracking-[0.14em] text-ink-muted">
                     <tr>
                       <th className="py-2 pr-4">Email</th>
                       <th className="py-2 pr-4">Captured</th>
@@ -717,7 +777,7 @@ const Admin: React.FC = () => {
                         <td className="py-2 pr-4 text-ink-muted">{s.source || '-'}</td>
                         <td className="py-2 pr-4">
                           {s.converted_order_id ? (
-                            <span className="rounded-full bg-sage-pale px-2 py-0.5 font-label text-[10px] font-bold uppercase tracking-[0.14em] text-sage-dark">
+                            <span className="rounded-full bg-sage-pale px-2 py-0.5 font-label text-xs font-bold uppercase tracking-[0.14em] text-sage-dark">
                               #{s.converted_order_id.slice(0, 8).toUpperCase()}
                             </span>
                           ) : (
@@ -808,7 +868,7 @@ const Admin: React.FC = () => {
             <div className="divide-y divide-line">
               {orders.map((order) => {
                 const isExpanded = expandedId === order.id;
-                const hasBrief = !!order.ai_brief?.trim();
+                const generationStatus = order.generation_status || 'not_started';
                 const orderSummary = [
                   labelize(order.occasion),
                   order.genre || 'Custom',
@@ -835,8 +895,14 @@ const Admin: React.FC = () => {
                             <span className={`rounded-full border px-2 py-0.5 text-xs font-bold ${STATUS_COLORS[order.status] || STATUS_COLORS.in_production}`}>
                               {order.status.replace('_', ' ')}
                             </span>
-                            <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${hasBrief ? 'bg-sage-pale text-sage-dark' : 'bg-mustard-pale text-[#6F521F]'}`}>
-                              {hasBrief ? 'AI brief ready' : 'AI brief pending'}
+                            <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                              generationStatus === 'completed'
+                                ? 'bg-sage-pale text-sage-dark'
+                                : generationStatus === 'failed' || generationStatus === 'needs_human_review'
+                                  ? 'bg-red-50 text-red-700'
+                                  : 'bg-mustard-pale text-[#6F521F]'
+                            }`}>
+                              {labelize(generationStatus)}
                             </span>
                             {order.promo_code_preview && (
                               <span className="rounded-full bg-ivory px-2 py-0.5 text-xs font-bold text-terracotta">
@@ -874,17 +940,6 @@ const Admin: React.FC = () => {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleGenerateBrief(order.id)}
-                          disabled={generatingId === order.id}
-                          className="inline-flex items-center gap-1 rounded-lg bg-terracotta px-3 py-2 text-xs font-bold text-cream disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          <span className={`material-symbols-outlined text-sm ${generatingId === order.id ? 'animate-spin' : ''}`}>
-                            {generatingId === order.id ? 'progress_activity' : 'auto_awesome'}
-                          </span>
-                          {hasBrief ? 'Regenerate' : 'Generate Brief'}
-                        </button>
-                        <button
-                          type="button"
                           onClick={() => setExpandedId(isExpanded ? null : order.id)}
                           className="flex size-9 items-center justify-center rounded-lg border border-line-strong text-ink-muted hover:text-ink"
                           aria-label={isExpanded ? 'Collapse order' : 'Expand order'}
@@ -914,7 +969,7 @@ const Admin: React.FC = () => {
                             ['Created', formatDate(order.created_at)],
                           ].map(([label, value]) => (
                             <div key={label}>
-                              <span className="block font-label text-[10px] font-bold uppercase tracking-[0.16em] text-ink-muted">
+                              <span className="block font-label text-xs font-bold uppercase tracking-[0.16em] text-ink-muted">
                                 {label}
                               </span>
                               <p className="mt-1 break-words font-medium text-ink">{value || '-'}</p>
@@ -932,36 +987,26 @@ const Admin: React.FC = () => {
                               <span className="mb-2 block font-label text-xs font-bold uppercase tracking-[0.14em] text-terracotta">
                                 {label}
                               </span>
-                              <p className="min-h-28 whitespace-pre-wrap rounded-lg border border-line bg-cream p-3 leading-relaxed text-ink-soft">
-                                {value || '-'}
-                              </p>
+                              <RevealableText value={value} />
                             </div>
                           ))}
                         </div>
 
-                        <div className="mt-4 border-t border-line pt-4">
-                          <div className="mb-2 flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-2">
-                              <span className="material-symbols-outlined text-base text-terracotta">
-                                auto_awesome
-                              </span>
-                              <span className="font-label text-xs font-bold uppercase tracking-[0.14em] text-terracotta">
-                                AI Production Brief
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleGenerateBrief(order.id)}
-                              disabled={generatingId === order.id}
-                              className="rounded-full bg-ink px-4 py-1.5 text-xs font-bold text-cream hover:bg-terracotta disabled:opacity-60"
-                            >
-                              {generatingId === order.id ? 'Generating...' : hasBrief ? 'Regenerate' : 'Generate'}
-                            </button>
-                          </div>
-                          <p className="whitespace-pre-wrap rounded-lg border border-terracotta/20 bg-terracotta-pale/60 p-4 leading-relaxed text-ink-soft">
-                            {order.ai_brief || 'AI brief pending generation. Use Generate Brief when this order is ready for production review.'}
-                          </p>
-                        </div>
+                        <SongPipelinePanel
+                          orderId={order.id}
+                          generationStatus={order.generation_status}
+                          generationStage={order.generation_stage}
+                          onMessage={setAdminMessage}
+                          onGenerationChange={(status, stage) => {
+                            setOrders((current) =>
+                              current.map((item) =>
+                                item.id === order.id
+                                  ? { ...item, generation_status: status, generation_stage: stage }
+                                  : item
+                              )
+                            );
+                          }}
+                        />
 
                         <div className="mt-4 border-t border-line pt-4">
                           <div className="mb-2 flex items-center gap-2">
@@ -970,7 +1015,7 @@ const Admin: React.FC = () => {
                               Final song
                             </span>
                             {order.final_song_url && (
-                              <span className="rounded-full bg-sage-pale px-2 py-0.5 font-label text-[10px] font-bold uppercase tracking-[0.14em] text-sage-dark">
+                              <span className="rounded-full bg-sage-pale px-2 py-0.5 font-label text-xs font-bold uppercase tracking-[0.14em] text-sage-dark">
                                 Delivered
                               </span>
                             )}
@@ -1020,6 +1065,21 @@ const Admin: React.FC = () => {
                           <p className="mt-2 text-xs text-ink-muted">
                             Attaching a URL flips the order to <span className="font-bold">completed</span>, emails the customer, and shows them the vinyl player.
                           </p>
+                        </div>
+
+                        <div className="mt-4 flex items-center justify-between gap-3 border-t border-line pt-4">
+                          <p className="text-xs text-ink-muted">
+                            Erase this order only for confirmed customer deletion requests.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteOrder(order)}
+                            disabled={deletingOrderId === order.id}
+                            className="inline-flex items-center gap-1 rounded-full border border-red-200 px-3 py-1.5 text-xs font-bold text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <span className="material-symbols-outlined text-sm">delete</span>
+                            {deletingOrderId === order.id ? 'Deleting...' : 'Delete order'}
+                          </button>
                         </div>
                       </div>
                     )}
