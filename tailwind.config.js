@@ -13,7 +13,7 @@ export default {
         ivory: '#FAF6EE',
         cream: '#FFFDF6',
         terracotta: {
-          DEFAULT: '#B3522F',
+          DEFAULT: '#943B2F',
           dark: '#8B3E22',
           soft: '#E8B89E',
           pale: '#F7E5DA',
@@ -25,7 +25,7 @@ export default {
           pale: '#EEF2E2',
         },
         mustard: {
-          DEFAULT: '#C99B3E',
+          DEFAULT: '#D8B253',
           soft: '#F0DCA8',
           pale: '#FBF0CF',
         },
@@ -51,7 +51,7 @@ export default {
         'on-primary': '#1F1B14',
 
         secondary: {
-          DEFAULT: '#B3522F',
+          DEFAULT: '#943B2F',
           dark: '#8B3E22',
         },
 
