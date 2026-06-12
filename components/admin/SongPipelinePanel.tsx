@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SongGeneration, SongPipelineStage } from '../../types';
 
 type StageName = Extract<SongPipelineStage, 'intake' | 'brief' | 'style' | 'lyrics' | 'quality' | 'format'>;
@@ -98,18 +98,45 @@ export const SongPipelinePanel: React.FC<Props> = ({
   const [comments, setComments] = useState<Record<string, string>>({});
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [dirtyOverrides, setDirtyOverrides] = useState<Record<string, boolean>>({});
+  // Refs mirror the dirty flags so applyGeneration (called from the 3s poll and
+  // post-action refreshes) can preserve in-progress edits without re-binding.
+  // Without this, every poll wiped the guidance textarea and override dropdowns
+  // while the admin was still typing.
+  const dirtyOverridesRef = useRef<Record<string, boolean>>({});
+  const dirtyCommentsRef = useRef<Record<string, boolean>>({});
 
   const endpoint = `/api/admin/orders/${orderId}/generation`;
 
-  const applyGeneration = useCallback((next: SongGeneration | null) => {
+  const applyGeneration = useCallback((next: SongGeneration | null, opts: { resetDrafts?: boolean } = {}) => {
+    const resetDrafts = !!opts.resetDrafts;
     setGeneration(next);
-    setComments(next?.stage_comments || {});
-    setOverrides({
-      tone_preference: next?.pipeline_form?.tone_preference || '',
-      relationship_energy: next?.pipeline_form?.relationship_energy || '',
-      emotion_intensity: next?.pipeline_form?.emotion_intensity || '',
+    if (resetDrafts) {
+      dirtyCommentsRef.current = {};
+      dirtyOverridesRef.current = {};
+      setDirtyOverrides({});
+    }
+    setComments((current) => {
+      const server = next?.stage_comments || {};
+      if (resetDrafts) return server;
+      const merged: Record<string, string> = { ...server };
+      for (const stage of Object.keys(dirtyCommentsRef.current)) {
+        if (dirtyCommentsRef.current[stage]) merged[stage] = current[stage] ?? '';
+      }
+      return merged;
     });
-    setDirtyOverrides({});
+    setOverrides((current) => {
+      const server = {
+        tone_preference: next?.pipeline_form?.tone_preference || '',
+        relationship_energy: next?.pipeline_form?.relationship_energy || '',
+        emotion_intensity: next?.pipeline_form?.emotion_intensity || '',
+      };
+      if (resetDrafts) return server;
+      const merged: Record<string, string> = { ...server };
+      for (const field of Object.keys(dirtyOverridesRef.current)) {
+        if (dirtyOverridesRef.current[field]) merged[field] = current[field] ?? '';
+      }
+      return merged;
+    });
     onGenerationChange?.(next?.status || null, next?.current_stage || null);
   }, [onGenerationChange]);
 
@@ -148,17 +175,24 @@ export const SongPipelinePanel: React.FC<Props> = ({
     ? `${generation.llm_usage.calls || 0} calls · ${Number(generation.llm_usage.total_tokens || 0).toLocaleString()} tokens`
     : '';
 
-  const runAction = async (label: string, request: () => Promise<Response>, success: string) => {
+  const runAction = async (
+    label: string,
+    request: () => Promise<Response>,
+    success: string,
+    opts: { resetDrafts?: boolean } = {}
+  ) => {
     setAction(label);
     try {
       const res = await request();
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || `${label} failed`);
-      applyGeneration(data);
+      applyGeneration(data, opts);
       onMessage?.(success);
       window.setTimeout(fetchGeneration, 600);
+      return true;
     } catch (err) {
       onMessage?.(err instanceof Error ? err.message : `${label} failed`);
+      return false;
     } finally {
       setAction(null);
     }
@@ -247,6 +281,7 @@ export const SongPipelinePanel: React.FC<Props> = ({
               onChange={(e) => {
                 setOverrides((current) => ({ ...current, [field]: e.target.value }));
                 setDirtyOverrides((current) => ({ ...current, [field]: true }));
+                dirtyOverridesRef.current = { ...dirtyOverridesRef.current, [field]: true };
               }}
               disabled={status === 'running'}
               className="w-full rounded-lg border border-line bg-cream px-3 py-2 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-terracotta/20 disabled:opacity-60"
@@ -258,24 +293,33 @@ export const SongPipelinePanel: React.FC<Props> = ({
         ))}
       </div>
 
-      <button
-        type="button"
-        onClick={() => {
-          const patch = Object.fromEntries(
-            Object.entries(overrides).filter(([field]) => dirtyOverrides[field])
-          );
-          runAction('Save overrides', () => adminFetch(`${endpoint}/overrides`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(patch),
-          }), 'Pipeline overrides saved.');
-        }}
-        disabled={action !== null || status === 'running'}
-        className="mt-3 inline-flex items-center gap-1 rounded-full border border-line-strong px-3 py-1.5 text-xs font-bold text-ink-soft hover:border-terracotta hover:text-terracotta disabled:opacity-60"
-      >
-        <span className="material-symbols-outlined text-sm">save</span>
-        Save Overrides
-      </button>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={() => {
+            // Send every currently selected value, not just dirty ones — a poll
+            // landing mid-edit must never reduce this to an empty patch.
+            const patch = Object.fromEntries(
+              Object.entries(overrides).filter(([, value]) => !!value)
+            );
+            void runAction('Save overrides', () => adminFetch(`${endpoint}/overrides`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(patch),
+            }), 'Pipeline overrides saved. Regenerate from Intake to apply them.', { resetDrafts: true });
+          }}
+          disabled={action !== null || status === 'running'}
+          className="inline-flex items-center gap-1 rounded-full border border-line-strong px-3 py-1.5 text-xs font-bold text-ink-soft hover:border-terracotta hover:text-terracotta disabled:opacity-60"
+        >
+          <span className="material-symbols-outlined text-sm">save</span>
+          Save Overrides
+        </button>
+        {Object.values(dirtyOverrides).some(Boolean) && (
+          <span className="rounded-full bg-mustard-pale px-2 py-0.5 text-xs font-bold text-[#6F521F]">
+            Unsaved changes — save, then regenerate from Intake
+          </span>
+        )}
+      </div>
 
       <div className="mt-4 grid gap-3 xl:grid-cols-[240px_1fr]">
         <div className="space-y-2">
@@ -309,11 +353,16 @@ export const SongPipelinePanel: React.FC<Props> = ({
             {expandedStage !== 'format' && (
               <button
                 type="button"
-                onClick={() => runAction(`Regenerate ${expandedStage}`, () => adminFetch(`${endpoint}/stages/${expandedStage}/regenerate`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ comment: comments[expandedStage] || '' }),
-                }), `${labelize(expandedStage)} regeneration queued.`)}
+                onClick={async () => {
+                  const stage = expandedStage;
+                  const ok = await runAction(`Regenerate ${stage}`, () => adminFetch(`${endpoint}/stages/${stage}/regenerate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ comment: comments[stage] || '' }),
+                  }), `${labelize(stage)} regeneration queued.`);
+                  // The comment is now stored server-side; let future polls own it.
+                  if (ok) dirtyCommentsRef.current = { ...dirtyCommentsRef.current, [stage]: false };
+                }}
                 disabled={action !== null || status === 'running'}
                 className="inline-flex items-center gap-1 rounded-full bg-terracotta px-3 py-1.5 text-xs font-bold text-cream disabled:opacity-60"
               >
@@ -326,9 +375,13 @@ export const SongPipelinePanel: React.FC<Props> = ({
           {expandedStage !== 'format' && (
             <textarea
               value={comments[expandedStage] || ''}
-              onChange={(e) => setComments((current) => ({ ...current, [expandedStage]: e.target.value }))}
+              onChange={(e) => {
+                const stage = expandedStage;
+                setComments((current) => ({ ...current, [stage]: e.target.value }));
+                dirtyCommentsRef.current = { ...dirtyCommentsRef.current, [stage]: true };
+              }}
               rows={3}
-              placeholder="Admin guidance"
+              placeholder="Admin guidance — applied when you click Regenerate"
               className="mt-3 w-full rounded-lg border border-line bg-cream px-3 py-2 text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-terracotta/20"
             />
           )}
