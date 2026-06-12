@@ -420,7 +420,7 @@ describe('POST /api/admin/orders/:id/song (SSRF guard)', () => {
     expect(routeDb.prepare('SELECT final_song_url FROM orders WHERE id = ?').get(orderId).final_song_url).toBeFalsy();
   });
 
-  it('accepts a public https URL', async () => {
+  it('accepts a public https URL that serves audio', async () => {
     const { default: supertest } = await import('supertest');
     const orderId = crypto.randomUUID();
     const now = new Date().toISOString();
@@ -430,14 +430,58 @@ describe('POST /api/admin/orders/:id/song (SSRF guard)', () => {
     `).run(orderId, now, now);
     const cookie = await adminCookie(supertest);
 
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      status: 206,
+      headers: { get: (h) => (h.toLowerCase() === 'content-type' ? 'audio/mpeg' : null) },
+    })));
+
     const res = await supertest(app)
       .post(`/api/admin/orders/${orderId}/song`)
       .set('Cookie', cookie)
       .send({ url: 'https://cdn.example.com/songs/final.mp3', title: 'Final Mix' });
 
+    vi.unstubAllGlobals();
+
     expect(res.status).toBe(200);
     expect(routeDb.prepare('SELECT final_song_url FROM orders WHERE id = ?').get(orderId).final_song_url)
       .toBe('https://cdn.example.com/songs/final.mp3');
+  });
+
+  it('rejects an unreachable URL with 422 and allows force', async () => {
+    const { default: supertest } = await import('supertest');
+    const orderId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    routeDb.prepare(`
+      INSERT INTO orders (id, song_title, genre, occasion, created_at, delivery_date)
+      VALUES (?, 'Custom Song', 'Afro-Beats', 'birthday', ?, ?)
+    `).run(orderId, now, now);
+    const cookie = await adminCookie(supertest);
+
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      status: 404,
+      headers: { get: () => 'text/html' },
+    })));
+
+    const blocked = await supertest(app)
+      .post(`/api/admin/orders/${orderId}/song`)
+      .set('Cookie', cookie)
+      .send({ url: 'https://cdn.example.com/songs/missing.mp3' });
+
+    expect(blocked.status).toBe(422);
+    expect(blocked.body.canForce).toBe(true);
+    expect(routeDb.prepare('SELECT final_song_url FROM orders WHERE id = ?').get(orderId).final_song_url).toBeFalsy();
+
+    // force:true bypasses the probe entirely (no fetch call needed)
+    const forced = await supertest(app)
+      .post(`/api/admin/orders/${orderId}/song`)
+      .set('Cookie', cookie)
+      .send({ url: 'https://cdn.example.com/songs/missing.mp3', force: true });
+
+    vi.unstubAllGlobals();
+
+    expect(forced.status).toBe(200);
+    expect(routeDb.prepare('SELECT final_song_url FROM orders WHERE id = ?').get(orderId).final_song_url)
+      .toBe('https://cdn.example.com/songs/missing.mp3');
   });
 });
 
