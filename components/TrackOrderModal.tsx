@@ -10,6 +10,8 @@ interface TrackOrderModalProps {
 
 type ModalState = 'input' | 'sending' | 'sent' | 'error';
 
+const FULL_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 async function getApiError(response: Response, fallback: string) {
   const data = await response.json().catch(() => null);
   return data?.error || data?.message || fallback;
@@ -17,6 +19,8 @@ async function getApiError(response: Response, fallback: string) {
 
 const TrackOrderModal: React.FC<TrackOrderModalProps> = ({ isOpen, onClose }) => {
   const [identifier, setIdentifier] = useState('');
+  const [lookupEmail, setLookupEmail] = useState('');
+  const [needsEmail, setNeedsEmail] = useState(false);
   const [modalState, setModalState] = useState<ModalState>('input');
   const [errorMessage, setErrorMessage] = useState('');
   const dialogRef = useRef<HTMLDivElement | null>(null);
@@ -61,7 +65,7 @@ const TrackOrderModal: React.FC<TrackOrderModalProps> = ({ isOpen, onClose }) =>
 
   const handleTrack = async (e: React.FormEvent) => {
     e.preventDefault();
-    const value = identifier.trim();
+    const value = identifier.trim().replace(/^#/, '');
     if (!value) {
       setErrorMessage('Please enter an Order ID or Email.');
       return;
@@ -72,8 +76,7 @@ const TrackOrderModal: React.FC<TrackOrderModalProps> = ({ isOpen, onClose }) =>
     const isEmail = value.includes('@');
 
     if (isEmail) {
-      // Email-based tracking requires authentication.
-      // Send a magic link and tell the user to check their inbox.
+      // Email-only: send a magic link listing every order on that address.
       setModalState('sending');
       try {
         const res = await fetch('/api/auth/request', {
@@ -89,16 +92,55 @@ const TrackOrderModal: React.FC<TrackOrderModalProps> = ({ isOpen, onClose }) =>
         setModalState('error');
         setErrorMessage('Network error. Please try again.');
       }
-    } else {
-      // Order ID access is direct; email-based order lists still use magic-link auth.
+      return;
+    }
+
+    if (FULL_UUID_RE.test(value)) {
+      // A full order ID is an unguessable capability — open it directly.
       sessionStorage.setItem('yourgbedu_track_id', value);
       onClose();
       navigate(`/track?id=${encodeURIComponent(value)}`);
+      return;
+    }
+
+    // Short order number (the #A1B2C3D4 from emails): pair it with the order's
+    // email for an instant lookup — no inbox round-trip needed.
+    if (!needsEmail) {
+      setNeedsEmail(true);
+      return;
+    }
+    const email = lookupEmail.trim();
+    if (!email.includes('@')) {
+      setErrorMessage('Enter the email you used on the order.');
+      return;
+    }
+    setModalState('sending');
+    try {
+      const res = await fetch('/api/orders/lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reference: value, email }),
+      });
+      if (!res.ok) {
+        setModalState('input');
+        setErrorMessage(await getApiError(res, 'No order matches that number and email.'));
+        return;
+      }
+      const order = await res.json();
+      sessionStorage.setItem('yourgbedu_track_id', order.id);
+      onClose();
+      const tokenParam = order.trackingToken ? `&t=${encodeURIComponent(order.trackingToken)}` : '';
+      navigate(`/track?id=${encodeURIComponent(order.id)}${tokenParam}`);
+    } catch {
+      setModalState('input');
+      setErrorMessage('Network error. Please try again.');
     }
   };
 
   const handleClose = () => {
     setIdentifier('');
+    setLookupEmail('');
+    setNeedsEmail(false);
     setModalState('input');
     setErrorMessage('');
     onClose();
@@ -173,6 +215,25 @@ const TrackOrderModal: React.FC<TrackOrderModalProps> = ({ isOpen, onClose }) =>
                   placeholder="Order ID or email@example.com"
                   className="w-full rounded-xl border border-line bg-ivory px-4 py-3.5 font-body text-ink placeholder:text-ink-muted transition-colors focus:border-terracotta focus:bg-cream focus:outline-none focus:ring-4 focus:ring-terracotta/10"
                 />
+                {needsEmail && !identifier.includes('@') && (
+                  <div className="mt-3">
+                    <input
+                      aria-label="Email used on the order"
+                      type="email"
+                      value={lookupEmail}
+                      onChange={(e) => {
+                        setLookupEmail(e.target.value);
+                        setErrorMessage('');
+                      }}
+                      placeholder="Email used on the order"
+                      autoFocus
+                      className="w-full rounded-xl border border-line bg-ivory px-4 py-3.5 font-body text-ink placeholder:text-ink-muted transition-colors focus:border-terracotta focus:bg-cream focus:outline-none focus:ring-4 focus:ring-terracotta/10"
+                    />
+                    <p className="mt-2 px-1 text-xs leading-5 text-ink-muted">
+                      Short order numbers need the matching email — no sign-in link required.
+                    </p>
+                  </div>
+                )}
                 {errorMessage && (
                   <p className="mt-2 px-1 text-sm text-red-700">{errorMessage}</p>
                 )}
@@ -187,8 +248,10 @@ const TrackOrderModal: React.FC<TrackOrderModalProps> = ({ isOpen, onClose }) =>
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : identifier.includes('@') ? (
                   'Send Sign-in Link'
-                ) : (
+                ) : needsEmail ? (
                   'Find My Order'
+                ) : (
+                  'Continue'
                 )}
               </button>
             </form>

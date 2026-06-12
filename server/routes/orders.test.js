@@ -212,7 +212,7 @@ describe('GET /api/orders/:id', () => {
     expect(res.status).toBe(404);
   });
 
-  it('requires the per-order tracking token for public order access', async () => {
+  it('treats the full order UUID as an access capability; short ids stay protected', async () => {
     const { default: supertest } = await import('supertest');
 
     const created = await supertest(app)
@@ -220,19 +220,21 @@ describe('GET /api/orders/:id', () => {
       .send({ songTitle: 'My Song', genre: 'Afro-Jazz', paystackReference: 'ref_get_001' })
       .set('Content-Type', 'application/json');
 
-    const noToken = await supertest(app).get(`/api/orders/${created.body.id}`);
-    const wrongToken = await supertest(app).get(`/api/orders/${created.body.id}?t=wrong`);
+    // Full UUID = 122 bits of entropy = unguessable capability, so it grants
+    // read access on its own (this is what lets customers track by order ID
+    // without an email round-trip).
+    const byUuidOnly = await supertest(app).get(`/api/orders/${created.body.id}`);
+    const withToken = await supertest(app).get(`/api/orders/${created.body.id}?t=${created.body.trackingToken}`);
+    // The enumerable 8-char short id must never resolve here, token or not.
     const shortId = await supertest(app).get(`/api/orders/${created.body.id.slice(0, 8)}?t=${created.body.trackingToken}`);
-    const fetched = await supertest(app).get(`/api/orders/${created.body.id}?t=${created.body.trackingToken}`);
 
-    expect(noToken.status).toBe(404);
-    expect(wrongToken.status).toBe(404);
+    expect(byUuidOnly.status).toBe(200);
+    expect(byUuidOnly.body.id).toBe(created.body.id);
+    expect(withToken.status).toBe(200);
     expect(shortId.status).toBe(404);
-    expect(fetched.status).toBe(200);
-    expect(fetched.body.id).toBe(created.body.id);
-    expect(fetched.body.currentStep).toBe(1);
-    expect(fetched.body.steps).toHaveLength(3);
-    expect(fetched.body.steps.map((step) => step.title)).toEqual([
+    expect(withToken.body.currentStep).toBe(1);
+    expect(withToken.body.steps).toHaveLength(3);
+    expect(withToken.body.steps.map((step) => step.title)).toEqual([
       'Order Received',
       'Song Composing',
       'Final Mastering',
@@ -257,8 +259,55 @@ describe('GET /api/orders/:id', () => {
   });
 });
 
+describe('POST /api/orders/lookup (guest tracking by order number + email)', () => {
+  it('resolves a short order number paired with the matching email', async () => {
+    const { default: supertest } = await import('supertest');
+    const email = 'guest@example.com';
+
+    const created = await supertest(app)
+      .post('/api/orders')
+      .send({ songTitle: 'Guest Song', genre: 'Soul', paystackReference: 'ref_lookup_001', customerEmail: email })
+      .set('Content-Type', 'application/json');
+
+    const shortRef = `#${created.body.id.slice(0, 8).toUpperCase()}`;
+    const res = await supertest(app)
+      .post('/api/orders/lookup')
+      .send({ reference: shortRef, email: 'Guest@Example.COM' })
+      .set('Content-Type', 'application/json');
+
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe(created.body.id);
+    expect(res.body.trackingToken).toBe(created.body.trackingToken);
+  });
+
+  it('rejects a short order number with the wrong email', async () => {
+    const { default: supertest } = await import('supertest');
+
+    const created = await supertest(app)
+      .post('/api/orders')
+      .send({ songTitle: 'Guest Song', genre: 'Soul', paystackReference: 'ref_lookup_002', customerEmail: 'right@example.com' })
+      .set('Content-Type', 'application/json');
+
+    const res = await supertest(app)
+      .post('/api/orders/lookup')
+      .send({ reference: created.body.id.slice(0, 8), email: 'wrong@example.com' })
+      .set('Content-Type', 'application/json');
+
+    expect(res.status).toBe(404);
+  });
+
+  it('rejects malformed input', async () => {
+    const { default: supertest } = await import('supertest');
+    const res = await supertest(app)
+      .post('/api/orders/lookup')
+      .send({ reference: 'abc', email: 'not-an-email' })
+      .set('Content-Type', 'application/json');
+    expect(res.status).toBe(400);
+  });
+});
+
 describe('PATCH /api/orders/:id/rating', () => {
-  it('requires the tracking token for public rating updates', async () => {
+  it('accepts the full-UUID capability or the tracking token; rejects unresolvable ids', async () => {
     const { default: supertest } = await import('supertest');
 
     const created = await supertest(app)
@@ -266,19 +315,21 @@ describe('PATCH /api/orders/:id/rating', () => {
       .send({ genre: 'Soul', paystackReference: 'ref_rating_001' })
       .set('Content-Type', 'application/json');
 
-    const noToken = await supertest(app)
+    // The full UUID is the same unguessable capability the share link carries,
+    // so it can rate without the explicit ?t= token.
+    const byUuid = await supertest(app)
       .patch(`/api/orders/${created.body.id}/rating`)
-      .send({ rating: 5 });
-    const wrongToken = await supertest(app)
-      .patch(`/api/orders/${created.body.id}/rating?t=wrong`)
-      .send({ rating: 5 });
-    const valid = await supertest(app)
+      .send({ rating: 4 });
+    const withToken = await supertest(app)
       .patch(`/api/orders/${created.body.id}/rating?t=${created.body.trackingToken}`)
       .send({ rating: 5 });
+    const shortId = await supertest(app)
+      .patch(`/api/orders/${created.body.id.slice(0, 8)}/rating?t=${created.body.trackingToken}`)
+      .send({ rating: 1 });
 
-    expect(noToken.status).toBe(404);
-    expect(wrongToken.status).toBe(404);
-    expect(valid.status).toBe(200);
+    expect(byUuid.status).toBe(200);
+    expect(withToken.status).toBe(200);
+    expect(shortId.status).toBe(404);
     expect(db.prepare('SELECT rating FROM orders WHERE id = ?').get(created.body.id).rating).toBe(5);
   });
 });

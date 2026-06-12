@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { randomBytes, randomUUID: uuidv4 } = require('crypto');
+const rateLimit = require('express-rate-limit');
 const { z } = require('zod');
 const { optionalAuth, requireAuth } = require('../middleware/auth.cjs');
 const { PRICING, isFastDelivery } = require('../pricing.cjs');
@@ -88,7 +89,17 @@ function hasValidTrackingToken(req, order) {
     return !!token && !!order.tracking_token && token === order.tracking_token;
 }
 
+// A full order UUID is itself an unguessable capability (122 bits of entropy,
+// same class as the tracking token), so knowing it grants read access — this is
+// what lets customers track with just their order ID, no email round-trip.
+// The IDOR risk we closed earlier was the enumerable 8-char SHORT id; that one
+// still requires the email-match lookup or a session.
+const FULL_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function canAccessOrder(req, order) {
+    if (FULL_UUID_RE.test(String(req.params?.id || '')) && req.params.id.toLowerCase() === String(order.id).toLowerCase()) {
+        return true;
+    }
     return hasValidTrackingToken(req, order) || isOwnerOrAdmin(req, order);
 }
 
@@ -344,8 +355,55 @@ router.patch('/:id/rating', optionalAuth, async (req, res) => {
     }
 });
 
-// GET /api/orders/:id — return a single order by full UUID plus capability token,
-// or by an authenticated owner/admin session.
+// POST /api/orders/lookup — guest tracking for the short order number printed in
+// emails. The 8-char id alone is enumerable, so it must be paired with the email
+// used on the order (standard guest-order-tracking: knowledge of both = access).
+// Returns the full order (incl. trackingToken) so the client can build a durable
+// /track?id=<uuid>&t=<token> URL. Strictly rate-limited to blunt enumeration.
+const lookupLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: process.env.NODE_ENV === 'production' ? 30 : 1000,
+    message: { error: 'Too many lookup attempts. Please try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+const LookupSchema = z.object({
+    reference: z.string().trim().min(8).max(64),
+    email: z.string().trim().email(),
+});
+
+router.post('/lookup', lookupLimiter, async (req, res) => {
+    const raw = typeof req.body?.reference === 'string' ? req.body.reference.replace(/^#/, '') : '';
+    const parsed = LookupSchema.safeParse({ reference: raw, email: req.body?.email });
+    if (!parsed.success) {
+        return res.status(400).json({ error: 'Enter your order number and the email used on the order.' });
+    }
+
+    const reference = parsed.data.reference.toLowerCase();
+    const email = parsed.data.email.toLowerCase();
+
+    try {
+        const order = FULL_UUID_RE.test(reference)
+            ? await getOne(
+                'SELECT * FROM orders WHERE LOWER(id) = ? AND LOWER(TRIM(customer_email)) = ?',
+                reference, email
+            )
+            : await getOne(
+                'SELECT * FROM orders WHERE LOWER(SUBSTR(id, 1, 8)) = ? AND LOWER(TRIM(customer_email)) = ? ORDER BY created_at DESC LIMIT 1',
+                reference.slice(0, 8), email
+            );
+
+        if (!order) return res.status(404).json({ error: 'No order matches that number and email.' });
+        res.json(computeOrderProgress(order));
+    } catch (err) {
+        console.error('Error looking up order:', err);
+        res.status(500).json({ error: 'Failed to look up order' });
+    }
+});
+
+// GET /api/orders/:id — return a single order by full UUID (the UUID itself is an
+// unguessable capability), by capability token, or by an authenticated session.
 router.get('/:id', optionalAuth, async (req, res) => {
     try {
         const order = await getOne('SELECT * FROM orders WHERE id = ?', req.params.id);
