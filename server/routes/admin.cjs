@@ -385,13 +385,60 @@ function isPublicHttpUrl(raw) {
     return true;
 }
 
+// Confirm the pasted URL actually serves a media file before we attach it and
+// email the customer. Catches the most common operator mistakes: pasting the R2
+// dashboard URL instead of the public object URL, a wrong object key (404), or a
+// bucket/object that isn't public (403). Returns { ok, status, contentType }.
+async function probeMediaUrl(url) {
+    const attempt = async (method, headers) => {
+        const resp = await fetch(url, {
+            method,
+            headers,
+            redirect: 'follow',
+            signal: AbortSignal.timeout(8000),
+        });
+        return { status: resp.status, contentType: resp.headers.get('content-type') || '' };
+    };
+    try {
+        // Prefer a 1-byte ranged GET — some object stores don't answer HEAD.
+        let r = await attempt('GET', { Range: 'bytes=0-0' });
+        if (r.status === 405 || r.status === 501) r = await attempt('HEAD', {});
+        return { ok: r.status >= 200 && r.status < 400, ...r };
+    } catch (err) {
+        return { ok: false, status: 0, contentType: '', error: err?.message || 'unreachable' };
+    }
+}
+
 // POST /api/admin/orders/:id/song — attach a finished song URL and mark completed
 router.post('/orders/:id/song', requireAdmin, async (req, res) => {
     const url = typeof req.body?.url === 'string' ? req.body.url.trim() : '';
     const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
+    const force = req.body?.force === true || req.body?.force === 'true';
 
     if (!url || url.length > 2048 || !isPublicHttpUrl(url)) {
         return res.status(400).json({ error: 'A valid public http(s) URL is required.' });
+    }
+
+    // Reachability gate — skippable with force:true for hosts that block our probe.
+    if (!force) {
+        const probe = await probeMediaUrl(url);
+        if (!probe.ok) {
+            const reason = probe.status
+                ? `the host returned ${probe.status}`
+                : `the host could not be reached (${probe.error || 'network error'})`;
+            return res.status(422).json({
+                error: `That URL isn't loadable — ${reason}. Open it in a private browser tab: it must download/play the file directly. Check it's the public object URL (…r2.dev/<folder>/<file>), not the dashboard link, and that the object is public.`,
+                probeStatus: probe.status,
+                canForce: true,
+            });
+        }
+        if (probe.contentType && !/^audio\/|^video\/|^application\/octet-stream/i.test(probe.contentType)) {
+            return res.status(422).json({
+                error: `That URL loads but looks like "${probe.contentType}", not an audio file. Double-check you copied the .mp3/.wav object URL. Attach anyway if you're sure.`,
+                contentType: probe.contentType,
+                canForce: true,
+            });
+        }
     }
 
     try {

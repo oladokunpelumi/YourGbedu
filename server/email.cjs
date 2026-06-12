@@ -113,6 +113,7 @@ async function sendConfirmationEmail({ to, orderId, trackingToken, genre, delive
   });
 
   const safeOrderId   = escapeHtml(String(orderId || '').slice(0, 8).toUpperCase());
+  const safeOrderCode = escapeHtml(String(orderId || ''));
   const safeGenre     = escapeHtml(genre || 'Custom');
   const safeReference = escapeHtml(reference);
   const safeAmount    = escapeHtml(amountLabel || 'Paid');
@@ -154,6 +155,11 @@ async function sendConfirmationEmail({ to, orderId, trackingToken, genre, delive
         <div class="row"><span class="label">Amount Paid</span><span class="value">${safeAmount}</span></div>
         <div class="row"><span class="label">Estimated Delivery</span><span class="value">${delivery}</span></div>
         <div class="row"><span class="label">Payment Ref</span><span class="value" style="font-size:11px; font-family:monospace;">${safeReference}</span></div>
+      </div>
+      <div class="panel" style="text-align:center;">
+        <p class="label" style="margin:0 0 6px;">Your Order Code</p>
+        <p style="margin:0; font-family:monospace; font-size:13px; font-weight:700; color:#1F1B14; word-break:break-all;">${safeOrderCode}</p>
+        <p style="margin:8px 0 0; color:#8B7F6C; font-size:12px; line-height:1.5;">Keep this code. Enter it on the Track page any time to open your order — no sign-in needed.</p>
       </div>
       <a href="${trackUrl}" class="cta">Track Your Order</a>
       <p class="fallback">If the button does not open, paste this link into your browser:<br>${trackUrl}</p>
@@ -261,6 +267,7 @@ async function sendCompletionEmail({ to, orderId, trackingToken, genre, senderNa
   }
 
   const safeOrderId       = escapeHtml(String(orderId || '').slice(0, 8).toUpperCase());
+  const safeOrderCode     = escapeHtml(String(orderId || ''));
   const safeGenre         = escapeHtml(genre);
   const safeSenderName    = escapeHtml(senderName);
   const safeRecipientType = escapeHtml(recipientType);
@@ -309,9 +316,11 @@ async function sendCompletionEmail({ to, orderId, trackingToken, genre, senderNa
         ${safeRecipientType ? `<div class="row"><span class="label">Song For</span><span class="value">${safeRecipientType}</span></div>` : ''}
         <div class="row"><span class="label">Status</span><span class="value" style="color:#5D6A42;">Completed</span></div>
       </div>
-      <p style="color:#8B7F6C; font-size:13px; line-height:1.6;">
-        Our team will be in touch with the final track. If you have any questions, please don't hesitate to reach out.
-      </p>
+      <div class="panel" style="text-align:center;">
+        <p class="label" style="margin:0 0 6px;">Your Order Code</p>
+        <p style="margin:0; font-family:monospace; font-size:13px; font-weight:700; color:#1F1B14; word-break:break-all;">${safeOrderCode}</p>
+        <p style="margin:8px 0 0; color:#8B7F6C; font-size:12px; line-height:1.5;">Enter this code on the Track page any time to open your song — no sign-in needed.</p>
+      </div>
       <a href="${trackUrl}" class="cta">View your order</a>
       <p class="fallback">If the button does not open, paste this link into your browser:<br>${trackUrl}</p>
     </div>

@@ -227,6 +227,7 @@ const Admin: React.FC = () => {
   const [disablingPromoId, setDisablingPromoId] = useState<string | null>(null);
   const [songInputs, setSongInputs] = useState<Record<string, { url: string; title: string }>>({});
   const [attachingSongId, setAttachingSongId] = useState<string | null>(null);
+  const [forceAttachId, setForceAttachId] = useState<string | null>(null);
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [showAllSubscribers, setShowAllSubscribers] = useState(false);
@@ -345,7 +346,7 @@ const Admin: React.FC = () => {
     }
   };
 
-  const handleAttachSong = async (orderId: string) => {
+  const handleAttachSong = async (orderId: string, force = false) => {
     const input = songInputs[orderId];
     if (!input?.url?.trim()) {
       setAdminMessage('Paste a finished song URL before attaching.');
@@ -353,14 +354,19 @@ const Admin: React.FC = () => {
     }
     setAttachingSongId(orderId);
     setAdminMessage('');
+    setForceAttachId(null);
     try {
       const res = await adminFetch(`/api/admin/orders/${orderId}/song`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: input.url.trim(), title: input.title?.trim() || '' }),
+        body: JSON.stringify({ url: input.url.trim(), title: input.title?.trim() || '', force }),
       });
       const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error || 'Song attach failed');
+      if (!res.ok) {
+        // 422 = URL didn't pass the reachability/content-type probe. Offer an override.
+        if (res.status === 422 && data?.canForce) setForceAttachId(orderId);
+        throw new Error(data?.error || 'Song attach failed');
+      }
 
       setOrders((current) =>
         current.map((order) => (order.id === orderId ? { ...order, ...data } : order))
@@ -1062,8 +1068,19 @@ const Admin: React.FC = () => {
                               {attachingSongId === order.id ? 'Sending...' : order.final_song_url ? 'Replace' : 'Attach & complete'}
                             </button>
                           </div>
+                          {forceAttachId === order.id && (
+                            <button
+                              type="button"
+                              onClick={() => handleAttachSong(order.id, true)}
+                              disabled={attachingSongId === order.id}
+                              className="mt-2 inline-flex items-center gap-1 rounded-full border border-red-300 px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-50 disabled:opacity-60"
+                            >
+                              <span className="material-symbols-outlined text-sm">warning</span>
+                              Attach anyway (skip URL check)
+                            </button>
+                          )}
                           <p className="mt-2 text-xs text-ink-muted">
-                            Attaching a URL flips the order to <span className="font-bold">completed</span>, emails the customer, and shows them the vinyl player.
+                            Paste the <span className="font-bold">public object URL</span> from R2 (…r2.dev/&lt;folder&gt;/&lt;file&gt;.mp3), not the dashboard link. Attaching flips the order to <span className="font-bold">completed</span>, emails the customer, and shows them the vinyl player.
                           </p>
                         </div>
 
