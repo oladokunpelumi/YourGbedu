@@ -7,6 +7,7 @@ import { paymentProviderFromGeo, reconcilePaymentProvider } from '../services/ch
 type CheckoutStatus = 'loading' | 'ready' | 'processing' | 'success' | 'error';
 
 const FULL_PRICE_STORAGE_KEY = 'yourgbedu_pay_full_price';
+const BRIEF_DRAFT_STORAGE_KEY = 'yourgbedu_brief_draft';
 
 interface CheckoutBrief {
   recipientType: string;
@@ -212,6 +213,7 @@ const Checkout: React.FC = () => {
       sessionStorage.setItem('yourgbedu_track_id', id);
       if (trackingToken) sessionStorage.setItem('yourgbedu_track_token', trackingToken);
       sessionStorage.removeItem('yourgbedu_brief');
+      sessionStorage.removeItem(BRIEF_DRAFT_STORAGE_KEY);
       clearPayFullPriceFlag();
       const tokenParam = trackingToken ? `&t=${encodeURIComponent(trackingToken)}` : '';
       setTimeout(() => navigate(`/track?id=${encodeURIComponent(id)}${tokenParam}`, { replace: false }), 3500);

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { OCCASION_ACCENTS, PaymentProvider, getDiscountedPrice } from '../constants';
 import { paymentProviderFromGeo } from '../services/checkoutProvider';
@@ -93,23 +93,99 @@ const FORM_STEPS = [
 const fieldClass =
   'w-full rounded-xl border border-line bg-ivory px-4 py-3.5 font-body text-base text-ink placeholder:text-ink-muted transition-colors focus:border-terracotta focus:bg-cream focus:outline-none focus:ring-4 focus:ring-terracotta/10';
 
+const BRIEF_STORAGE_KEY = 'yourgbedu_brief';
+const DRAFT_STORAGE_KEY = 'yourgbedu_brief_draft';
+const MIN_STEP = 1;
+const MAX_STEP = FORM_STEPS.length;
+
+interface CreateSongDraft {
+  recipientType: string;
+  recipientName: string;
+  occasion: string;
+  occasionDetail: string;
+  senderName: string;
+  genre: string;
+  voiceGender: string;
+  specialQualities: string;
+  favoriteMemories: string;
+  specialMessage: string;
+  customerEmail: string;
+  fastDelivery: boolean;
+}
+
+function normalizeDraft(value: unknown): CreateSongDraft | null {
+  if (!value || typeof value !== 'object') return null;
+  const parsed = value as Partial<CreateSongDraft>;
+  return {
+    recipientType: parsed.recipientType || '',
+    recipientName: parsed.recipientName || '',
+    occasion: parsed.occasion || '',
+    occasionDetail: parsed.occasionDetail || '',
+    senderName: parsed.senderName || '',
+    genre: parsed.genre || '',
+    voiceGender: parsed.voiceGender || '',
+    specialQualities: parsed.specialQualities || '',
+    favoriteMemories: parsed.favoriteMemories || '',
+    specialMessage: parsed.specialMessage || '',
+    customerEmail: parsed.customerEmail || '',
+    fastDelivery: Boolean(parsed.fastDelivery),
+  };
+}
+
+function readCreateSongDraft(): CreateSongDraft | null {
+  try {
+    const rawDraft = sessionStorage.getItem(DRAFT_STORAGE_KEY);
+    if (rawDraft) return normalizeDraft(JSON.parse(rawDraft));
+
+    const rawBrief = sessionStorage.getItem(BRIEF_STORAGE_KEY);
+    if (rawBrief) return normalizeDraft(JSON.parse(rawBrief));
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function hasDraftContent(draft: CreateSongDraft) {
+  return Boolean(
+    draft.recipientType ||
+      draft.recipientName ||
+      draft.occasion ||
+      draft.occasionDetail ||
+      draft.senderName ||
+      draft.genre ||
+      draft.voiceGender ||
+      draft.specialQualities ||
+      draft.favoriteMemories ||
+      draft.specialMessage ||
+      draft.customerEmail ||
+      draft.fastDelivery
+  );
+}
+
+function parseStepParam(value: string | null) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) return MIN_STEP;
+  return Math.min(Math.max(parsed, MIN_STEP), MAX_STEP);
+}
+
 const CreateSong: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const [initialDraft] = useState(() => readCreateSongDraft());
   const [step, setStep] = useState(1);
 
-  const [recipientType, setRecipientType] = useState('');
-  const [recipientName, setRecipientName] = useState('');
-  const [occasion, setOccasion] = useState('');
-  const [occasionDetail, setOccasionDetail] = useState('');
-  const [senderName, setSenderName] = useState('');
-  const [genre, setGenre] = useState('');
-  const [voiceGender, setVoiceGender] = useState('');
-  const [specialQualities, setSpecialQualities] = useState('');
-  const [favoriteMemories, setFavoriteMemories] = useState('');
-  const [specialMessage, setSpecialMessage] = useState('');
-  const [customerEmail, setCustomerEmail] = useState('');
-  const [isFastDelivery, setIsFastDelivery] = useState(false);
+  const [recipientType, setRecipientType] = useState(initialDraft?.recipientType || '');
+  const [recipientName, setRecipientName] = useState(initialDraft?.recipientName || '');
+  const [occasion, setOccasion] = useState(initialDraft?.occasion || '');
+  const [occasionDetail, setOccasionDetail] = useState(initialDraft?.occasionDetail || '');
+  const [senderName, setSenderName] = useState(initialDraft?.senderName || '');
+  const [genre, setGenre] = useState(initialDraft?.genre || '');
+  const [voiceGender, setVoiceGender] = useState(initialDraft?.voiceGender || '');
+  const [specialQualities, setSpecialQualities] = useState(initialDraft?.specialQualities || '');
+  const [favoriteMemories, setFavoriteMemories] = useState(initialDraft?.favoriteMemories || '');
+  const [specialMessage, setSpecialMessage] = useState(initialDraft?.specialMessage || '');
+  const [customerEmail, setCustomerEmail] = useState(initialDraft?.customerEmail || '');
+  const [isFastDelivery, setIsFastDelivery] = useState(Boolean(initialDraft?.fastDelivery));
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -117,6 +193,61 @@ const CreateSong: React.FC = () => {
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const selectedPersona =
     RECIPIENT_QUERY_MAP[(searchParams.get('recipient') || '').toLowerCase()] || '';
+  const draftData = useMemo<CreateSongDraft>(() => ({
+    recipientType,
+    recipientName,
+    occasion,
+    occasionDetail,
+    senderName,
+    genre,
+    voiceGender,
+    specialQualities,
+    favoriteMemories,
+    specialMessage,
+    customerEmail,
+    fastDelivery: isFastDelivery,
+  }), [
+    recipientType,
+    recipientName,
+    occasion,
+    occasionDetail,
+    senderName,
+    genre,
+    voiceGender,
+    specialQualities,
+    favoriteMemories,
+    specialMessage,
+    customerEmail,
+    isFastDelivery,
+  ]);
+  const isStepOneComplete = useCallback(() => {
+    return Boolean(
+      recipientType &&
+        occasion &&
+        senderName.trim() &&
+        (recipientType === 'Yourself' || recipientName.trim())
+    );
+  }, [occasion, recipientName, recipientType, senderName]);
+  const isStepTwoComplete = useCallback(() => Boolean(genre && voiceGender), [genre, voiceGender]);
+  const isStepThreeComplete = useCallback(() => {
+    return specialQualities.trim().length >= 5 && favoriteMemories.trim().length >= 5;
+  }, [favoriteMemories, specialQualities]);
+  const isStepFourComplete = useCallback(() => specialMessage.trim().length >= 5, [specialMessage]);
+  const furthestAllowedStep = useMemo(() => {
+    if (!isStepOneComplete()) return 1;
+    if (!isStepTwoComplete()) return 2;
+    if (!isStepThreeComplete()) return 3;
+    if (!isStepFourComplete()) return 4;
+    return 5;
+  }, [isStepFourComplete, isStepOneComplete, isStepThreeComplete, isStepTwoComplete]);
+  const navigateToStep = useCallback(
+    (targetStep: number, replace = false) => {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.set('step', String(Math.min(Math.max(targetStep, MIN_STEP), MAX_STEP)));
+      navigate(`/create?${nextParams.toString()}`, { replace });
+    },
+    [navigate, searchParams]
+  );
 
   useEffect(() => {
     const checkoutError = sessionStorage.getItem('yourgbedu_checkout_error');
@@ -127,9 +258,31 @@ const CreateSong: React.FC = () => {
 
   useEffect(() => {
     if (!selectedPersona) return;
+    if (initialDraft) return;
     setRecipientType(selectedPersona);
-    setStep(1);
-  }, [selectedPersona]);
+  }, [initialDraft, selectedPersona]);
+
+  useEffect(() => {
+    try {
+      if (hasDraftContent(draftData)) {
+        sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draftData));
+      } else {
+        sessionStorage.removeItem(DRAFT_STORAGE_KEY);
+      }
+    } catch {
+      // sessionStorage may be unavailable; the form still works in memory.
+    }
+  }, [draftData]);
+
+  useEffect(() => {
+    const requestedStep = parseStepParam(searchParams.get('step'));
+    const clampedStep = Math.min(requestedStep, furthestAllowedStep);
+    if (searchParams.get('step') !== String(clampedStep)) {
+      navigateToStep(clampedStep, true);
+      return;
+    }
+    setStep(clampedStep);
+  }, [furthestAllowedStep, navigateToStep, searchParams]);
 
   useEffect(() => {
     if (step !== 5 || paymentProvider !== null) return;
@@ -166,24 +319,24 @@ const CreateSong: React.FC = () => {
       setError("Please add the recipient's name so we can write the song for them.");
       return;
     }
-    if (step === 2 && (!genre || !voiceGender)) {
+    if (step === 2 && !isStepTwoComplete()) {
       setError('Please select both a genre and voice preference.');
       return;
     }
-    if (step === 3 && (specialQualities.trim().length < 5 || favoriteMemories.trim().length < 5)) {
+    if (step === 3 && !isStepThreeComplete()) {
       setError('Please provide a few details for both questions to help us write the best song.');
       return;
     }
-    if (step === 4 && specialMessage.trim().length < 5) {
+    if (step === 4 && !isStepFourComplete()) {
       setError('Please write a special message from your heart.');
       return;
     }
-    setStep((s) => Math.min(s + 1, 5));
+    navigateToStep(step + 1);
   };
 
   const prevStep = () => {
     setError(null);
-    setStep((s) => Math.max(s - 1, 1));
+    navigate(-1);
   };
 
   const handleCompleteBrief = () => {
