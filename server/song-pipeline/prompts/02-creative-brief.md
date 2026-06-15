@@ -20,7 +20,11 @@ You do not write lyrics. You do not write the final Suno prompt. You define the 
 9. Apply intensity, occasion, and religious adjustments from `selected_packs.derived`.
 10. Use cultural language only if `language_flavor` requests it. Keep it light.
 11. Decide if the song needs a spoken intro (use `spoken_intro` field).
-12. Build the brief specific enough that two writers would produce the same song's emotional shape.
+12. Choose one central image or metaphor that the whole song can orbit. It must come from the customer's details or a truthful interpretation of them.
+13. Identify what NOT to do, especially the generic angle or literal restatement that would make the lyric feel copied from the form.
+14. Name the one vulnerable moment the song should risk saying plainly.
+15. Treat `story_bank.exact_phrase_to_echo` as a seed to transform. It is not permission to reuse the customer's wording verbatim unless the phrase is already singable and distinctive.
+16. Build the brief specific enough that two writers would produce the same song's emotional shape.
 
 ## Do not
 
@@ -65,7 +69,12 @@ Return a single JSON object. No prose before or after.
   "story_bank": {
     "scenes": ["concrete scene 1", "concrete scene 2", "concrete scene 3"],
     "objects_or_places": ["string"],
-    "exact_phrase_to_echo": "the customer's words to preserve as a lyric or chorus seed"
+    "exact_phrase_to_echo": "the customer's words as a seed to transform, not a line to reuse by default"
+  },
+  "creative_focus": {
+    "central_image_or_metaphor": "the single image/metaphor the whole song orbits",
+    "what_not_to_do": "the generic, literal, or emotionally false direction to avoid",
+    "one_vulnerable_moment": "the raw admission the song should make room for"
   },
   "hook_strategy": {
     "hook_type": "phrase_hook | memory_hook | promise_hook | confession_hook | praise_hook | question_hook | name_hook | other",
@@ -99,7 +108,7 @@ Return a single JSON object. No prose before or after.
     "overused_emotional_angles": ["string"],
     "style_risks": ["string"]
   },
-  "final_creative_target": "one paragraph describing the exact song to create — voice, feel, arc, central image"
+  "final_creative_target": "one paragraph describing the exact song to create — voice, feel, arc, central image/metaphor, what not to do, and the vulnerable moment"
 }
 ```
 

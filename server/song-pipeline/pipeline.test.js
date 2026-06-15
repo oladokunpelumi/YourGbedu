@@ -12,6 +12,7 @@ vi.stubEnv('DB_PATH', path.join(os.tmpdir(), `sonnetary-pipeline-${process.pid}-
 const require = createRequire(import.meta.url);
 const db = require('../db.cjs');
 const { getSongPipeline, shouldAutoRun } = require('../services/song-pipeline.cjs');
+const { makeClient } = require('./lib/llm.cjs');
 
 function insertOrder(id = crypto.randomUUID()) {
   const now = new Date().toISOString();
@@ -88,5 +89,41 @@ describe('song pipeline service', () => {
 
     expect(generation.status).toBe('needs_human_review');
     expect(generation.state.rewrite_count).toBe(2);
+  });
+
+  it('passes explicit and default temperatures to OpenRouter', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: '{"ok":true}' } }],
+          usage: { prompt_tokens: 2, completion_tokens: 3 },
+          model: 'test-model',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+
+    try {
+      const client = makeClient({ mock: false, apiKey: 'test-key', baseUrl: 'https://openrouter.test' });
+
+      await client.run('lyrics', {
+        model: 'anthropic/claude-sonnet-4.6',
+        system: 'system',
+        userContent: { hello: 'world' },
+        temperature: 0.9,
+      });
+      await client.run('style', {
+        model: 'anthropic/claude-sonnet-4.6',
+        system: 'system',
+        userContent: { hello: 'again' },
+      });
+
+      const firstBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+      const secondBody = JSON.parse(fetchMock.mock.calls[1][1].body);
+      expect(firstBody.temperature).toBe(0.9);
+      expect(secondBody.temperature).toBe(0.7);
+    } finally {
+      fetchMock.mockRestore();
+    }
   });
 });

@@ -29,6 +29,13 @@ You are scoring five subjective dimensions. The hard checks (banned phrases, sto
 
 Be honest. A song that "feels fine" but is forgettable is a 6, not an 8. The customer is paying for emotional precision, not adequacy.
 
+## Extra scrutiny
+
+- If the chorus mostly restates or closely paraphrases the customer's form message, score `hook_strength` and `emotional_specificity` lower unless the phrase is already exceptional and singable.
+- If the verses list qualities without turning them into action, image, place, object, or sensory memory, score `emotional_specificity` no higher than 6.
+- If the bridge repeats the chorus idea instead of revealing a more vulnerable turn, name that in `issues` and target the bridge for rewrite.
+- Reward transformation: customer facts becoming scenes, feelings becoming images, and memories becoming singable moments.
+
 ## Output format
 
 Return a single JSON object. No prose before or after. No markdown fences.

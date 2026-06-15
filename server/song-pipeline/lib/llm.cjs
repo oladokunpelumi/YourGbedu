@@ -75,7 +75,7 @@ function parseOpenRouterResponse(data, fallbackModel) {
     };
 }
 
-async function callOpenRouter({ model, system, userContent, maxTokens = 4096, apiKey, baseUrl }) {
+async function callOpenRouter({ model, system, userContent, maxTokens = 4096, temperature = 0.7, apiKey, baseUrl }) {
     const content = typeof userContent === 'string' ? userContent : JSON.stringify(userContent);
     const data = await requestJSONWithRetry(() =>
         fetch(`${String(baseUrl || DEFAULT_BASE_URL).replace(/\/$/, '')}/chat/completions`, {
@@ -89,7 +89,7 @@ async function callOpenRouter({ model, system, userContent, maxTokens = 4096, ap
             body: JSON.stringify({
                 model,
                 max_tokens: maxTokens,
-                temperature: 0.7,
+                temperature,
                 messages: [
                     { role: 'system', content: system },
                     { role: 'user', content },
@@ -246,7 +246,7 @@ function makeClient({
     const usage = { calls: 0, input_tokens: 0, output_tokens: 0, total_tokens: 0 };
     let judgeCalls = 0;
 
-    async function run(stage, { model, system, userContent, maxTokens }) {
+    async function run(stage, { model, system, userContent, maxTokens, temperature }) {
         if (mock) {
             if (stage === 'judge') judgeCalls++;
             await sleep(5);
@@ -263,6 +263,7 @@ function makeClient({
             system,
             userContent: userContent.__guarded || userContent,
             maxTokens,
+            temperature,
             apiKey,
             baseUrl,
         });
@@ -282,6 +283,7 @@ function makeClient({
 
 module.exports = {
     makeClient,
+    callOpenRouter,
     extractJSON,
     normalizeUsage,
     parseOpenRouterResponse,

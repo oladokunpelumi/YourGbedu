@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
+const BRIEF_DRAFT_STORAGE_KEY = 'yourgbedu_brief_draft';
+
 const PaymentSuccess: React.FC = () => {
   const [status, setStatus] = useState<'creating' | 'success' | 'error'>('creating');
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -32,6 +34,7 @@ const PaymentSuccess: React.FC = () => {
       sessionStorage.setItem('yourgbedu_track_id', id);
       if (token) sessionStorage.setItem('yourgbedu_track_token', token);
       sessionStorage.removeItem('yourgbedu_brief');
+      sessionStorage.removeItem(BRIEF_DRAFT_STORAGE_KEY);
       const tokenParam = token ? `&t=${encodeURIComponent(token)}` : '';
       setTimeout(() => {
         navigate(`/track?id=${encodeURIComponent(id)}${tokenParam}`, { replace: false });
