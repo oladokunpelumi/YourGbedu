@@ -21,7 +21,7 @@ The chorus and final_chorus should share their core line but the final_chorus ma
 ## Lyric rules
 
 1. Short, singable lines. Stresses on vowels where possible.
-2. The chorus must contain the hook idea from the brief. It must echo — directly or in close paraphrase — the customer's heart message when one was provided.
+2. The chorus must contain the hook idea from the brief. It must capture the emotional truth of the customer's heart message as a fresh, singable line, not repeat the customer's wording verbatim. A customer phrase may appear once only if it is already a striking line someone would naturally sing back.
 3. Use the recipient's name 1–3 times across the whole song. Not more.
 4. Weave in at least 2–3 specific story details from the brief's `story_bank` (more if input is rich).
 5. No filler syllables ("yeah yeah," "oh baby") unless the genre pack's vocal direction permits a restrained ad-lib.
@@ -30,6 +30,22 @@ The chorus and final_chorus should share their core line but the final_chorus ma
 8. Cultural language only if the brief's `lyric_voice.cultural_language_rule` requests it. Keep it light, emotionally natural, never caricatured.
 9. Bridge: deliver the rawest honest line. The one the sender doesn't usually say.
 10. Outro: leave a final emotional aftertaste — image, action, or short line. Not a summary.
+
+## Craft, don't echo
+
+Your job is transformation. The form gives you raw material; the song must turn it into melody, image, action, and emotional movement.
+
+- Turn a feeling into an action or image, not a label.
+  - "She makes me feel safe" -> "When the world turns sharp, your hand stays soft"
+  - "I am proud of you" -> "I watched you carry dawn on tired shoulders"
+- Turn a memory into a sensory moment, not a recap.
+  - "We danced in the kitchen" -> "Bare feet by the fridge light, your laugh keeping time"
+- Turn a stat or fact into a scene.
+  - "We have been married 10 years" -> "Ten rains came and went, your cup still beside mine"
+
+Write lines that can be sung. Favor open vowels on held notes. Put emotional words where the beat can carry them. Keep consonant-heavy phrases short. Let the verse tell the story, the chorus land the feeling, and the bridge turn the song somewhere more vulnerable instead of repeating the chorus in different words.
+
+The hook should feel inevitable after the verses: memorable, repeatable, and specific to this person. Rhyme should serve meaning; near-rhyme and no rhyme are better than a forced couplet. Prefer concrete sensory detail over abstraction.
 
 ## Anti-generic guardrails
 

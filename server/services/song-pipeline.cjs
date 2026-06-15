@@ -20,6 +20,14 @@ const STAGES = ['validate', 'packs', 'intake', 'brief', 'style', 'lyrics', 'qual
 const RESUMABLE_STAGES = ['intake', 'brief', 'style', 'lyrics', 'quality', 'format'];
 const TERMINAL_STATUSES = new Set(['completed', 'needs_human_review', 'invalid_input', 'failed']);
 const AUTO_MODES = new Set(['paid', 'all', 'off']);
+const STAGE_TEMPERATURES = {
+    intake: 0.4,
+    brief: 0.8,
+    style: 0.7,
+    lyrics: 0.9,
+    judge: 0.4,
+    rewrite: 0.85,
+};
 
 function nowIso() {
     return new Date().toISOString();
@@ -427,6 +435,7 @@ class SongPipelineService {
                     model: client.models.haiku,
                     system: withGuidance(prompts.intake, comments.intake),
                     userContent: guardedPayload({ form: state.normalized_form, validation: state.validated_input }),
+                    temperature: STAGE_TEMPERATURES.intake,
                 });
                 state.intake_interpretation = r.json;
                 state.stage_versions.intake_interpreter = { prompt_version: '2.0.0', model: r.model };
@@ -441,6 +450,7 @@ class SongPipelineService {
                         selected_packs: state.selected_packs,
                         normalized_form: state.normalized_form,
                     }),
+                    temperature: STAGE_TEMPERATURES.brief,
                 });
                 state.creative_brief = r.json;
                 state.stage_versions.creative_brief = { prompt_version: '2.0.0', model: r.model };
@@ -455,6 +465,7 @@ class SongPipelineService {
                         selected_packs: state.selected_packs,
                         normalized_form: state.normalized_form,
                     }),
+                    temperature: STAGE_TEMPERATURES.style,
                 });
                 state.suno_output = { ...(state.suno_output || {}), style_prompt: r.json.style_prompt };
                 state.stage_versions.style_prompt_composer = { prompt_version: '2.0.0', model: r.model };
@@ -470,6 +481,7 @@ class SongPipelineService {
                         style_prompt: state.suno_output?.style_prompt,
                         normalized_form: state.normalized_form,
                     }),
+                    temperature: STAGE_TEMPERATURES.lyrics,
                 });
                 state.suno_output = { ...(state.suno_output || {}), title_options: r.json.title_options, lyrics: r.json.lyrics };
                 state.stage_versions.lyric_writer = { prompt_version: '2.0.0', model: r.model };
@@ -503,6 +515,7 @@ class SongPipelineService {
                     quality_report: state.quality_report,
                     normalized_form: state.normalized_form,
                 }),
+                temperature: STAGE_TEMPERATURES.rewrite,
             });
             state.suno_output.title_options = r.json.title_options || state.suno_output.title_options;
             state.suno_output.lyrics = r.json.lyrics;
@@ -527,6 +540,7 @@ class SongPipelineService {
                 lyrics: state.suno_output?.lyrics,
                 title_options: state.suno_output?.title_options,
             }),
+            temperature: STAGE_TEMPERATURES.judge,
         });
         state.quality_report = {
             ...(state.quality_report || {}),
@@ -617,6 +631,7 @@ module.exports = {
     STAGES,
     RESUMABLE_STAGES,
     TERMINAL_STATUSES,
+    STAGE_TEMPERATURES,
     shouldAutoRun,
     getAutoMode,
     normalizeDbGeneration,
