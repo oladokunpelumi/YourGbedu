@@ -11,7 +11,7 @@ vi.stubEnv('DB_PATH', path.join(os.tmpdir(), `sonnetary-pipeline-${process.pid}-
 
 const require = createRequire(import.meta.url);
 const db = require('../db.cjs');
-const { getSongPipeline, shouldAutoRun } = require('../services/song-pipeline.cjs');
+const { getSongPipeline, shouldAutoRun, mergeJudgePanel, resolveJudgePanel } = require('../services/song-pipeline.cjs');
 const { makeClient } = require('./lib/llm.cjs');
 
 function insertOrder(id = crypto.randomUUID()) {
@@ -125,5 +125,63 @@ describe('song pipeline service', () => {
     } finally {
       fetchMock.mockRestore();
     }
+  });
+});
+
+describe('judge panel merge', () => {
+  it('takes the lowest score per dimension and unions issues/targets', () => {
+    const merged = mergeJudgePanel([
+      {
+        model: 'a',
+        json: {
+          scores: { emotional_specificity: 9, singability: 8, hook_strength: 8, genre_fit: 9, occasion_fit: 9 },
+          issues: ['chorus is a touch generic'],
+          rewrite_targets: ['chorus - sharpen hook'],
+          one_line_verdict: 'Strong, minor polish.',
+        },
+      },
+      {
+        model: 'b',
+        json: {
+          // the strict critic: catches a weak hook the first model waved through
+          scores: { emotional_specificity: 7, singability: 8, hook_strength: 5, genre_fit: 9, occasion_fit: 8 },
+          issues: ['hook does not land', 'verse 2 lists qualities'],
+          rewrite_targets: ['chorus - sharpen hook', 'verse_2 - turn into a scene'],
+          one_line_verdict: 'Weak hook, needs a rewrite.',
+        },
+      },
+    ]);
+
+    expect(merged.scores).toEqual({
+      emotional_specificity: 7,
+      singability: 8,
+      hook_strength: 5,
+      genre_fit: 9,
+      occasion_fit: 8,
+    });
+    // union + dedupe across the panel
+    expect(merged.rewrite_targets).toEqual(['chorus - sharpen hook', 'verse_2 - turn into a scene']);
+    expect(merged.issues).toContain('hook does not land');
+    // verdict comes from the harshest (lowest-average) panelist
+    expect(merged.one_line_verdict).toBe('Weak hook, needs a rewrite.');
+    expect(merged.panel).toHaveLength(2);
+  });
+
+  it('returns null when no panelist produced scores (caller falls back)', () => {
+    expect(mergeJudgePanel([])).toBeNull();
+    expect(mergeJudgePanel([{ model: 'x', json: {} }])).toBeNull();
+  });
+
+  it('resolveJudgePanel honors the off switch and the model override', () => {
+    vi.stubEnv('YG_JUDGE_PANEL', 'off');
+    expect(resolveJudgePanel('anthropic/claude-sonnet-4.6')).toEqual(['anthropic/claude-sonnet-4.6']);
+
+    vi.stubEnv('YG_JUDGE_PANEL', 'on');
+    vi.stubEnv('YG_JUDGE_PANEL_MODELS', 'model-a, model-b ,model-c');
+    expect(resolveJudgePanel('sonnet')).toEqual(['model-a', 'model-b', 'model-c']);
+
+    vi.stubEnv('YG_JUDGE_PANEL_MODELS', '');
+    expect(resolveJudgePanel('sonnet')[0]).toBe('sonnet');
+    expect(resolveJudgePanel('sonnet').length).toBeGreaterThan(1);
   });
 });

@@ -29,6 +29,72 @@ const STAGE_TEMPERATURES = {
     rewrite: 0.85,
 };
 
+// Quality is the one stage where multi-model deliberation pays off (critique, not
+// creation — see the Fusion analysis): a diverse panel catches weak songs a single
+// judge misses. We run our own panel on the existing OpenRouter client rather than
+// the beta Fusion server tool — no forced web search, full cost control, graceful
+// degradation if a model errors. Default panel = the primary writer-grade model
+// plus two cheap, training-diverse critics.
+const SOFT_SCORE_DIMENSIONS = ['emotional_specificity', 'singability', 'hook_strength', 'genre_fit', 'occasion_fit'];
+const DEFAULT_PANEL_EXTRA_MODELS = ['google/gemini-flash-latest', 'deepseek/deepseek-chat'];
+
+function resolveJudgePanel(sonnetModel) {
+    if (String(process.env.YG_JUDGE_PANEL || 'on').toLowerCase() === 'off') {
+        return [sonnetModel];
+    }
+    const override = String(process.env.YG_JUDGE_PANEL_MODELS || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+    if (override.length) return override;
+    return [sonnetModel, ...DEFAULT_PANEL_EXTRA_MODELS];
+}
+
+function dedupeStrings(arr) {
+    return Array.from(new Set((arr || []).map((s) => String(s).trim()).filter(Boolean)));
+}
+
+function judgeAverage(scores = {}) {
+    const nums = SOFT_SCORE_DIMENSIONS.map((d) => scores[d]).filter((v) => typeof v === 'number');
+    return nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : 0;
+}
+
+// Merge N panel judgments into the single shape qualityPass already consumes.
+// Per dimension we take the LOWEST panelist score: the goal is catching weak songs
+// reliably, so the strictest critic sets the bar (combineVerdict fails any dim < 7).
+// Issues and rewrite targets are unioned; the verdict line comes from the harshest
+// panelist; the full breakdown is kept for admin visibility.
+function mergeJudgePanel(results) {
+    const valid = (results || []).filter((r) => r && r.json && r.json.scores);
+    if (valid.length === 0) return null;
+
+    const scores = {};
+    for (const dim of SOFT_SCORE_DIMENSIONS) {
+        const vals = valid.map((r) => r.json.scores[dim]).filter((v) => typeof v === 'number');
+        if (vals.length) scores[dim] = Math.min(...vals);
+    }
+
+    const issues = dedupeStrings(valid.flatMap((r) => (Array.isArray(r.json.issues) ? r.json.issues : [])));
+    const rewriteTargets = dedupeStrings(valid.flatMap((r) => (Array.isArray(r.json.rewrite_targets) ? r.json.rewrite_targets : [])));
+
+    const harshest = valid.reduce(
+        (acc, r) => (judgeAverage(r.json.scores) < acc.avg ? { r, avg: judgeAverage(r.json.scores) } : acc),
+        { r: valid[0], avg: judgeAverage(valid[0].json.scores) }
+    );
+
+    return {
+        scores,
+        issues,
+        rewrite_targets: rewriteTargets,
+        one_line_verdict: harshest.r.json.one_line_verdict || '',
+        panel: valid.map((r) => ({
+            model: r.model,
+            scores: r.json.scores,
+            one_line_verdict: r.json.one_line_verdict || '',
+        })),
+    };
+}
+
 function nowIso() {
     return new Date().toISOString();
 }
@@ -530,27 +596,50 @@ class SongPipelineService {
 
     async qualityPass(state, client, passNum, comments) {
         const hard = runHardChecks(state);
-        const r = await client.run('judge', {
-            model: client.models.sonnet,
-            system: withGuidance(prompts.judge, comments.quality),
-            userContent: guardedPayload({
-                creative_brief: state.creative_brief,
-                selected_packs: state.selected_packs,
-                style_prompt: state.suno_output?.style_prompt,
-                lyrics: state.suno_output?.lyrics,
-                title_options: state.suno_output?.title_options,
-            }),
-            temperature: STAGE_TEMPERATURES.judge,
+        const system = withGuidance(prompts.judge, comments.quality);
+        const userContent = guardedPayload({
+            creative_brief: state.creative_brief,
+            selected_packs: state.selected_packs,
+            style_prompt: state.suno_output?.style_prompt,
+            lyrics: state.suno_output?.lyrics,
+            title_options: state.suno_output?.title_options,
         });
+        const judgeOne = (model) => client.run('judge', { model, system, userContent, temperature: STAGE_TEMPERATURES.judge });
+
+        // Mock mode runs a single judge so forced-failure test accounting stays 1:1.
+        const panelModels = client.mock ? [client.models.sonnet] : resolveJudgePanel(client.models.sonnet);
+
+        let merged;
+        if (panelModels.length <= 1) {
+            const r = await judgeOne(panelModels[0] || client.models.sonnet);
+            merged = mergeJudgePanel([r]);
+        } else {
+            const settled = await Promise.allSettled(panelModels.map(judgeOne));
+            const ok = settled.filter((s) => s.status === 'fulfilled').map((s) => s.value);
+            const failed = settled.length - ok.length;
+            if (failed) {
+                console.warn(`[SongPipeline] judge panel: ${failed}/${panelModels.length} model(s) failed — merging the rest`);
+            }
+            merged = mergeJudgePanel(ok);
+            // Total panel failure (e.g. all model IDs wrong / provider down): one last
+            // single-model attempt on the primary model so the pass can still complete.
+            if (!merged) merged = mergeJudgePanel([await judgeOne(client.models.sonnet)]);
+        }
+
         state.quality_report = {
             ...(state.quality_report || {}),
             hard_checks: hard,
-            soft_scores: r.json.scores,
-            soft_issues: r.json.issues,
-            soft_rewrite_targets: r.json.rewrite_targets,
-            soft_verdict: r.json.one_line_verdict,
+            soft_scores: merged.scores,
+            soft_issues: merged.issues,
+            soft_rewrite_targets: merged.rewrite_targets,
+            soft_verdict: merged.one_line_verdict,
+            soft_panel: merged.panel,
         };
-        state.stage_versions[`soft_quality_judge_pass${passNum}`] = { prompt_version: '2.0.0', model: r.model };
+        state.stage_versions[`soft_quality_judge_pass${passNum}`] = {
+            prompt_version: '2.0.0',
+            model: merged.panel.map((p) => p.model).join(' + '),
+            panel_size: merged.panel.length,
+        };
         const verdict = combineVerdict(state);
         state.quality_report.verdict = verdict;
         state.status = verdict.status;
@@ -635,4 +724,6 @@ module.exports = {
     shouldAutoRun,
     getAutoMode,
     normalizeDbGeneration,
+    mergeJudgePanel,
+    resolveJudgePanel,
 };

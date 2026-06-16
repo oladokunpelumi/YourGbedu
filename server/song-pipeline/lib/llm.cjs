@@ -276,6 +276,7 @@ function makeClient({
 
     return {
         run,
+        mock,
         models: { haiku: modelIntake, sonnet: modelSonnet },
         getUsage: () => ({ ...usage, provider: mock ? 'mock' : 'openrouter' }),
     };
