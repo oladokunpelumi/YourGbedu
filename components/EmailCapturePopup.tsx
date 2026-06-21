@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { X, Mail, Gift, Loader2 } from 'lucide-react';
 import { DISCOUNTED_PRICING, type PaymentProvider } from '../constants';
 import { paymentProviderFromGeo } from '../services/checkoutProvider';
+import { trackEvent } from '../services/analytics';
 
 type PopupState = 'idle' | 'submitting' | 'revealed' | 'error';
 
@@ -170,6 +171,7 @@ const EmailCapturePopup: React.FC = () => {
         setPromo(data.promo);
         setState('revealed');
         markSeen();
+        trackEvent('lead', { source: location.pathname });
       } catch (err) {
         setState('error');
         setErrorMessage(err instanceof Error ? err.message : 'Something went wrong. Please try again.');

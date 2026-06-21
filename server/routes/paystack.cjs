@@ -252,16 +252,32 @@ router.post('/webhook', (req, res) => {
 
             const customerEmail = metadata?.customerEmail || customer?.email;
             if (customerEmail) {
-                getEmailModule().sendConfirmationEmail({
-                    to: customerEmail,
-                    orderId: id,
-                    trackingToken,
-                    genre: metadata?.genre,
-                    mood: metadata?.mood,
-                    deliveryDate,
-                    reference,
-                    amountLabel: typeof amount === 'number' ? `₦${(amount / 100).toLocaleString('en-NG')}` : undefined,
+                const klaviyo = require('../services/klaviyo.cjs');
+                void klaviyo.track('Placed Order', {
+                    email: customerEmail,
+                    value: typeof amount === 'number' ? Math.round(amount) / 100 : undefined,
+                    uniqueId: id,
+                    properties: {
+                        order_id: id,
+                        occasion: metadata?.occasion || null,
+                        genre: metadata?.genre || null,
+                        recipient_type: metadata?.recipientType || null,
+                        provider: 'paystack',
+                    },
+                    profileProps: metadata?.senderName ? { first_name: metadata.senderName } : {},
                 });
+
+                if (!klaviyo.klaviyoOwnsTransactional()) {
+                    getEmailModule().sendConfirmationEmail({
+                        to: customerEmail,
+                        orderId: id,
+                        trackingToken,
+                        genre: metadata?.genre,
+                        deliveryDate,
+                        reference,
+                        amountLabel: typeof amount === 'number' ? `₦${(amount / 100).toLocaleString('en-NG')}` : undefined,
+                    });
+                }
             }
         } catch (err) {
             console.error('[Webhook] Error creating order:', err);

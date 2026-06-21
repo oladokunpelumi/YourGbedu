@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { loadStripe, type StripeEmbeddedCheckout } from '@stripe/stripe-js';
 import { PaymentProvider, getDiscountedPrice } from '../constants';
 import { paymentProviderFromGeo, reconcilePaymentProvider } from '../services/checkoutProvider';
+import { trackEvent } from '../services/analytics';
 
 type CheckoutStatus = 'loading' | 'ready' | 'processing' | 'success' | 'error';
 
@@ -215,10 +216,15 @@ const Checkout: React.FC = () => {
       sessionStorage.removeItem('yourgbedu_brief');
       sessionStorage.removeItem(BRIEF_DRAFT_STORAGE_KEY);
       clearPayFullPriceFlag();
+      trackEvent('purchase', {
+        transaction_id: id,
+        currency: brief?.paymentProvider === 'stripe' ? 'USD' : 'NGN',
+        value: promoQuote ? promoQuote.finalAmount / 100 : undefined,
+      });
       const tokenParam = trackingToken ? `&t=${encodeURIComponent(trackingToken)}` : '';
       setTimeout(() => navigate(`/track?id=${encodeURIComponent(id)}${tokenParam}`, { replace: false }), 3500);
     },
-    [navigate]
+    [navigate, brief, promoQuote]
   );
 
   const createOrderFromPayment = useCallback(
@@ -614,6 +620,10 @@ const Checkout: React.FC = () => {
     if (!providerResolved) return;
 
     initializedRef.current = true;
+    trackEvent('begin_checkout', {
+      currency: brief.paymentProvider === 'stripe' ? 'USD' : 'NGN',
+      fast_delivery: brief.fastDelivery,
+    });
     const start = brief.paymentProvider === 'stripe' ? startStripeCheckout : startPaystackCheckout;
     void start().catch((err) => {
       setStatus('error');

@@ -316,15 +316,35 @@ router.post('/free', async (req, res) => {
                 console.warn('Order: subscriber link skipped:', subErr.message);
             }
 
-            void getEmailModule().sendConfirmationEmail({
-                to: data.customerEmail,
-                orderId: order.id,
-                trackingToken: order.tracking_token,
-                genre: data.genre,
-                deliveryDate: order.delivery_date,
-                reference: order.promo_code_preview,
-                amountLabel: formatPaidAmount(0, data.paymentProvider === 'stripe' ? 'stripe' : 'paystack'),
+            const klaviyo = require('../services/klaviyo.cjs');
+            void klaviyo.track('Placed Order', {
+                email: data.customerEmail,
+                value: 0,
+                uniqueId: order.id,
+                properties: {
+                    order_id: order.id,
+                    occasion: order.occasion || data.occasion || null,
+                    genre: order.genre || data.genre || null,
+                    recipient_type: order.recipient_type || null,
+                    fast_delivery: isFastDelivery(data.fastDelivery),
+                    promo_code: order.promo_code_preview || null,
+                    free: true,
+                },
+                profileProps: order.sender_name ? { first_name: order.sender_name } : {},
             });
+
+            // Klaviyo owns the confirmation email once its flow is live; until then Resend sends it.
+            if (!klaviyo.klaviyoOwnsTransactional()) {
+                void getEmailModule().sendConfirmationEmail({
+                    to: data.customerEmail,
+                    orderId: order.id,
+                    trackingToken: order.tracking_token,
+                    genre: data.genre,
+                    deliveryDate: order.delivery_date,
+                    reference: order.promo_code_preview,
+                    amountLabel: formatPaidAmount(0, data.paymentProvider === 'stripe' ? 'stripe' : 'paystack'),
+                });
+            }
         }
 
         res.status(201).json(computeOrderProgress(order));
@@ -517,15 +537,33 @@ router.post('/', async (req, res) => {
                 console.warn('Order: subscriber link skipped:', subErr.message);
             }
 
-            void getEmailModule().sendConfirmationEmail({
-                to: customerEmail,
-                orderId: id,
-                trackingToken,
-                genre,
-                deliveryDate,
-                reference: paystackReference || stripeSessionId,
-                amountLabel: formatPaidAmount(verifiedAmount, paymentProvider),
+            const klaviyo = require('../services/klaviyo.cjs');
+            void klaviyo.track('Placed Order', {
+                email: customerEmail,
+                value: typeof verifiedAmount === 'number' ? Math.round(verifiedAmount) / 100 : undefined,
+                uniqueId: id,
+                properties: {
+                    order_id: id,
+                    occasion: occasion || null,
+                    genre: genre || null,
+                    recipient_type: recipientType || null,
+                    fast_delivery: isFastDelivery(fastDelivery),
+                    provider: paymentProvider,
+                },
+                profileProps: senderName ? { first_name: senderName } : {},
             });
+
+            if (!klaviyo.klaviyoOwnsTransactional()) {
+                void getEmailModule().sendConfirmationEmail({
+                    to: customerEmail,
+                    orderId: id,
+                    trackingToken,
+                    genre,
+                    deliveryDate,
+                    reference: paystackReference || stripeSessionId,
+                    amountLabel: formatPaidAmount(verifiedAmount, paymentProvider),
+                });
+            }
         }
         res.status(201).json(computeOrderProgress(order));
     } catch (err) {

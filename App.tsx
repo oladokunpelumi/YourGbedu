@@ -4,6 +4,7 @@ import Header from './components/Header';
 import Footer from './components/Footer';
 import PersistentPlayer from './components/PersistentPlayer';
 import EmailCapturePopup from './components/EmailCapturePopup';
+import AnalyticsConsent from './components/AnalyticsConsent';
 import Home from './pages/Home';
 import PaymentCancel from './pages/PaymentCancel';
 import Verify from './pages/Verify';
@@ -251,6 +252,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         {!isAdminRoute && <Footer />}
         {!isAdminRoute && !isCheckoutRoute && <PersistentPlayer />}
         {!isAdminRoute && <EmailCapturePopup />}
+        <AnalyticsConsent />
 
         {/* Background Texture Overlay */}
         <div

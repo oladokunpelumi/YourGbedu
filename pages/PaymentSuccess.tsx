@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { trackEvent } from '../services/analytics';
 
 const BRIEF_DRAFT_STORAGE_KEY = 'yourgbedu_brief_draft';
 
@@ -27,7 +28,7 @@ const PaymentSuccess: React.FC = () => {
     const briefRaw = sessionStorage.getItem('yourgbedu_brief');
     const brief = briefRaw ? JSON.parse(briefRaw) : {};
 
-    const finalize = (id: string, token?: string | null) => {
+    const finalize = (id: string, token?: string | null, amountMinor?: number | null, currency: 'USD' | 'NGN' = 'USD') => {
       setOrderId(id);
       setTrackingToken(token || null);
       setStatus('success');
@@ -35,6 +36,11 @@ const PaymentSuccess: React.FC = () => {
       if (token) sessionStorage.setItem('yourgbedu_track_token', token);
       sessionStorage.removeItem('yourgbedu_brief');
       sessionStorage.removeItem(BRIEF_DRAFT_STORAGE_KEY);
+      trackEvent('purchase', {
+        transaction_id: id,
+        currency,
+        value: typeof amountMinor === 'number' ? amountMinor / 100 : undefined,
+      });
       const tokenParam = token ? `&t=${encodeURIComponent(token)}` : '';
       setTimeout(() => {
         navigate(`/track?id=${encodeURIComponent(id)}${tokenParam}`, { replace: false });
@@ -87,7 +93,7 @@ const PaymentSuccess: React.FC = () => {
             setStatus('error');
             return;
           }
-          finalize(orderData.id, orderData.trackingToken);
+          finalize(orderData.id, orderData.trackingToken, verifyData.amount, 'USD');
         } else {
           const verifyRes = await fetch(`/api/paystack/verify/${paystackReference}`);
           const verifyData = await verifyRes.json().catch(() => null);
@@ -135,7 +141,7 @@ const PaymentSuccess: React.FC = () => {
             setStatus('error');
             return;
           }
-          finalize(orderData.id, orderData.trackingToken);
+          finalize(orderData.id, orderData.trackingToken, verifyData.amount, 'NGN');
         }
       } catch (err) {
         console.error('Order creation error:', err);
