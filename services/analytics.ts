@@ -7,8 +7,11 @@
  *
  * No IDs configured, or no consent → every call is a no-op.
  */
-const GA_ID = (import.meta.env.VITE_GA_MEASUREMENT_ID as string | undefined) || '';
-const META_PIXEL_ID = (import.meta.env.VITE_META_PIXEL_ID as string | undefined) || '';
+// Live YourGbedu measurement IDs, baked in as defaults (these are public client
+// IDs, not secrets — they ship to the browser regardless). Override per-env with
+// VITE_GA_MEASUREMENT_ID / VITE_META_PIXEL_ID (e.g. a staging property).
+const GA_ID = (import.meta.env.VITE_GA_MEASUREMENT_ID as string | undefined) || 'G-KVDJRERYQC';
+const META_PIXEL_ID = (import.meta.env.VITE_META_PIXEL_ID as string | undefined) || '1586133760190609';
 
 const CONSENT_KEY = 'yourgbedu_analytics_consent';
 
