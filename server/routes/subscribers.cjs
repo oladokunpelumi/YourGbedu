@@ -50,6 +50,14 @@ router.post('/', subscribeLimiter, async (req, res) => {
         const now = new Date().toISOString();
         await execSql('INSERT INTO subscribers (id, email, created_at, source) VALUES (?, ?, ?, ?)', id, email, now, source);
 
+        // Fire-and-forget: subscribe to the Klaviyo list (welcome flow) + event.
+        const klaviyo = require('../services/klaviyo.cjs');
+        void klaviyo.subscribeToList(email, { properties: { signup_source: source } });
+        void klaviyo.track('Subscribed to Promo', {
+            email,
+            properties: { source, promo_code: STANDARD_PROMO_CODE, discount_percent: STANDARD_DISCOUNT_PERCENT },
+        });
+
         res.status(201).json({
             subscriber: { email, createdAt: now },
             promo: { code: STANDARD_PROMO_CODE, discountPercent: STANDARD_DISCOUNT_PERCENT },

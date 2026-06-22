@@ -55,6 +55,23 @@ Song-generation pipeline:
 
 ---
 
+## Email Flows (Klaviyo) & Analytics
+
+The app **emits events**; the emails and reports are built in the respective dashboards. Everything is env-gated — unset keys mean no-op, so the app runs fine without any of it.
+
+**Klaviyo** (`server/services/klaviyo.cjs`). Events we send: `Subscribed to Promo` (popup), `Placed Order` (paid + free + Paystack webhook), `Song Delivered` (admin attaches the final song, includes the track URL). Set up:
+
+1. Set `KLAVIYO_PRIVATE_KEY` (Private API key, `pk_...`) and authenticate your sending domain (DKIM) in Klaviyo for deliverability.
+2. Create a list for the popup and put its ID in `KLAVIYO_PROMO_LIST_ID`.
+3. Build the Flows in Klaviyo, triggered by those events / the list join: welcome + promo code, abandoned checkout, order confirmation, song-ready (use the `track_url` event property for the "listen" button), review/reaction-video, win-back for non-converters. Admin alerts can be a flow filtered to your admin email on `Placed Order`.
+4. **Only after** the confirmation + song-ready flows are live, set `KLAVIYO_OWNS_TRANSACTIONAL=1` to stop Resend sending those two. The magic-link sign-in email **always** stays on Resend regardless.
+
+**GA4 + Meta Pixel** (`services/analytics.ts`, consent-gated). The live IDs (GA4 `G-KVDJRERYQC`, Meta Pixel `1586133760190609`) are baked in as defaults — override with `VITE_GA_MEASUREMENT_ID` / `VITE_META_PIXEL_ID` for a staging property. Scripts load only after the visitor accepts the cookie banner, and run from bundled JS (no inline `<script>` in `index.html`) so the strict prod CSP holds. Events: `page_view` on every route, `lead` (popup), `begin_checkout`, `purchase`. The server CSP already allowlists the GA/Meta origins. (Optional later: Meta Conversions API for server-side, ad-blocker-proof purchase tracking.)
+
+⚠️ Never send the customer's personal song text (heart message, memories) to Klaviyo or analytics — only commerce properties (occasion, genre, recipient type, amount, order id) are emitted, by design.
+
+---
+
 ## Who It Is For
 
 YourGbedu is for anyone who wants to give a gift that truly stands out. It is ideal for people celebrating birthdays, weddings, anniversaries, graduations, or any milestone worth marking. It is also a meaningful tool for brands and creators looking to offer personalised musical experiences to their audiences. If you believe the people you love deserve something more than a card, YourGbedu was built for you.

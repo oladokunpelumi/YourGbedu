@@ -58,6 +58,19 @@ function parseOriginList(value) {
 
 const MEDIA_CDN_ORIGINS = parseOriginList(process.env.MEDIA_CDN_ORIGINS);
 const mediaFallback = MEDIA_CDN_ORIGINS.length === 0;
+
+// Analytics origins — GA4 + Meta Pixel. Their init runs from our bundled JS
+// (no inline script needed, so prod CSP keeps scriptSrc strict). Only the
+// external loaders + beacon endpoints need allowlisting.
+const ANALYTICS_SCRIPT_SRC = ['https://www.googletagmanager.com', 'https://connect.facebook.net'];
+const ANALYTICS_CONNECT_SRC = [
+    'https://www.google-analytics.com',
+    'https://*.google-analytics.com',
+    'https://*.analytics.google.com',
+    'https://www.facebook.com',
+    'https://connect.facebook.net',
+];
+const ANALYTICS_IMG_SRC = ['https://www.google-analytics.com', 'https://www.facebook.com'];
 if (IS_PROD && mediaFallback) {
     console.warn('[CSP] MEDIA_CDN_ORIGINS is not set; falling back to broad https: media/image sources.');
 }
@@ -82,10 +95,11 @@ app.use(helmet({
                 ...(IS_PROD ? [] : ["'unsafe-inline'"]),
                 'https://js.stripe.com',
                 'https://js.paystack.co',
+                ...ANALYTICS_SCRIPT_SRC,
             ],
             styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
             fontSrc: ["'self'", 'https://fonts.gstatic.com', 'https://fonts.googleapis.com'],
-            imgSrc: ["'self'", 'data:', 'blob:', ...MEDIA_CDN_ORIGINS, ...(mediaFallback ? ['https:'] : [])],
+            imgSrc: ["'self'", 'data:', 'blob:', ...ANALYTICS_IMG_SRC, ...MEDIA_CDN_ORIGINS, ...(mediaFallback ? ['https:'] : [])],
             mediaSrc: ["'self'", 'blob:', 'data:', ...MEDIA_CDN_ORIGINS, ...(mediaFallback ? ['https:'] : [])],
             connectSrc: [
                 "'self'",
@@ -95,6 +109,7 @@ app.use(helmet({
                 'https://r.stripe.com',
                 'https://m.stripe.network',
                 'https://ipapi.co',
+                ...ANALYTICS_CONNECT_SRC,
             ],
             frameSrc: [
                 "'self'",

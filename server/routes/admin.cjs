@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit');
 const { generateToken, requireAdmin, revokeToken, COOKIE_OPTS } = require('../middleware/auth.cjs');
 const { createOneTimeFreeCode, listOneTimeCodes, disablePromoCode } = require('../promos.cjs');
 const { getOne, getAll, execSql, pgVariantSql } = require('../db-helpers.cjs');
+const klaviyo = require('../services/klaviyo.cjs');
 const adminGenerationRouter = require('./admin-generation.cjs');
 
 // Strict in production, forgiving in local development so a typo does not
@@ -314,7 +315,7 @@ router.patch('/orders/:id/status', requireAdmin, async (req, res) => {
 
         const order = await getOne('SELECT * FROM orders WHERE id = ?', req.params.id);
 
-        if (status === 'completed' && order?.customer_email) {
+        if (status === 'completed' && order?.customer_email && !klaviyo.klaviyoOwnsTransactional()) {
             getEmailModule().sendCompletionEmail({
                 to: order.customer_email,
                 orderId: order.id,
@@ -457,14 +458,30 @@ router.post('/orders/:id/song', requireAdmin, async (req, res) => {
         const order = await getOne('SELECT * FROM orders WHERE id = ?', req.params.id);
 
         if (order?.customer_email) {
-            void getEmailModule().sendCompletionEmail({
-                to: order.customer_email,
-                orderId: order.id,
-                trackingToken: order.tracking_token,
-                genre: order.genre,
-                senderName: order.sender_name,
-                recipientType: order.recipient_type,
+            const emailModule = getEmailModule();
+            void klaviyo.track('Song Delivered', {
+                email: order.customer_email,
+                uniqueId: `${order.id}:delivered`,
+                properties: {
+                    order_id: order.id,
+                    genre: order.genre || null,
+                    recipient_type: order.recipient_type || null,
+                    final_song_title: order.final_song_title || null,
+                    track_url: emailModule.getTrackUrl(order.id, order.tracking_token),
+                },
+                profileProps: order.sender_name ? { first_name: order.sender_name } : {},
             });
+
+            if (!klaviyo.klaviyoOwnsTransactional()) {
+                void emailModule.sendCompletionEmail({
+                    to: order.customer_email,
+                    orderId: order.id,
+                    trackingToken: order.tracking_token,
+                    genre: order.genre,
+                    senderName: order.sender_name,
+                    recipientType: order.recipient_type,
+                });
+            }
         }
 
         res.json(order);
