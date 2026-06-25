@@ -100,6 +100,24 @@ router.post('/initialize', async (req, res) => {
         const data = await response.json();
 
         if (data.status) {
+            // Abandoned-checkout signal for the Win-Back flow. Only for a real email
+            // (not the guest placeholder); fire-and-forget, env-gated.
+            if (email) {
+                require('../services/klaviyo.cjs').track('Started Checkout', {
+                    email,
+                    properties: {
+                        sender_name: safeMetadataValue(resolvedMetadata.senderName),
+                        recipient_name: safeMetadataValue(resolvedMetadata.recipientName),
+                        recipient_type: safeMetadataValue(resolvedMetadata.recipientType),
+                        occasion: safeMetadataValue(resolvedMetadata.occasion),
+                        genre: safeMetadataValue(resolvedMetadata.genre),
+                        fast_delivery: isFastDelivery(resolvedMetadata.fastDelivery),
+                        provider: 'paystack',
+                        promo_code: 'YOURGBEDU50',
+                    },
+                    profileProps: resolvedMetadata.senderName ? { first_name: safeMetadataValue(resolvedMetadata.senderName) } : {},
+                });
+            }
             res.json({
                 authorization_url: data.data.authorization_url,
                 access_code: data.data.access_code,

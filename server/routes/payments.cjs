@@ -94,6 +94,26 @@ router.post('/create-checkout-session', async (req, res) => {
 
         const session = await getStripeClient().checkout.sessions.create(sessionOptions);
 
+        // Abandoned-checkout signal for the Win-Back flow. Only for a real email
+        // (not the guest placeholder); fire-and-forget, env-gated.
+        const realEmail = email || customerEmail;
+        if (realEmail) {
+            require('../services/klaviyo.cjs').track('Started Checkout', {
+                email: realEmail,
+                properties: {
+                    sender_name: senderName || '',
+                    recipient_name: req.body.recipientName || '',
+                    recipient_type: recipientType || '',
+                    occasion: occasion || '',
+                    genre: genre || '',
+                    fast_delivery: !!fastDelivery,
+                    provider: 'stripe',
+                    promo_code: 'YOURGBEDU50',
+                },
+                profileProps: senderName ? { first_name: senderName } : {},
+            });
+        }
+
         res.json({ url: session.url, sessionId: session.id, clientSecret: session.client_secret });
     } catch (err) {
         console.error('[Stripe] Checkout session error:', err);
