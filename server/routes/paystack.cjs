@@ -296,6 +296,16 @@ router.post('/webhook', (req, res) => {
                         amountLabel: typeof amount === 'number' ? `₦${(amount / 100).toLocaleString('en-NG')}` : undefined,
                     });
                 }
+
+                void getEmailModule().sendAdminNewOrderEmail({
+                    orderId: id,
+                    occasion: metadata?.occasion,
+                    genre: metadata?.genre,
+                    recipientType: metadata?.recipientType,
+                    fastDelivery: isFastDelivery(metadata?.fastDelivery),
+                    amountLabel: typeof amount === 'number' ? `₦${(amount / 100).toLocaleString('en-NG')}` : undefined,
+                    customerEmail,
+                });
             }
         } catch (err) {
             console.error('[Webhook] Error creating order:', err);

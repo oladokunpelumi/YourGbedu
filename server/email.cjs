@@ -45,6 +45,10 @@ function getTrackUrl(orderId, trackingToken) {
   return `${getClientUrl()}/#/track?id=${encodeURIComponent(orderId)}${tokenParam}`;
 }
 
+function getBrandLogoUrl() {
+  return `${getClientUrl()}/brand/logo-wordmark.png`;
+}
+
 function getVerifyUrl({ clientUrl, token }) {
   return `${normalizeClientUrl(clientUrl)}/#/verify?token=${encodeURIComponent(token)}`;
 }
@@ -118,6 +122,7 @@ async function sendConfirmationEmail({ to, orderId, trackingToken, genre, delive
   const safeReference = escapeHtml(reference);
   const safeAmount    = escapeHtml(amountLabel || 'Paid');
   const trackUrl      = getTrackUrl(orderId, trackingToken);
+  const brandLogoUrl  = getBrandLogoUrl();
 
   const html = `
 <!DOCTYPE html>
@@ -128,6 +133,8 @@ async function sendConfirmationEmail({ to, orderId, trackingToken, genre, delive
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #FAF6EE; color: #1F1B14; margin: 0; padding: 0; }
     .container { max-width: 560px; margin: 40px auto; background: #FFFDF6; border-radius: 18px; overflow: hidden; border: 1px solid #E5DDD0; }
     .header { background: #1F1B14; padding: 40px 32px; text-align: center; }
+    .brand-logo { display:block; width:220px; max-width:82%; height:auto; margin:0 auto 8px; }
+    .brand-text { margin:0; font-size:30px; color:#FFFDF6; letter-spacing:-0.2px; font-family:Georgia, serif; font-style:italic; font-weight:500; }
     .header h1 { margin: 0; font-size: 30px; color: #FFFDF6; letter-spacing: -0.2px; font-family: Georgia, serif; font-style: italic; font-weight: 500; }
     .header p { margin: 8px 0 0; color: rgba(255,253,246,0.72); font-size: 14px; }
     .body { padding: 32px; }
@@ -144,7 +151,8 @@ async function sendConfirmationEmail({ to, orderId, trackingToken, genre, delive
 <body>
   <div class="container">
     <div class="header">
-      <h1>YourGbedu</h1>
+      <img class="brand-logo" src="${brandLogoUrl}" width="220" alt="YourGbedu">
+      <div class="brand-text">YourGbedu</div>
       <p>Your custom song is in production!</p>
     </div>
     <div class="body">
@@ -190,6 +198,7 @@ async function sendConfirmationEmail({ to, orderId, trackingToken, genre, delive
  */
 async function sendMagicLinkEmail({ to, token, clientUrl }) {
   const loginUrl = getVerifyUrl({ clientUrl, token });
+  const brandLogoUrl = getBrandLogoUrl();
   const { client: resend, reason } = getResendClientStatus();
   if (!resend) {
     const devLinkLogged = process.env.NODE_ENV !== 'production' && process.env.DEV_MAGIC_LINK_LOG !== 'false';
@@ -211,6 +220,8 @@ async function sendMagicLinkEmail({ to, token, clientUrl }) {
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #FAF6EE; color: #1F1B14; margin: 0; padding: 0; }
     .container { max-width: 540px; margin: 40px auto; background: #FFFDF6; border-radius: 16px; overflow: hidden; border: 1px solid #E5DDD0; }
     .header { background: #1F1B14; padding: 40px 32px; text-align: center; }
+    .brand-logo { display:block; width:220px; max-width:82%; height:auto; margin:0 auto 8px; }
+    .brand-text { margin:0; font-size:30px; color:#FFFDF6; font-family:Georgia, serif; font-style:italic; font-weight:500; }
     .header h1 { margin: 0; font-size: 30px; color: #FFFDF6; font-family: Georgia, serif; font-style: italic; font-weight: 500; }
     .header p { margin: 8px 0 0; color: rgba(255,253,246,0.72); font-size: 14px; }
     .body { padding: 32px; text-align: center; }
@@ -222,7 +233,8 @@ async function sendMagicLinkEmail({ to, token, clientUrl }) {
 <body>
   <div class="container">
     <div class="header">
-      <h1>YourGbedu</h1>
+      <img class="brand-logo" src="${brandLogoUrl}" width="220" alt="YourGbedu">
+      <div class="brand-text">YourGbedu</div>
       <p>Open your order tracker</p>
     </div>
     <div class="body">
@@ -272,6 +284,7 @@ async function sendCompletionEmail({ to, orderId, trackingToken, genre, senderNa
   const safeSenderName    = escapeHtml(senderName);
   const safeRecipientType = escapeHtml(recipientType);
   const trackUrl          = getTrackUrl(orderId, trackingToken);
+  const brandLogoUrl      = getBrandLogoUrl();
 
   const html = `
 <!DOCTYPE html>
@@ -282,6 +295,8 @@ async function sendCompletionEmail({ to, orderId, trackingToken, genre, senderNa
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #FAF6EE; color: #1F1B14; margin: 0; padding: 0; }
     .container { max-width: 540px; margin: 40px auto; background: #FFFDF6; border-radius: 16px; overflow: hidden; border: 1px solid #E5DDD0; }
     .header { background: #5D6A42; padding: 40px 32px; text-align: center; }
+    .brand-logo { display:block; width:220px; max-width:82%; height:auto; margin:0 auto 8px; }
+    .brand-text { margin:0; font-size:30px; color:#FFFDF6; font-family:Georgia, serif; font-style:italic; font-weight:500; }
     .header h1 { margin: 0; font-size: 30px; color: #FFFDF6; font-family: Georgia, serif; font-style: italic; font-weight: 500; }
     .header p { margin: 8px 0 0; color: rgba(255,253,246,0.82); font-size: 14px; }
     .body { padding: 32px; }
@@ -299,7 +314,8 @@ async function sendCompletionEmail({ to, orderId, trackingToken, genre, senderNa
 <body>
   <div class="container">
     <div class="header">
-      <h1>YourGbedu</h1>
+      <img class="brand-logo" src="${brandLogoUrl}" width="220" alt="YourGbedu">
+      <div class="brand-text">YourGbedu</div>
       <p>Your custom song is ready!</p>
     </div>
     <div class="body">
@@ -343,10 +359,82 @@ async function sendCompletionEmail({ to, orderId, trackingToken, genre, senderNa
   }
 }
 
+/**
+ * Internal alert to the operator when a new order comes in. Sent via Resend to
+ * ADMIN_EMAIL (never to the customer). No-op if ADMIN_EMAIL or Resend is unset.
+ * @param {object} params
+ * @param {string} params.orderId   Full order UUID
+ * @param {string} [params.occasion]
+ * @param {string} [params.genre]
+ * @param {string} [params.recipientType]
+ * @param {boolean} [params.fastDelivery]
+ * @param {string} [params.amountLabel]
+ * @param {string} [params.customerEmail]
+ */
+async function sendAdminNewOrderEmail({ orderId, occasion, genre, recipientType, fastDelivery, amountLabel, customerEmail }) {
+  const adminEmail = process.env.ADMIN_EMAIL;
+  if (!adminEmail) return skippedEmailResult('admin_new_order', 'admin', 'admin_email_not_configured');
+
+  const { client: resend, reason } = getResendClientStatus();
+  if (!resend) return skippedEmailResult('admin_new_order', adminEmail, reason);
+
+  const shortId   = escapeHtml(String(orderId || '').slice(0, 8).toUpperCase());
+  const adminUrl  = `${getClientUrl()}/#/admin`;
+  const rows = [
+    ['Order', `#${shortId}`],
+    ['Occasion', escapeHtml(occasion || '—')],
+    ['Genre', escapeHtml(genre || '—')],
+    ['For', escapeHtml(recipientType || '—')],
+    ['Delivery', fastDelivery ? '24-hour (fast)' : '48-hour'],
+    ['Amount', escapeHtml(amountLabel || '—')],
+    ['Customer', escapeHtml(customerEmail || '—')],
+  ].map(([k, v]) => `<div class="row"><span class="label">${k}</span><span class="value">${v}</span></div>`).join('');
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><style>
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#FAF6EE; color:#1F1B14; margin:0; padding:0; }
+  .container { max-width:520px; margin:32px auto; background:#FFFDF6; border-radius:16px; overflow:hidden; border:1px solid #E5DDD0; }
+  .header { background:#1F1B14; padding:28px 32px; }
+  .header h1 { margin:0; font-size:18px; color:#FFFDF6; font-weight:700; letter-spacing:0.02em; }
+  .body { padding:24px 32px; }
+  .row { display:flex; justify-content:space-between; gap:16px; padding:10px 0; border-bottom:1px solid #E5DDD0; }
+  .row:last-child { border-bottom:none; }
+  .label { color:#8B7F6C; font-size:12px; text-transform:uppercase; letter-spacing:0.1em; font-weight:700; }
+  .value { color:#1F1B14; font-size:13px; font-weight:700; text-align:right; }
+  .cta { display:block; margin:22px 0 0; padding:13px; background:#943B2F; color:#FFFDF6; text-decoration:none; border-radius:999px; text-align:center; font-weight:800; font-size:13px; text-transform:uppercase; letter-spacing:0.1em; }
+</style></head>
+<body>
+  <div class="container">
+    <div class="header"><h1>New order received</h1></div>
+    <div class="body">
+      <div>${rows}</div>
+      <a href="${adminUrl}" class="cta">Open admin dashboard</a>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  try {
+    const result = await resend.emails.send({
+      from: getFromEmail(),
+      to: adminEmail,
+      subject: `🟠 New YourGbedu order #${shortId} — ${escapeHtml(occasion || 'custom song')}`,
+      html,
+    });
+    if (result.error) return failedEmailResult('admin_new_order', adminEmail, 'resend_rejected', result.error);
+    return sentEmailResult('admin_new_order', adminEmail, result);
+  } catch (err) {
+    return failedEmailResult('admin_new_order', adminEmail, 'send_exception', err);
+  }
+}
+
 module.exports = {
   sendConfirmationEmail,
   sendMagicLinkEmail,
   sendCompletionEmail,
+  sendAdminNewOrderEmail,
   getTrackUrl,
   getVerifyUrl,
 };

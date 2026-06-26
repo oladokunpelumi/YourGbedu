@@ -22,6 +22,22 @@ describe('email URL helpers', () => {
   });
 });
 
+describe('sendAdminNewOrderEmail', () => {
+  it('no-ops when ADMIN_EMAIL is not configured', async () => {
+    vi.stubEnv('ADMIN_EMAIL', '');
+    const res = await email.sendAdminNewOrderEmail({ orderId: 'abc12345-0000-0000-0000-000000000000', occasion: 'birthday' });
+    expect(res).toMatchObject({ ok: false, skipped: true, reason: 'admin_email_not_configured' });
+  });
+
+  it('skips (without throwing) when ADMIN_EMAIL is set but Resend is not configured', async () => {
+    vi.stubEnv('ADMIN_EMAIL', 'ops@yourgbedu.com');
+    vi.stubEnv('RESEND_API_KEY', 're_placeholder');
+    const res = await email.sendAdminNewOrderEmail({ orderId: 'abc12345-0000-0000-0000-000000000000', occasion: 'birthday', genre: 'Afro-R&B' });
+    expect(res.ok).toBe(false);
+    expect(res.skipped).toBe(true);
+  });
+});
+
 describe('sendMagicLinkEmail diagnostics', () => {
   it('logs a dev preview URL when Resend is not configured outside production', async () => {
     vi.stubEnv('NODE_ENV', 'development');
