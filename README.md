@@ -63,7 +63,9 @@ The app **emits events**; the emails and reports are built in the respective das
 
 1. Set `KLAVIYO_PRIVATE_KEY` (Private API key, `pk_...`) and authenticate your sending domain (DKIM) in Klaviyo for deliverability.
 2. Create a list for the popup and put its ID in `KLAVIYO_PROMO_LIST_ID`.
-3. Build the Flows in Klaviyo, triggered by those events / the list join: welcome + promo code, abandoned checkout, order confirmation, song-ready (use the `track_url` event property for the "listen" button), review/reaction-video, win-back for non-converters. Admin alerts can be a flow filtered to your admin email on `Placed Order`.
+3. Build the Flows in Klaviyo, triggered by those events / the list join: welcome + promo code, abandoned checkout / win-back (trigger on the `Started Checkout` metric, delay, then a conditional split that exits if `Placed Order` happened), order confirmation, song-ready (use the `track_url` event property for the "listen" button), review/reaction-video.
+
+**Admin "new order" alert** is server-side (not a Klaviyo flow): on every new order the server sends an internal email to `ADMIN_EMAIL` via Resend (`sendAdminNewOrderEmail`) with the order details + an admin-dashboard link. No-op if `ADMIN_EMAIL` is unset. Always fires, independent of the customer-email cutover.
 4. **Only after** the confirmation + song-ready flows are live, set `KLAVIYO_OWNS_TRANSACTIONAL=1` to stop Resend sending those two. The magic-link sign-in email **always** stays on Resend regardless.
 
 **GA4 + Meta Pixel** (`services/analytics.ts`, consent-gated). The live IDs (GA4 `G-KVDJRERYQC`, Meta Pixel `1586133760190609`) are baked in as defaults — override with `VITE_GA_MEASUREMENT_ID` / `VITE_META_PIXEL_ID` for a staging property. Scripts load only after the visitor accepts the cookie banner, and run from bundled JS (no inline `<script>` in `index.html`) so the strict prod CSP holds. Events: `page_view` on every route, `lead` (popup), `begin_checkout`, `purchase`. The server CSP already allowlists the GA/Meta origins. (Optional later: Meta Conversions API for server-side, ad-blocker-proof purchase tracking.)

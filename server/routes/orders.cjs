@@ -347,6 +347,17 @@ router.post('/free', async (req, res) => {
             }
         }
 
+        // Internal operator alert — always (independent of the customer-email cutover).
+        void getEmailModule().sendAdminNewOrderEmail({
+            orderId: order.id,
+            occasion: order.occasion,
+            genre: order.genre,
+            recipientType: order.recipient_type,
+            fastDelivery: isFastDelivery(data.fastDelivery),
+            amountLabel: formatPaidAmount(0, data.paymentProvider === 'stripe' ? 'stripe' : 'paystack'),
+            customerEmail: data.customerEmail || null,
+        });
+
         res.status(201).json(computeOrderProgress(order));
     } catch (err) {
         if (!err.statusCode || err.statusCode >= 500) {
@@ -565,6 +576,17 @@ router.post('/', async (req, res) => {
                 });
             }
         }
+
+        void getEmailModule().sendAdminNewOrderEmail({
+            orderId: id,
+            occasion,
+            genre,
+            recipientType,
+            fastDelivery: isFastDelivery(fastDelivery),
+            amountLabel: formatPaidAmount(verifiedAmount, paymentProvider),
+            customerEmail: customerEmail || null,
+        });
+
         res.status(201).json(computeOrderProgress(order));
     } catch (err) {
         console.error('Error creating order:', err);
