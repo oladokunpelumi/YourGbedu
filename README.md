@@ -40,6 +40,8 @@ Large catalogue media (the sample MP3s and cover images) is intentionally **not*
 2. Set `MEDIA_BASE_URL` to that origin (no trailing slash), e.g. `MEDIA_BASE_URL=https://cdn.yourgbedu.com`. On boot, the catalogue seeds rewrite every relative `/musics/...` path to `${MEDIA_BASE_URL}/musics/...` (idempotent; a no-op in dev where `MEDIA_BASE_URL` is unset and files are served locally).
 3. Set `MEDIA_CDN_ORIGINS` to the comma-separated HTTPS origins the CSP should allow for images/audio, e.g. `https://cdn.yourgbedu.com`. If unset, the CSP falls back to a broad `https:` source and logs a warning.
 
+**Homepage demo video:** the "Hear it come to life" video (`pages/Home.tsx`) is a hardcoded frontend asset, not a DB catalogue entry, so the server-side `MEDIA_BASE_URL` rewrite doesn't reach it. Upload `Anniversary_Music_Video.mp4` to the same CDN bucket under `musics/Music Video/Anniversary_Music_Video.mp4`, and set `VITE_MEDIA_BASE_URL` (same origin as `MEDIA_BASE_URL`) **before running the production build** — Vite env vars are baked in at build time, not read at server runtime. Unset, it falls back to the local `/musics` route (dev-only; 404s in production since `musics/` is gitignored).
+
 ## Environment Variables
 
 Copy `.env.example` to `.env.local` and fill in. Required in production: `JWT_SECRET` (server refuses to boot without it), `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `PAYSTACK_SECRET_KEY`, `CLIENT_URL`, `DATABASE_URL` (Postgres; falls back to local SQLite when unset).
@@ -52,6 +54,26 @@ Song-generation pipeline:
 - `SONG_PIPELINE_CONCURRENCY` — max concurrent generations (default 2).
 - `SONG_PIPELINE_RETENTION_DAYS` — days before completed generations' intermediate state is purged (default 90; `0` disables).
 - `SONG_PIPELINE_MOCK` — `1` to run the pipeline with a mock LLM (used by tests; no API spend).
+
+---
+
+## Payments (Stripe + Paystack)
+
+Currency is chosen server-side from the visitor's geo (`GET /api/checkout-config`), never by the client. Everyone outside Nigeria pays USD via Stripe. Nigeria's provider is a switch:
+
+| `NGN_PAYMENT_PROVIDER` | Nigeria pays via | Notes |
+| --- | --- | --- |
+| unset / `paystack` (default) | Paystack, NGN | Current, proven behavior. No change until you flip the switch. |
+| `stripe` | Stripe, NGN (`ng_card`) | Consolidates both currencies onto one dashboard. Requires the prerequisites below. |
+
+**To turn on Stripe-for-Naira:**
+
+1. In the Stripe Dashboard, enable **Nigerian cards** under Settings → Payment methods.
+2. Create a webhook endpoint for `checkout.session.completed` pointing at `https://<your-domain>/api/stripe/webhook`, and set its signing secret as `STRIPE_WEBHOOK_SECRET`. This is required — it's the authoritative order-creator for Stripe payments (the client-side fallback, `POST /api/orders`, can miss a paid order if the customer closes the tab right after paying).
+3. Set `NGN_PAYMENT_PROVIDER=stripe`.
+4. To roll back instantly, unset it (or set it back to `paystack`) — Paystack's code path, webhook, and env vars are untouched and stay fully functional as a fallback.
+
+Pricing is currency-keyed, not provider-keyed (`server/pricing.cjs`) — Stripe charges the same NGN amounts Paystack does when handling Naira. Amounts are always server-calculated and re-validated against the currency actually charged (never trusted from the client or from unmatched metadata).
 
 ---
 

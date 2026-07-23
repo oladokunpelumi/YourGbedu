@@ -19,33 +19,50 @@ function isFastDelivery(value) {
     return value === true || value === 'true' || value === 1 || value === '1';
 }
 
+function normalizeCurrency(currency) {
+    const lower = String(currency || '').toLowerCase();
+    return lower === 'usd' ? 'usd' : 'ngn';
+}
+
+// Currency-keyed pricing — the source of truth. Provider no longer implies
+// currency: Stripe can charge NGN (via ng_card) or USD depending on geo/config.
+function getAmount(currency, fastDelivery) {
+    const table = PRICING[normalizeCurrency(currency)];
+    const fast = isFastDelivery(fastDelivery);
+    if (table === PRICING.ngn) return fast ? table.fastDeliveryKobo : table.standardKobo;
+    return fast ? table.fastDeliveryCents : table.standardCents;
+}
+
+function getOriginalAmount(currency, fastDelivery) {
+    const table = PRICING[normalizeCurrency(currency)];
+    const fast = isFastDelivery(fastDelivery);
+    if (table === PRICING.ngn) return fast ? table.fastDeliveryOriginalKobo : table.standardOriginalKobo;
+    return fast ? table.fastDeliveryOriginalCents : table.standardOriginalCents;
+}
+
+// Legacy provider-keyed helpers — kept for the Paystack fallback path.
 function getPaystackAmountKobo(metadata = {}) {
-    return isFastDelivery(metadata.fastDelivery)
-        ? PRICING.ngn.fastDeliveryKobo
-        : PRICING.ngn.standardKobo;
+    return getAmount('ngn', metadata.fastDelivery);
 }
 
 function getPaystackOriginalAmountKobo(metadata = {}) {
-    return isFastDelivery(metadata.fastDelivery)
-        ? PRICING.ngn.fastDeliveryOriginalKobo
-        : PRICING.ngn.standardOriginalKobo;
+    return getOriginalAmount('ngn', metadata.fastDelivery);
 }
 
 function getStripeAmountCents(fastDelivery) {
-    return isFastDelivery(fastDelivery)
-        ? PRICING.usd.fastDeliveryCents
-        : PRICING.usd.standardCents;
+    return getAmount('usd', fastDelivery);
 }
 
 function getStripeOriginalAmountCents(fastDelivery) {
-    return isFastDelivery(fastDelivery)
-        ? PRICING.usd.fastDeliveryOriginalCents
-        : PRICING.usd.standardOriginalCents;
+    return getOriginalAmount('usd', fastDelivery);
 }
 
 module.exports = {
     PRICING,
     isFastDelivery,
+    normalizeCurrency,
+    getAmount,
+    getOriginalAmount,
     getPaystackAmountKobo,
     getPaystackOriginalAmountKobo,
     getStripeAmountCents,

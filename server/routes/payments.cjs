@@ -11,6 +11,27 @@ function getStripeClient() {
     return stripeClient;
 }
 
+// Indirection (rather than a direct top-level require) so tests can inject a
+// deterministic geo result without depending on module-mock/CJS interop.
+let detectCountry = require('./geo.cjs').detectCountryFromRequest;
+
+// Nigeria's provider is switchable (Paystack today, Stripe once NGN-via-Stripe
+// success rates are proven); NGN_PAYMENT_PROVIDER unset/anything-but-'stripe'
+// keeps current behavior. Everywhere else is always Stripe/USD.
+function resolveCheckoutConfig(isNigeria) {
+    if (!isNigeria) return { provider: 'stripe', currency: 'usd' };
+    const ngnProvider = process.env.NGN_PAYMENT_PROVIDER === 'stripe' ? 'stripe' : 'paystack';
+    return { provider: ngnProvider, currency: 'ngn' };
+}
+
+// GET /api/checkout-config — server-side source of truth for which provider
+// and currency a checkout should use. Replaces the old client-side geo
+// inference (client can't be trusted to pick its own price/currency).
+router.get('/checkout-config', async (req, res) => {
+    const geo = await detectCountry(req);
+    res.json({ ...resolveCheckoutConfig(geo.isNigeria), country: geo.country });
+});
+
 // POST /api/create-checkout-session
 router.post('/create-checkout-session', async (req, res) => {
     try {
@@ -34,8 +55,13 @@ router.post('/create-checkout-session', async (req, res) => {
         } = req.body;
 
         const resolvedEmail = email || customerEmail || 'guest@yourgbedu.com';
+        // Currency is derived from server-side geo detection, never from the
+        // client — a client can't pick its own (possibly cheaper) currency.
+        const geo = await detectCountry(req);
+        const { currency } = resolveCheckoutConfig(geo.isNigeria);
         const quote = await quoteCheckout({
             provider: 'stripe',
+            currency,
             fastDelivery,
             promoCode,
             fullPrice,
@@ -62,13 +88,12 @@ router.post('/create-checkout-session', async (req, res) => {
         };
 
         const sessionOptions = {
-            payment_method_types: ['card'],
             mode: 'payment',
             customer_email: resolvedEmail,
             line_items: [
                 {
                     price_data: {
-                        currency: 'usd',
+                        currency,
                         product_data: {
                             name: 'Custom Song — YourGbedu' + (fastDelivery ? ' (24-Hour Fast Delivery)' : ''),
                             description: `A personalised ${genre || 'custom'} song crafted just for your ${recipientType || 'loved one'}.`,
@@ -80,6 +105,16 @@ router.post('/create-checkout-session', async (req, res) => {
             ],
             metadata,
         };
+
+        // For USD, pin to card explicitly (existing behavior). For NGN, omit
+        // payment_method_types entirely so Checkout's dynamic payment methods can
+        // surface Naira-issued cards (ng_card) once enabled in the Dashboard —
+        // Checkout Sessions use dynamic payment methods automatically when this
+        // field is left unset; `automatic_payment_methods` is a Payment Intents
+        // API field and is invalid here (confirmed via a live test-mode probe).
+        if (currency !== 'ngn') {
+            sessionOptions.payment_method_types = ['card'];
+        }
 
         if (embedded) {
             sessionOptions.ui_mode = 'embedded';
@@ -108,7 +143,8 @@ router.post('/create-checkout-session', async (req, res) => {
                     genre: genre || '',
                     fast_delivery: !!fastDelivery,
                     provider: 'stripe',
-                    promo_code: 'YOURGBEDU50',
+                    currency,
+                    promo_code: quote.promo?.codePreview || promoCode || '',
                 },
                 profileProps: senderName ? { first_name: senderName } : {},
             });
@@ -127,7 +163,8 @@ router.get('/verify-session/:sessionId', async (req, res) => {
         const session = await getStripeClient().checkout.sessions.retrieve(req.params.sessionId);
         res.json({
             paid: session.payment_status === 'paid',
-            amount: session.amount_total, // in cents
+            amount: session.amount_total, // in cents/kobo, per session.currency
+            currency: session.currency,
             customerEmail: session.customer_details?.email || session.customer_email,
             metadata: session.metadata,
         });
@@ -141,4 +178,9 @@ router.__setStripeClientForTests = (client) => {
     stripeClient = client;
 };
 
+router.__setDetectCountryForTests = (fn) => {
+    detectCountry = fn;
+};
+
 module.exports = router;
+module.exports.resolveCheckoutConfig = resolveCheckoutConfig;

@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { X, Mail, Gift, Loader2 } from 'lucide-react';
-import { DISCOUNTED_PRICING, type PaymentProvider } from '../constants';
-import { paymentProviderFromGeo } from '../services/checkoutProvider';
+import { DISCOUNTED_PRICING_BY_CURRENCY, type Currency, type PaymentProvider } from '../constants';
+import { fetchCheckoutConfig } from '../services/checkoutProvider';
 import { trackEvent } from '../services/analytics';
 
 type PopupState = 'idle' | 'submitting' | 'revealed' | 'error';
@@ -36,15 +36,16 @@ function shouldSuppress(pathname: string): boolean {
   }
 }
 
-function readSavedBriefPriceContext(): { paymentProvider?: PaymentProvider; fastDelivery: boolean } {
+function readSavedBriefPriceContext(): { paymentProvider?: PaymentProvider; currency?: Currency; fastDelivery: boolean } {
   try {
     const raw = window.sessionStorage.getItem('yourgbedu_brief');
     if (!raw) return { fastDelivery: false };
-    const parsed = JSON.parse(raw) as { paymentProvider?: PaymentProvider; fastDelivery?: boolean };
+    const parsed = JSON.parse(raw) as { paymentProvider?: PaymentProvider; currency?: Currency; fastDelivery?: boolean };
     return {
       paymentProvider: parsed.paymentProvider === 'stripe' || parsed.paymentProvider === 'paystack'
         ? parsed.paymentProvider
         : undefined,
+      currency: parsed.currency === 'usd' || parsed.currency === 'ngn' ? parsed.currency : undefined,
       fastDelivery: Boolean(parsed.fastDelivery),
     };
   } catch {
@@ -52,8 +53,8 @@ function readSavedBriefPriceContext(): { paymentProvider?: PaymentProvider; fast
   }
 }
 
-function formatMarketingAmount(provider: PaymentProvider, amount: number) {
-  if (provider === 'stripe') {
+function formatMarketingAmount(currency: Currency, amount: number) {
+  if (currency === 'usd') {
     const value = amount / 100;
     return `$${value.toLocaleString('en-US', {
       minimumFractionDigits: amount % 100 === 0 ? 0 : 2,
@@ -63,21 +64,21 @@ function formatMarketingAmount(provider: PaymentProvider, amount: number) {
   return `₦${(amount / 100).toLocaleString('en-NG', { maximumFractionDigits: 0 })}`;
 }
 
-function getMarketingPriceLine(provider: PaymentProvider, fastDelivery: boolean, discountPercent: number) {
-  if (provider === 'stripe') {
-    const price = fastDelivery ? DISCOUNTED_PRICING.stripe.fast : DISCOUNTED_PRICING.stripe.standard;
+function getMarketingPriceLine(currency: Currency, fastDelivery: boolean, discountPercent: number) {
+  if (currency === 'usd') {
+    const price = fastDelivery ? DISCOUNTED_PRICING_BY_CURRENCY.usd.fast : DISCOUNTED_PRICING_BY_CURRENCY.usd.standard;
     const discounted = Math.round(price.originalAmountCents * (1 - discountPercent / 100));
     return {
-      was: formatMarketingAmount(provider, price.originalAmountCents),
-      now: formatMarketingAmount(provider, discounted),
+      was: formatMarketingAmount(currency, price.originalAmountCents),
+      now: formatMarketingAmount(currency, discounted),
     };
   }
 
-  const price = fastDelivery ? DISCOUNTED_PRICING.paystack.fast : DISCOUNTED_PRICING.paystack.standard;
+  const price = fastDelivery ? DISCOUNTED_PRICING_BY_CURRENCY.ngn.fast : DISCOUNTED_PRICING_BY_CURRENCY.ngn.standard;
   const discounted = Math.round(price.originalAmountKobo * (1 - discountPercent / 100));
   return {
-    was: formatMarketingAmount(provider, price.originalAmountKobo),
-    now: formatMarketingAmount(provider, discounted),
+    was: formatMarketingAmount(currency, price.originalAmountKobo),
+    now: formatMarketingAmount(currency, discounted),
   };
 }
 
@@ -90,7 +91,7 @@ const EmailCapturePopup: React.FC = () => {
   const [state, setState] = useState<PopupState>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [promo, setPromo] = useState<{ code: string; discountPercent: number } | null>(null);
-  const [paymentProvider, setPaymentProvider] = useState<PaymentProvider>(briefContext.paymentProvider || 'paystack');
+  const [currency, setCurrency] = useState<Currency>(briefContext.currency || 'ngn');
   const [fastDelivery] = useState(briefContext.fastDelivery);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const emailInputRef = useRef<HTMLInputElement | null>(null);
@@ -108,26 +109,20 @@ const EmailCapturePopup: React.FC = () => {
   }, [location.pathname, location.search]);
 
   useEffect(() => {
-    if (briefContext.paymentProvider) return;
+    if (briefContext.currency) return;
     let cancelled = false;
 
-    const detectProvider = async () => {
-      try {
-        const response = await fetch('/api/geo/country');
-        const data = await response.json().catch(() => null);
-        if (!response.ok) throw new Error('Geo detection failed.');
-        if (!cancelled) setPaymentProvider(paymentProviderFromGeo(data));
-      } catch {
-        if (!cancelled) setPaymentProvider('paystack');
-      }
+    const detectCurrency = async () => {
+      const config = await fetchCheckoutConfig();
+      if (!cancelled) setCurrency(config.currency);
     };
 
-    void detectProvider();
+    void detectCurrency();
 
     return () => {
       cancelled = true;
     };
-  }, [briefContext.paymentProvider]);
+  }, [briefContext.currency]);
 
   const markSeen = useCallback(() => {
     try {
@@ -243,7 +238,7 @@ const EmailCapturePopup: React.FC = () => {
   if (!isOpen) return null;
 
   const discount = promo?.discountPercent ?? 50;
-  const priceLine = getMarketingPriceLine(paymentProvider, fastDelivery, discount);
+  const priceLine = getMarketingPriceLine(currency, fastDelivery, discount);
 
   return ReactDOM.createPortal(
     <div

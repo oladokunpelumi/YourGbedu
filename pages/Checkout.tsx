@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { loadStripe, type StripeEmbeddedCheckout } from '@stripe/stripe-js';
-import { PaymentProvider, getDiscountedPrice } from '../constants';
-import { paymentProviderFromGeo, reconcilePaymentProvider } from '../services/checkoutProvider';
+import { Currency, PaymentProvider, getDiscountedPriceByCurrency } from '../constants';
+import { fetchCheckoutConfig, reconcileCheckoutConfig } from '../services/checkoutProvider';
 import { trackEvent } from '../services/analytics';
 
 type CheckoutStatus = 'loading' | 'ready' | 'processing' | 'success' | 'error';
@@ -24,6 +24,7 @@ interface CheckoutBrief {
   customerEmail: string;
   fastDelivery: boolean;
   paymentProvider: PaymentProvider;
+  currency: Currency;
 }
 
 interface PromoQuote {
@@ -106,6 +107,11 @@ function readBrief(): CheckoutBrief | null {
     const parsed = JSON.parse(raw) as Partial<CheckoutBrief>;
     if (!parsed.customerEmail) return null;
     const paymentProvider = parsed.paymentProvider === 'stripe' ? 'stripe' : 'paystack';
+    // Older saved briefs predate the currency field — infer from provider as the
+    // safe default (this will be reconciled against /api/checkout-config anyway).
+    const currency: Currency = parsed.currency === 'usd' || parsed.currency === 'ngn'
+      ? parsed.currency
+      : paymentProvider === 'stripe' ? 'usd' : 'ngn';
     return {
       recipientType: parsed.recipientType || '',
       recipientName: parsed.recipientName || '',
@@ -120,6 +126,7 @@ function readBrief(): CheckoutBrief | null {
       customerEmail: parsed.customerEmail,
       fastDelivery: Boolean(parsed.fastDelivery),
       paymentProvider,
+      currency,
     };
   } catch {
     return null;
@@ -152,8 +159,8 @@ function formatOccasion(value: string) {
   return value.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function formatCheckoutAmount(provider: PaymentProvider, amount: number) {
-  if (provider === 'stripe') {
+function formatCheckoutAmount(currency: Currency, amount: number) {
+  if (currency === 'usd') {
     const value = amount / 100;
     return `$${value.toLocaleString('en-US', {
       minimumFractionDigits: amount % 100 === 0 ? 0 : 2,
@@ -189,18 +196,18 @@ const Checkout: React.FC = () => {
   const query = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const returnedStripeSessionId = query.get('session_id');
   const displayBrief = brief && !providerResolved && !returnedStripeSessionId
-    ? { ...brief, paymentProvider: 'paystack' as PaymentProvider }
+    ? { ...brief, paymentProvider: 'paystack' as PaymentProvider, currency: 'ngn' as Currency }
     : brief;
   const providerLabel = displayBrief?.paymentProvider === 'stripe' ? 'Stripe' : 'Paystack';
-  const price = displayBrief ? getDiscountedPrice(displayBrief.paymentProvider, displayBrief.fastDelivery) : null;
+  const price = displayBrief ? getDiscountedPriceByCurrency(displayBrief.currency, displayBrief.fastDelivery) : null;
   const isFullPriceCheckout = payFullPrice && !promoQuote?.promo;
   const displayTotal = displayBrief && promoQuote
-    ? formatCheckoutAmount(displayBrief.paymentProvider, promoQuote.finalAmount)
+    ? formatCheckoutAmount(displayBrief.currency, promoQuote.finalAmount)
     : isFullPriceCheckout
       ? price?.original
       : price?.current;
   const displayOriginal = displayBrief && promoQuote
-    ? formatCheckoutAmount(displayBrief.paymentProvider, promoQuote.originalAmount)
+    ? formatCheckoutAmount(displayBrief.currency, promoQuote.originalAmount)
     : isFullPriceCheckout
       ? undefined
       : price?.original;
@@ -218,7 +225,7 @@ const Checkout: React.FC = () => {
       clearPayFullPriceFlag();
       trackEvent('purchase', {
         transaction_id: id,
-        currency: brief?.paymentProvider === 'stripe' ? 'USD' : 'NGN',
+        currency: (brief?.currency || 'ngn').toUpperCase(),
         value: promoQuote ? promoQuote.finalAmount / 100 : undefined,
       });
       const tokenParam = trackingToken ? `&t=${encodeURIComponent(trackingToken)}` : '';
@@ -252,6 +259,9 @@ const Checkout: React.FC = () => {
         customerEmail: String(verifyData.customerEmail || meta.customerEmail || ''),
         fastDelivery: meta.fastDelivery === true || meta.fastDelivery === 'true',
         paymentProvider: provider,
+        currency: (meta.currency === 'usd' || meta.currency === 'ngn'
+          ? meta.currency
+          : provider === 'stripe' ? 'usd' : 'ngn') as Currency,
       };
 
       const orderRes = await fetch('/api/orders', {
@@ -515,6 +525,7 @@ const Checkout: React.FC = () => {
         body: JSON.stringify({
           promoCode: code,
           paymentProvider: brief.paymentProvider,
+          currency: brief.currency,
           fastDelivery: brief.fastDelivery,
           fullPrice: false,
         }),
@@ -529,7 +540,7 @@ const Checkout: React.FC = () => {
       setPromoMessage(
         quote.finalAmount === 0
           ? '100% promo applied. Completing your order now.'
-          : `${quote.promo?.discountPercent || 0}% promo applied. Total updated to ${formatCheckoutAmount(brief.paymentProvider, quote.finalAmount)}.`
+          : `${quote.promo?.discountPercent || 0}% promo applied. Total updated to ${formatCheckoutAmount(brief.currency, quote.finalAmount)}.`
       );
 
       if (quote.finalAmount === 0) {
@@ -563,22 +574,13 @@ const Checkout: React.FC = () => {
     let cancelled = false;
 
     const resolveProvider = async () => {
-      setMessage('Confirming local checkout provider...');
-      let provider: PaymentProvider = 'paystack';
-
-      try {
-        const response = await fetch('/api/geo/country');
-        const data = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(getApiError(data, 'Geo detection failed.'));
-        provider = paymentProviderFromGeo(data);
-      } catch {
-        provider = 'paystack';
-      }
+      setMessage('Confirming secure checkout provider...');
+      const config = await fetchCheckoutConfig();
 
       if (cancelled) return;
       setBrief((current) => {
         if (!current) return current;
-        const next = reconcilePaymentProvider(current, provider);
+        const next = reconcileCheckoutConfig(current, config);
         if (next !== current) saveBrief(next);
         return next;
       });
@@ -621,7 +623,7 @@ const Checkout: React.FC = () => {
 
     initializedRef.current = true;
     trackEvent('begin_checkout', {
-      currency: brief.paymentProvider === 'stripe' ? 'USD' : 'NGN',
+      currency: brief.currency.toUpperCase(),
       fast_delivery: brief.fastDelivery,
     });
     const start = brief.paymentProvider === 'stripe' ? startStripeCheckout : startPaystackCheckout;

@@ -1,10 +1,9 @@
 const crypto = require('crypto');
 const {
     isFastDelivery,
-    getPaystackAmountKobo,
-    getPaystackOriginalAmountKobo,
-    getStripeAmountCents,
-    getStripeOriginalAmountCents,
+    normalizeCurrency,
+    getAmount,
+    getOriginalAmount,
 } = require('./pricing.cjs');
 
 const STANDARD_PROMO_CODE = process.env.STANDARD_PROMO_CODE || 'YOURGBEDU50';
@@ -27,23 +26,24 @@ function makeOneTimeCode() {
     return `FREE-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
 }
 
-function getBaseAmounts(provider, fastDelivery) {
-    if (provider === 'stripe') {
+function getBaseAmounts(provider, fastDelivery, currency) {
+    const resolvedCurrency = normalizeCurrency(currency);
+    if (resolvedCurrency === 'usd') {
         return {
-            provider: 'stripe',
+            provider,
             currency: 'USD',
             unit: 'cents',
-            currentAmount: getStripeAmountCents(fastDelivery),
-            originalAmount: getStripeOriginalAmountCents(fastDelivery),
+            currentAmount: getAmount('usd', fastDelivery),
+            originalAmount: getOriginalAmount('usd', fastDelivery),
         };
     }
 
     return {
-        provider: 'paystack',
+        provider,
         currency: 'NGN',
         unit: 'kobo',
-        currentAmount: getPaystackAmountKobo({ fastDelivery }),
-        originalAmount: getPaystackOriginalAmountKobo({ fastDelivery }),
+        currentAmount: getAmount('ngn', fastDelivery),
+        originalAmount: getOriginalAmount('ngn', fastDelivery),
     };
 }
 
@@ -82,10 +82,14 @@ async function findPromoByCode(code) {
     return getStandardPromo(normalizedCode) || await getStoredPromo(normalizedCode);
 }
 
-async function quoteCheckout({ provider = 'paystack', fastDelivery = false, promoCode = '', fullPrice = false }) {
+async function quoteCheckout({ provider = 'paystack', currency, fastDelivery = false, promoCode = '', fullPrice = false }) {
     const resolvedProvider = provider === 'stripe' ? 'stripe' : 'paystack';
+    // Currency defaults from provider for backward compat (paystack orders are
+    // always NGN; a bare 'stripe' call without an explicit currency is USD, the
+    // pre-NGN-on-Stripe default). Callers that support Stripe-NGN pass currency explicitly.
+    const resolvedCurrency = currency || (resolvedProvider === 'stripe' ? 'usd' : 'ngn');
     const fast = isFastDelivery(fastDelivery);
-    const amounts = getBaseAmounts(resolvedProvider, fast);
+    const amounts = getBaseAmounts(resolvedProvider, fast, resolvedCurrency);
     const promo = await findPromoByCode(promoCode);
 
     if (promoCode && !promo) {
@@ -130,6 +134,7 @@ function quoteMetadata(quote) {
         promoDiscountPercent: quote.promo ? String(quote.promo.discountPercent) : '',
         originalAmount: String(quote.originalAmount),
         discountedAmount: String(quote.finalAmount),
+        currency: quote.currency,
     };
 }
 
@@ -143,6 +148,7 @@ function parsePromoMetadata(metadata = {}) {
         promoDiscountPercent: Number.isFinite(promoDiscountPercent) ? promoDiscountPercent : null,
         originalAmount: Number.isFinite(originalAmount) ? originalAmount : null,
         discountedAmount: Number.isFinite(discountedAmount) ? discountedAmount : null,
+        currency: metadata.currency ? normalizeCurrency(metadata.currency) : null,
     };
 }
 

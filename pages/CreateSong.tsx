@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { OCCASION_ACCENTS, PaymentProvider, getDiscountedPrice } from '../constants';
-import { paymentProviderFromGeo } from '../services/checkoutProvider';
+import { Currency, OCCASION_ACCENTS, PaymentProvider, getDiscountedPriceByCurrency } from '../constants';
+import { fetchCheckoutConfig } from '../services/checkoutProvider';
 
 const RECIPIENTS = [
   'Parents',
@@ -190,6 +190,7 @@ const CreateSong: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentProvider, setPaymentProvider] = useState<PaymentProvider | null>(null);
+  const [currency, setCurrency] = useState<Currency | null>(null);
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const selectedPersona =
     RECIPIENT_QUERY_MAP[(searchParams.get('recipient') || '').toLowerCase()] || '';
@@ -291,12 +292,11 @@ const CreateSong: React.FC = () => {
     const detectProvider = async () => {
       setIsDetectingLocation(true);
       try {
-        const response = await fetch('/api/geo/country');
-        const data = await response.json().catch(() => null);
-        if (!response.ok) throw new Error('Geo detection failed.');
-        if (!cancelled) setPaymentProvider(paymentProviderFromGeo(data));
-      } catch {
-        if (!cancelled) setPaymentProvider('paystack');
+        const config = await fetchCheckoutConfig();
+        if (!cancelled) {
+          setPaymentProvider(config.provider);
+          setCurrency(config.currency);
+        }
       } finally {
         if (!cancelled) setIsDetectingLocation(false);
       }
@@ -345,7 +345,7 @@ const CreateSong: React.FC = () => {
       setError('Please enter a valid email address to receive your song.');
       return;
     }
-    if (!paymentProvider) {
+    if (!paymentProvider || !currency) {
       setError('We are still preparing your checkout options. Please wait a moment.');
       return;
     }
@@ -367,6 +367,7 @@ const CreateSong: React.FC = () => {
       customerEmail,
       fastDelivery: isFastDelivery,
       paymentProvider,
+      currency,
     };
     sessionStorage.setItem('yourgbedu_brief', JSON.stringify(briefData));
     sessionStorage.removeItem('yourgbedu_checkout_error');
@@ -376,8 +377,8 @@ const CreateSong: React.FC = () => {
 
   const currentStep = FORM_STEPS[step - 1];
   const nextStepMeta = FORM_STEPS[step] || null;
-  const price = getDiscountedPrice(paymentProvider, isFastDelivery);
-  const fastPrice = getDiscountedPrice(paymentProvider, true);
+  const price = getDiscountedPriceByCurrency(currency, isFastDelivery);
+  const fastPrice = getDiscountedPriceByCurrency(currency, true);
   const providerLabel = paymentProvider === 'stripe' ? 'Stripe' : 'Paystack';
   const occasionLabel = OCCASIONS.find((item) => item.value === occasion)?.label || occasion;
   const activeOccasion = useMemo(() => {

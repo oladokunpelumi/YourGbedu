@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
 
-async function detectCountry(req, res) {
+// Shared geo-detection logic — used by /api/geo (client-side inference, being
+// phased out) and /api/checkout-config (the server-side source of truth).
+async function detectCountryFromRequest(req) {
     try {
         // Respect x-forwarded-for for reverse proxies (Railway, etc.)
         const forwarded = req.headers['x-forwarded-for'];
@@ -17,7 +19,7 @@ async function detectCountry(req, res) {
             ip.startsWith('10.');
 
         if (isLocal) {
-            return res.json({ country: 'NG', isNigeria: true, source: 'local' });
+            return { country: 'NG', isNigeria: true, source: 'local' };
         }
 
         const response = await fetch(`https://ipapi.co/${ip}/json/`, {
@@ -28,16 +30,20 @@ async function detectCountry(req, res) {
         const data = await response.json();
         const country = data.country_code || 'NG';
 
-        res.json({ country, isNigeria: country === 'NG', source: 'ipapi' });
+        return { country, isNigeria: country === 'NG', source: 'ipapi' };
     } catch (err) {
         console.error('[Geo] Country detection failed:', err.message);
         // Fail open: default to Nigeria (Paystack) so Nigerian users are never broken
-        res.json({ country: 'NG', isNigeria: true, source: 'fallback' });
+        return { country: 'NG', isNigeria: true, source: 'fallback' };
     }
 }
 
 // GET /api/geo and /api/geo/country — detect user's country from IP address.
+async function detectCountry(req, res) {
+    res.json(await detectCountryFromRequest(req));
+}
 router.get('/', detectCountry);
 router.get('/country', detectCountry);
 
 module.exports = router;
+module.exports.detectCountryFromRequest = detectCountryFromRequest;

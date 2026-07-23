@@ -4,9 +4,10 @@ const { randomBytes, randomUUID: uuidv4 } = require('crypto');
 const rateLimit = require('express-rate-limit');
 const { z } = require('zod');
 const { optionalAuth, requireAuth } = require('../middleware/auth.cjs');
-const { PRICING, isFastDelivery } = require('../pricing.cjs');
+const { isFastDelivery, normalizeCurrency } = require('../pricing.cjs');
 const { quoteCheckout, parsePromoMetadata } = require('../promos.cjs');
 const { getOne, getAll, execSql, withTransaction } = require('../db-helpers.cjs');
+const { createPaidOrder, formatPaidAmount } = require('../services/paid-order.cjs');
 
 const PAYSTACK_BASE_URL = 'https://api.paystack.co';
 
@@ -21,18 +22,23 @@ async function verifyPaystackPayment(reference) {
     return {
         paid: !!(data.status && data.data?.status === 'success'),
         amount: data.data?.amount ?? null,
+        currency: 'ngn', // Paystack only ever settles Naira
         metadata: data.data?.metadata ?? {},
     };
 }
 
+let stripeClientOverride;
 async function verifyStripePayment(sessionId) {
     const stripeKey = process.env.STRIPE_SECRET_KEY;
-    if (!stripeKey) return { paid: false, amount: null };
-    const stripe = require('stripe')(stripeKey);
+    if (!stripeKey && !stripeClientOverride) return { paid: false, amount: null };
+    const stripe = stripeClientOverride || require('stripe')(stripeKey);
     const session = await stripe.checkout.sessions.retrieve(sessionId);
     return {
         paid: session.payment_status === 'paid',
         amount: session.amount_total ?? null,
+        // The session's own currency is the source of truth for what was actually
+        // charged — never trust client-supplied metadata for this.
+        currency: normalizeCurrency(session.currency),
         metadata: session.metadata ?? {},
     };
 }
@@ -67,12 +73,6 @@ const PRODUCTION_STEPS = [
     },
 ];
 
-function formatPaidAmount(amount, provider) {
-    if (typeof amount !== 'number') return undefined;
-    if (provider === 'stripe') return `$${(amount / 100).toFixed(2)} USD`;
-    return `₦${(amount / 100).toLocaleString('en-NG')}`;
-}
-
 function makeTrackingToken() {
     return randomBytes(16).toString('hex');
 }
@@ -103,13 +103,18 @@ function canAccessOrder(req, order) {
     return hasValidTrackingToken(req, order) || isOwnerOrAdmin(req, order);
 }
 
-async function validateVerifiedAmount({ provider, metadata, requestFastDelivery, verifiedAmount }) {
+async function validateVerifiedAmount({ provider, currency, metadata, requestFastDelivery, verifiedAmount }) {
     if (typeof verifiedAmount !== 'number') return false;
 
-    const fastDelivery = metadata?.fastDelivery ?? requestFastDelivery;
-    const currentQuote = await quoteCheckout({ provider, fastDelivery });
-    const fullQuote = await quoteCheckout({ provider, fastDelivery, fullPrice: true });
+    // The currency actually charged (from the verified session/transaction) must
+    // match what the metadata claims was quoted — otherwise a session paid in one
+    // currency could be validated against another currency's (possibly lower) price.
     const promo = parsePromoMetadata(metadata || {});
+    if (promo.currency && promo.currency !== normalizeCurrency(currency)) return false;
+
+    const fastDelivery = metadata?.fastDelivery ?? requestFastDelivery;
+    const currentQuote = await quoteCheckout({ provider, currency, fastDelivery });
+    const fullQuote = await quoteCheckout({ provider, currency, fastDelivery, fullPrice: true });
     const allowed = new Set([
         currentQuote.finalAmount,
         fullQuote.finalAmount,
@@ -342,7 +347,7 @@ router.post('/free', async (req, res) => {
                     genre: data.genre,
                     deliveryDate: order.delivery_date,
                     reference: order.promo_code_preview,
-                    amountLabel: formatPaidAmount(0, data.paymentProvider === 'stripe' ? 'stripe' : 'paystack'),
+                    amountLabel: formatPaidAmount(0, data.paymentProvider === 'stripe' ? 'usd' : 'ngn'),
                 });
             }
         }
@@ -354,7 +359,7 @@ router.post('/free', async (req, res) => {
             genre: order.genre,
             recipientType: order.recipient_type,
             fastDelivery: isFastDelivery(data.fastDelivery),
-            amountLabel: formatPaidAmount(0, data.paymentProvider === 'stripe' ? 'stripe' : 'paystack'),
+            amountLabel: formatPaidAmount(0, data.paymentProvider === 'stripe' ? 'usd' : 'ngn'),
             customerEmail: data.customerEmail || null,
         });
 
@@ -464,8 +469,11 @@ router.post('/', async (req, res) => {
 
     try {
         let verifiedAmount = null;
+        let verifiedCurrency = null;
         let paymentMetadata = {};
         let paymentProvider = 'paystack';
+        let referenceColumn;
+        let reference;
 
         if (paystackReference) {
             const existing = await getOne('SELECT * FROM orders WHERE paystack_reference = ?', paystackReference);
@@ -476,8 +484,11 @@ router.post('/', async (req, res) => {
                 return res.status(402).json({ error: 'Payment not confirmed. Please wait a moment and try again.' });
             }
             verifiedAmount = payment.amount;
+            verifiedCurrency = payment.currency;
             paymentMetadata = payment.metadata || {};
             paymentProvider = 'paystack';
+            referenceColumn = 'paystack_reference';
+            reference = paystackReference;
         }
 
         if (stripeSessionId) {
@@ -489,12 +500,16 @@ router.post('/', async (req, res) => {
                 return res.status(402).json({ error: 'Payment not confirmed. Please wait a moment and try again.' });
             }
             verifiedAmount = payment.amount;
+            verifiedCurrency = payment.currency;
             paymentMetadata = payment.metadata || {};
             paymentProvider = 'stripe';
+            referenceColumn = 'stripe_session_id';
+            reference = stripeSessionId;
         }
 
         const amountValid = await validateVerifiedAmount({
             provider: paymentProvider,
+            currency: verifiedCurrency,
             metadata: paymentMetadata,
             requestFastDelivery: fastDelivery,
             verifiedAmount,
@@ -503,88 +518,18 @@ router.post('/', async (req, res) => {
             return res.status(402).json({ error: 'Payment amount does not match checkout total.' });
         }
 
-        const id = uuidv4();
-        const trackingToken = makeTrackingToken();
-        const createdAt = new Date().toISOString();
-        const deliveryHours = isFastDelivery(fastDelivery) ? FAST_DELIVERY_HOURS : STANDARD_DELIVERY_HOURS;
-        const deliveryDate = new Date(Date.now() + deliveryHours * 60 * 60 * 1000).toISOString();
-        const promo = parsePromoMetadata(paymentMetadata);
-
-        await execSql(`
-            INSERT INTO orders (
-                id, tracking_token, song_title, genre, mood, tempo, occasion, occasion_detail, story,
-                status, created_at, delivery_date,
-                stripe_session_id, paystack_reference, amount, customer_email,
-                recipient_type, recipient_name, sender_name, voice_gender,
-                special_qualities, favorite_memories, special_message,
-                promo_code_id, promo_code_preview, promo_discount_percent,
-                original_amount, discounted_amount
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `,
-            id, trackingToken, songTitle || 'Custom Song', genre || '', mood || '', tempo || 100,
-            occasion || '', occasionDetail || '', story || '', 'in_production', createdAt, deliveryDate,
-            stripeSessionId || null, paystackReference || null,
-            verifiedAmount || PRICING.ngn.standardKobo,
-            customerEmail ? String(customerEmail).trim().toLowerCase() : null,
-            recipientType || '', recipientName || '', senderName || '',
-            voiceGender || '', specialQualities || '', favoriteMemories || '', specialMessage || '',
-            promo.promoCodeId, promo.promoCodePreview, promo.promoDiscountPercent,
-            promo.originalAmount, promo.discountedAmount
-        );
-
-        const order = await getOne('SELECT * FROM orders WHERE id = ?', id);
-        require('../services/song-pipeline.cjs').getSongPipeline().startGenerationInBackgroundForOrder(order);
-        if (customerEmail) {
-            const normalized = String(customerEmail).trim().toLowerCase();
-            try {
-                await execSql(
-                    'UPDATE subscribers SET converted_order_id = ? WHERE email = ? AND converted_order_id IS NULL',
-                    id,
-                    normalized
-                );
-            } catch (subErr) {
-                // best effort — never block order creation on a subscriber update
-                console.warn('Order: subscriber link skipped:', subErr.message);
-            }
-
-            const klaviyo = require('../services/klaviyo.cjs');
-            void klaviyo.track('Placed Order', {
-                email: customerEmail,
-                value: typeof verifiedAmount === 'number' ? Math.round(verifiedAmount) / 100 : undefined,
-                uniqueId: id,
-                properties: {
-                    order_id: id,
-                    occasion: occasion || null,
-                    genre: genre || null,
-                    recipient_type: recipientType || null,
-                    fast_delivery: isFastDelivery(fastDelivery),
-                    provider: paymentProvider,
-                },
-                profileProps: senderName ? { first_name: senderName } : {},
-            });
-
-            if (!klaviyo.klaviyoOwnsTransactional()) {
-                void getEmailModule().sendConfirmationEmail({
-                    to: customerEmail,
-                    orderId: id,
-                    trackingToken,
-                    genre,
-                    deliveryDate,
-                    reference: paystackReference || stripeSessionId,
-                    amountLabel: formatPaidAmount(verifiedAmount, paymentProvider),
-                });
-            }
-        }
-
-        void getEmailModule().sendAdminNewOrderEmail({
-            orderId: id,
-            occasion,
-            genre,
-            recipientType,
-            fastDelivery: isFastDelivery(fastDelivery),
-            amountLabel: formatPaidAmount(verifiedAmount, paymentProvider),
-            customerEmail: customerEmail || null,
+        const { order } = await createPaidOrder({
+            reference,
+            referenceColumn,
+            provider: paymentProvider,
+            currency: verifiedCurrency,
+            verifiedAmount,
+            metadata: paymentMetadata,
+            fallback: {
+                songTitle, genre, mood, tempo, occasion, occasionDetail, story,
+                customerEmail, recipientType, recipientName, senderName,
+                voiceGender, specialQualities, favoriteMemories, specialMessage, fastDelivery,
+            },
         });
 
         res.status(201).json(computeOrderProgress(order));
@@ -593,5 +538,9 @@ router.post('/', async (req, res) => {
         res.status(500).json({ error: 'Failed to create order' });
     }
 });
+
+router.__setStripeClientForTests = (client) => {
+    stripeClientOverride = client;
+};
 
 module.exports = router;

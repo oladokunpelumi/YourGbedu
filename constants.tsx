@@ -49,6 +49,16 @@ export const DISCOUNTED_PRICING = {
 
 export type PaymentProvider = keyof typeof DISCOUNTED_PRICING;
 
+// Currency is independent of provider — Stripe can charge NGN (Naira cards)
+// or USD depending on server-side geo/config, so pricing display must key off
+// currency, not provider.
+export type Currency = 'ngn' | 'usd';
+
+export const DISCOUNTED_PRICING_BY_CURRENCY = {
+  ngn: DISCOUNTED_PRICING.paystack,
+  usd: DISCOUNTED_PRICING.stripe,
+} as const;
+
 export const OCCASION_ACCENTS = {
   birthday: {
     label: 'Birthday',
@@ -141,4 +151,11 @@ export function getDiscountedPrice(provider: PaymentProvider | null, fastDeliver
   return fastDelivery
     ? DISCOUNTED_PRICING[resolvedProvider].fast
     : DISCOUNTED_PRICING[resolvedProvider].standard;
+}
+
+export function getDiscountedPriceByCurrency(currency: Currency | null, fastDelivery: boolean) {
+  const resolvedCurrency = currency || 'ngn';
+  return fastDelivery
+    ? DISCOUNTED_PRICING_BY_CURRENCY[resolvedCurrency].fast
+    : DISCOUNTED_PRICING_BY_CURRENCY[resolvedCurrency].standard;
 }
