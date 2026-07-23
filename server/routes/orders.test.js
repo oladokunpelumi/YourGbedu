@@ -15,11 +15,14 @@ import path from 'path';
 import { createRequire } from 'module';
 
 vi.stubEnv('PAYSTACK_SECRET_KEY', 'sk_test_mock');
+vi.stubEnv('STRIPE_SECRET_KEY', 'sk_test_mock');
 vi.stubEnv('NODE_ENV', 'test');
 vi.stubEnv('JWT_SECRET', 'test-secret-for-testing-only-32chars!!');
 vi.stubEnv('DB_PATH', path.join(os.tmpdir(), `sonnetary-orders-${process.pid}-${crypto.randomUUID()}.db`));
 
 const TEST_JWT_SECRET = 'test-secret-for-testing-only-32chars!!';
+
+const stripeRetrieveMock = vi.fn();
 
 const require = createRequire(import.meta.url);
 const db = require('../db.cjs');
@@ -32,6 +35,7 @@ beforeEach(() => {
   db.prepare('DELETE FROM promo_codes').run();
   db.prepare('DELETE FROM revoked_tokens').run();
   sendConfirmationEmailMock.mockClear();
+  stripeRetrieveMock.mockReset();
   vi.stubGlobal('fetch', vi.fn(async () => ({
     json: async () => ({ status: true, data: { status: 'success', amount: 3000000 } }),
   })));
@@ -40,6 +44,9 @@ beforeEach(() => {
 const { default: express } = await import('express');
 const { default: cookieParser } = await import('cookie-parser');
 const { default: ordersRouter } = await import('../routes/orders.cjs');
+ordersRouter.__setStripeClientForTests({
+  checkout: { sessions: { retrieve: (...args) => stripeRetrieveMock(...args) } },
+});
 
 const app = express();
 app.use(express.json());
@@ -141,6 +148,57 @@ describe('POST /api/orders', () => {
 
     expect(res.status).toBe(402);
     expect(db.prepare('SELECT id FROM orders WHERE paystack_reference = ?').get('ref_underpay_001')).toBeUndefined();
+  });
+
+  it('creates a Stripe order charged in NGN (Naira-via-Stripe) when the session currency is ngn', async () => {
+    const { default: supertest } = await import('supertest');
+    stripeRetrieveMock.mockResolvedValue({
+      payment_status: 'paid',
+      amount_total: 3_000_000,
+      currency: 'ngn',
+      metadata: {
+        customerEmail: 'naija@test.com',
+        genre: 'Highlife',
+        currency: 'NGN',
+        originalAmount: '6000000',
+        discountedAmount: '3000000',
+      },
+    });
+
+    const res = await supertest(app)
+      .post('/api/orders')
+      .send({ genre: 'Highlife', stripeSessionId: 'cs_ngn_001', customerEmail: 'naija@test.com' })
+      .set('Content-Type', 'application/json');
+
+    expect(res.status).toBe(201);
+    const row = db.prepare('SELECT amount, stripe_session_id, customer_email FROM orders WHERE stripe_session_id = ?').get('cs_ngn_001');
+    expect(row.amount).toBe(3_000_000);
+    expect(row.customer_email).toBe('naija@test.com');
+  });
+
+  it('rejects a Stripe session whose metadata currency does not match what was actually charged', async () => {
+    const { default: supertest } = await import('supertest');
+    // Metadata claims USD pricing, but the session actually charged NGN — a
+    // mismatch that could otherwise let a cheaper currency's amount pass validation.
+    stripeRetrieveMock.mockResolvedValue({
+      payment_status: 'paid',
+      amount_total: 2_500,
+      currency: 'ngn',
+      metadata: {
+        customerEmail: 'mismatch@test.com',
+        currency: 'USD',
+        originalAmount: '5000',
+        discountedAmount: '2500',
+      },
+    });
+
+    const res = await supertest(app)
+      .post('/api/orders')
+      .send({ genre: 'Pop', stripeSessionId: 'cs_currency_mismatch_001', customerEmail: 'mismatch@test.com' })
+      .set('Content-Type', 'application/json');
+
+    expect(res.status).toBe(402);
+    expect(db.prepare('SELECT id FROM orders WHERE stripe_session_id = ?').get('cs_currency_mismatch_001')).toBeUndefined();
   });
 });
 

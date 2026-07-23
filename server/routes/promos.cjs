@@ -7,6 +7,7 @@ const router = express.Router();
 const QuoteSchema = z.object({
     promoCode: z.string().max(100).optional(),
     paymentProvider: z.enum(['paystack', 'stripe']).optional(),
+    currency: z.enum(['ngn', 'usd', 'NGN', 'USD']).optional(),
     fastDelivery: z.union([z.boolean(), z.string()]).optional(),
     fullPrice: z.union([z.boolean(), z.string()]).optional(),
 });
@@ -20,6 +21,7 @@ router.post('/quote', async (req, res) => {
     try {
         const quote = await quoteCheckout({
             provider: parsed.data.paymentProvider || 'paystack',
+            currency: parsed.data.currency ? parsed.data.currency.toLowerCase() : undefined,
             fastDelivery: parsed.data.fastDelivery,
             promoCode: parsed.data.promoCode || '',
             fullPrice: parsed.data.fullPrice,

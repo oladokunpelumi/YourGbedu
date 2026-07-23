@@ -37,6 +37,7 @@ const songsRouter = require('./routes/songs.cjs');
 const ordersRouter = require('./routes/orders.cjs');
 const paymentsRouter = require('./routes/payments.cjs');
 const paystackRouter = require('./routes/paystack.cjs');
+const stripeWebhookRouter = require('./routes/stripe-webhook.cjs');
 const adminRouter = require('./routes/admin.cjs');
 const authRouter = require('./routes/auth.cjs');
 const geoRouter = require('./routes/geo.cjs');
@@ -207,6 +208,7 @@ const {
 
 // ─── Body Parsing ─────────────────────────────────────────────────────────────
 app.use('/api/paystack/webhook', express.raw({ type: 'application/json' }));
+app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '10kb' }));
 
 // ─── Static Files ─────────────────────────────────────────────────────────────
@@ -237,6 +239,7 @@ app.use('/api/songs', songsRouter);
 app.use('/api/orders', ordersRouter);
 app.use(['/api/create-checkout-session', '/api/verify-session'], stripePaymentLimiter);
 app.use('/api', paymentsRouter);
+app.use('/api/stripe/webhook', stripeWebhookRouter);
 app.use('/api/paystack', paystackPaymentLimiter, paystackRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/auth', authLimiter, authRouter);

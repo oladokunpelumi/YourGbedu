@@ -85,3 +85,38 @@ describe('promo checkout quotes', () => {
     expect(quote.promo.discountPercent).toBe(50);
   });
 });
+
+describe('currency is decoupled from provider (Stripe-for-Naira)', () => {
+  it('charges NGN pricing through Stripe when currency=ngn is explicit', async () => {
+    const quote = await quoteCheckout({
+      provider: 'stripe',
+      currency: 'ngn',
+      fastDelivery: false,
+    });
+
+    expect(quote.currency).toBe('NGN');
+    expect(quote.unit).toBe('kobo');
+    expect(quote.originalAmount).toBe(6000000);
+    expect(quote.finalAmount).toBe(3000000);
+  });
+
+  it('still defaults a bare "stripe" call (no explicit currency) to USD for backward compatibility', async () => {
+    const quote = await quoteCheckout({ provider: 'stripe', fastDelivery: false });
+    expect(quote.currency).toBe('USD');
+    expect(quote.finalAmount).toBe(2500);
+  });
+
+  it('applies the 50% promo identically to NGN-via-Stripe as NGN-via-Paystack', async () => {
+    const viaStripe = await quoteCheckout({ provider: 'stripe', currency: 'ngn', fastDelivery: true, promoCode: 'YOURGBEDU50' });
+    const viaPaystack = await quoteCheckout({ provider: 'paystack', fastDelivery: true, promoCode: 'YOURGBEDU50' });
+
+    expect(viaStripe.finalAmount).toBe(viaPaystack.finalAmount);
+    expect(viaStripe.originalAmount).toBe(viaPaystack.originalAmount);
+  });
+
+  it('quoteMetadata carries the currency for downstream amount validation', async () => {
+    const { quoteMetadata } = require('./promos.cjs');
+    const quote = await quoteCheckout({ provider: 'stripe', currency: 'ngn', fastDelivery: false });
+    expect(quoteMetadata(quote).currency).toBe('NGN');
+  });
+});
